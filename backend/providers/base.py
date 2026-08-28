@@ -1,7 +1,21 @@
 """Base class for LLM providers."""
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from dataclasses import dataclass
+from typing import Any, AsyncIterator, Dict, List, Literal, Optional
+
+
+@dataclass(frozen=True)
+class ProviderStreamEvent:
+    """A provider-neutral, user-visible streaming event."""
+
+    type: Literal["text_delta", "completed", "error"]
+    delta: str = ""
+    result: Optional[Dict[str, Any]] = None
+    finish_reason: Optional[str] = None
+    usage: Optional[Dict[str, Any]] = None
+    error_message: Optional[str] = None
+
 
 class LLMProvider(ABC):
     """Abstract base class for LLM providers."""
@@ -20,6 +34,22 @@ class LLMProvider(ABC):
             Dict containing 'content' (str) or 'error' (bool) and 'error_message' (str).
         """
         pass
+
+    @property
+    def supports_streaming(self) -> bool:
+        """Whether this provider implements incremental response streaming."""
+        return False
+
+    async def stream_query(
+        self,
+        model_id: str,
+        messages: List[Dict[str, str]],
+        timeout: float = 120.0,
+        temperature: float = 0.7,
+    ) -> AsyncIterator[ProviderStreamEvent]:
+        """Stream a response when supported; callers must capability-check first."""
+        raise NotImplementedError(f"{type(self).__name__} does not support streaming")
+        yield  # pragma: no cover - makes this an async generator
 
     @abstractmethod
     async def get_models(self) -> List[Dict[str, Any]]:

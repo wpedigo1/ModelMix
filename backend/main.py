@@ -58,6 +58,7 @@ from .documents import (
     to_attachment_metadata,
     validate_documents_for_request,
 )
+from .modelmix import router as modelmix_router
 
 logger = logging.getLogger(__name__)
 
@@ -261,6 +262,7 @@ def _save_partial_results(
     )
 
 app = FastAPI(title="The AI Counsel API")
+app.include_router(modelmix_router)
 
 # Sensitive settings endpoints (export/import/reset) leak or wipe API keys, so
 # they MUST be authenticated. Behavior:
@@ -349,6 +351,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-ModelMix-Run-ID"],
 )
 
 
