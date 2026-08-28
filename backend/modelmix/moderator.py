@@ -1,0 +1,122 @@
+"""Moderator input assembly and execution for ModelMix."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
+from ..providers.base import LLMProvider
+from .orchestrator import EventFactory
+
+MAX_VISIBLE_OUTPUT_CHARS = 100_000
+
+MODERATOR_INSTRUCTIONS = """You are the ModelMix Moderator. Produce the best final answer to the
+user by evaluating and reconciling the visible witness outputs. Resolve discrepancies using sound
+reasoning. Do not rank, vote, debate, mechanically concatenate, or mention hidden reasoning. A
+missing witness may be noted as unavailable, but do not invent its evidence."""
+
+
+@dataclass(frozen=True)
+class ModeratorOutputLimits:
+    """Future output-limit integration point; enforcement is not yet supported."""
+
+    warning_threshold_tokens: Optional[int] = None
+    hard_cap_tokens: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class ModeratorInput:
+    messages: List[Dict[str, str]]
+    truncation: Dict[str, bool]
+
+
+def _bounded_visible_text(text: str) -> tuple[str, bool]:
+    if len(text) <= MAX_VISIBLE_OUTPUT_CHARS:
+        return text, False
+    marker = "\n\n[... visible output truncated deterministically ...]\n\n"
+    available = MAX_VISIBLE_OUTPUT_CHARS - len(marker)
+    head = available // 2
+    tail = available - head
+    return f"{text[:head]}{marker}{text[-tail:]}", True
+
+
+def assemble_moderator_input(
+    prompt: str,
+    worker_outputs: Dict[str, str],
+    worker_failures: Dict[str, str],
+) -> ModeratorInput:
+    """Build a bounded handoff from visible deltas and structured failure notes only."""
+    sections = [f"Original user prompt:\n{prompt}"]
+    truncation: Dict[str, bool] = {}
+    for seat_id, label in (("worker_a", "Worker A"), ("worker_b", "Worker B")):
+        if seat_id in worker_outputs:
+            visible, truncated = _bounded_visible_text(worker_outputs[seat_id])
+            truncation[seat_id] = truncated
+            sections.append(f"{label} visible output:\n{visible}")
+        else:
+            status = (
+                "Unavailable because the worker failed."
+                if seat_id in worker_failures
+                else "Unavailable because no visible output was produced."
+            )
+            sections.append(f"{label} status:\n{status}")
+    return ModeratorInput(
+        messages=[
+            {"role": "system", "content": MODERATOR_INSTRUCTIONS},
+            {"role": "user", "content": "\n\n".join(sections)},
+        ],
+        truncation=truncation,
+    )
+
+
+async def run_moderator(
+    model_id: str,
+    provider: LLMProvider,
+    moderator_input: ModeratorInput,
+    create_event: EventFactory,
+    output_limits: Optional[ModeratorOutputLimits] = None,
+) -> bool:
+    """Stream or query one Moderator and publish through the canonical event factory."""
+    limits = output_limits or ModeratorOutputLimits()
+    if limits.hard_cap_tokens is not None:
+        raise ValueError("Moderator hard output caps are not supported by the provider contract")
+
+    await create_event(
+        "moderator_started",
+        actor="moderator",
+        model=model_id,
+        input_truncated=moderator_input.truncation,
+        output_warning_threshold_tokens=limits.warning_threshold_tokens,
+    )
+    try:
+        if provider.supports_streaming:
+            usage = None
+            finish_reason = None
+            async for item in provider.stream_query(model_id, moderator_input.messages):
+                if item.type == "text_delta" and item.delta:
+                    await create_event("moderator_delta", actor="moderator", delta=item.delta)
+                elif item.type == "completed":
+                    usage = item.usage or (item.result or {}).get("usage")
+                    finish_reason = item.finish_reason
+                elif item.type == "error":
+                    raise RuntimeError(item.error_message or "Moderator stream failed")
+        else:
+            result = await provider.query(model_id, moderator_input.messages)
+            if result.get("error"):
+                raise RuntimeError(result.get("error_message") or "Moderator query failed")
+            content = str(result.get("content") or "")
+            if content:
+                await create_event("moderator_delta", actor="moderator", delta=content)
+            usage = result.get("usage")
+            finish_reason = result.get("finish_reason")
+
+        payload: Dict[str, Any] = {"actor": "moderator"}
+        if usage is not None:
+            payload["usage"] = usage
+        if finish_reason is not None:
+            payload["finish_reason"] = finish_reason
+        await create_event("moderator_completed", **payload)
+        return True
+    except Exception as exc:
+        await create_event("moderator_failed", actor="moderator", error=str(exc))
+        return False

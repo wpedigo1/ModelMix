@@ -1,0 +1,115 @@
+"""Two independent worker orchestration for the first ModelMix slice."""
+
+from __future__ import annotations
+
+import asyncio
+import uuid
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Optional
+
+from ..providers.base import LLMProvider
+from .events import EventSequencer
+
+ProviderResolver = Callable[[str], LLMProvider]
+DisconnectCheck = Callable[[], Awaitable[bool]]
+EventFactory = Callable[..., Awaitable[Dict[str, Any]]]
+SEATS = (("worker_a", "worker_a_model"), ("worker_b", "worker_b_model"))
+
+
+async def multiplex_workers(
+    prompt: str,
+    worker_a_model: str,
+    worker_b_model: str,
+    provider_resolver: ProviderResolver,
+    is_disconnected: Optional[DisconnectCheck] = None,
+    run_id: Optional[str] = None,
+    event_factory: Optional[EventFactory] = None,
+    emit_run_completed: bool = True,
+) -> AsyncIterator[Dict[str, Any]]:
+    """Run exactly two isolated model calls and multiplex their visible output."""
+    run_id = run_id or str(uuid.uuid4())
+    sequencer = EventSequencer(run_id) if event_factory is None else None
+
+    async def create(event_type: str, **payload: Any) -> Dict[str, Any]:
+        if event_factory is not None:
+            return await event_factory(event_type, **payload)
+        assert sequencer is not None
+        return sequencer.create(event_type, **payload)
+
+    queue: asyncio.Queue[tuple[str, str, Dict[str, Any]]] = asyncio.Queue()
+    models = {"worker_a": worker_a_model, "worker_b": worker_b_model}
+
+    async def run_seat(seat_id: str, model_id: str) -> None:
+        await queue.put((seat_id, "seat_started", {"model": model_id}))
+        messages = [{"role": "user", "content": prompt}]
+        try:
+            provider = provider_resolver(model_id)
+            if provider.supports_streaming:
+                usage = None
+                finish_reason = None
+                async for item in provider.stream_query(model_id, messages):
+                    if item.type == "text_delta" and item.delta:
+                        await queue.put((seat_id, "seat_delta", {"delta": item.delta}))
+                    elif item.type == "completed":
+                        usage = item.usage or (item.result or {}).get("usage")
+                        finish_reason = item.finish_reason
+                    elif item.type == "error":
+                        raise RuntimeError(item.error_message or "Provider stream failed")
+                payload: Dict[str, Any] = {}
+                if usage is not None:
+                    payload["usage"] = usage
+                if finish_reason is not None:
+                    payload["finish_reason"] = finish_reason
+                await queue.put((seat_id, "seat_completed", payload))
+            else:
+                result = await provider.query(model_id, messages)
+                if result.get("error"):
+                    raise RuntimeError(result.get("error_message") or "Provider query failed")
+                content = str(result.get("content") or "")
+                if content:
+                    await queue.put((seat_id, "seat_delta", {"delta": content}))
+                payload = {}
+                if result.get("usage") is not None:
+                    payload["usage"] = result["usage"]
+                await queue.put((seat_id, "seat_completed", payload))
+        except asyncio.CancelledError:
+            await queue.put((seat_id, "seat_cancelled", {}))
+            raise
+        except Exception as exc:
+            await queue.put((seat_id, "seat_failed", {"error": str(exc)}))
+
+    yield await create("run_started", seats=list(models))
+    tasks = {
+        seat_id: asyncio.create_task(run_seat(seat_id, models[seat_id]))
+        for seat_id, _ in SEATS
+    }
+    terminal_seats = set()
+    cancelled = False
+    failed = False
+    try:
+        while len(terminal_seats) < len(tasks):
+            if not cancelled and is_disconnected is not None and await is_disconnected():
+                cancelled = True
+                yield await create("run_cancel_requested")
+                for task in tasks.values():
+                    task.cancel()
+
+            if is_disconnected is None:
+                seat_id, event_type, payload = await queue.get()
+            else:
+                try:
+                    seat_id, event_type, payload = await asyncio.wait_for(queue.get(), timeout=0.1)
+                except asyncio.TimeoutError:
+                    continue
+            yield await create(event_type, seat_id=seat_id, **payload)
+            if event_type in {"seat_completed", "seat_failed", "seat_cancelled"}:
+                terminal_seats.add(seat_id)
+            if event_type == "seat_failed":
+                failed = True
+
+        if not cancelled and emit_run_completed:
+            yield await create("run_completed", status="partial" if failed else "completed")
+    finally:
+        for task in tasks.values():
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks.values(), return_exceptions=True)
