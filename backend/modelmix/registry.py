@@ -1,0 +1,195 @@
+"""Process-local ModelMix run ownership and lifecycle."""
+
+from __future__ import annotations
+
+import asyncio
+import time
+import uuid
+from contextlib import aclosing
+from typing import Dict, Optional
+
+from .journal import (
+    MAX_EVENTS_PER_RUN,
+    MAX_RETAINED_TERMINAL_RUNS,
+    TERMINAL_RUN_TTL_SECONDS,
+    TERMINAL_STATUSES,
+    RunEventJournal,
+)
+from .orchestrator import ProviderResolver, multiplex_workers
+from .moderator import assemble_moderator_input, run_moderator
+
+
+class RunRegistry:
+    """Own ModelMix run tasks and their bounded in-memory journals."""
+
+    def __init__(
+        self,
+        *,
+        max_events_per_run: int = MAX_EVENTS_PER_RUN,
+        max_terminal_runs: int = MAX_RETAINED_TERMINAL_RUNS,
+        terminal_ttl_seconds: float = TERMINAL_RUN_TTL_SECONDS,
+    ) -> None:
+        self.max_events_per_run = max_events_per_run
+        self.max_terminal_runs = max_terminal_runs
+        self.terminal_ttl_seconds = terminal_ttl_seconds
+        self._runs: Dict[str, RunEventJournal] = {}
+        self._lock = asyncio.Lock()
+
+    async def start(
+        self,
+        prompt: str,
+        worker_a_model: str,
+        worker_b_model: str,
+        provider_resolver: ProviderResolver,
+        moderator_model: Optional[str] = None,
+    ) -> RunEventJournal:
+        await self._prune()
+        run = RunEventJournal(str(uuid.uuid4()), max_events=self.max_events_per_run)
+        async with self._lock:
+            self._runs[run.run_id] = run
+        run.task = asyncio.create_task(
+            self._run(
+                run,
+                prompt,
+                worker_a_model,
+                worker_b_model,
+                provider_resolver,
+                moderator_model,
+            )
+        )
+        return run
+
+    async def get(self, run_id: str) -> Optional[RunEventJournal]:
+        await self._prune()
+        async with self._lock:
+            return self._runs.get(run_id)
+
+    async def cancel(self, run_id: str) -> Optional[RunEventJournal]:
+        run = await self.get(run_id)
+        if run is None:
+            return None
+        if run.status in TERMINAL_STATUSES or run.cancellation_requested:
+            return run
+        run.cancellation_requested = True
+        await run.append("run_cancel_requested")
+        if run.task and not run.task.done():
+            run.task.cancel()
+        return run
+
+    async def _run(
+        self,
+        run: RunEventJournal,
+        prompt: str,
+        worker_a_model: str,
+        worker_b_model: str,
+        provider_resolver: ProviderResolver,
+        moderator_model: Optional[str],
+    ) -> None:
+        await run.mark_status("active")
+        worker_outputs = {"worker_a": "", "worker_b": ""}
+        worker_failures: Dict[str, str] = {}
+        try:
+            worker_stream = multiplex_workers(
+                prompt,
+                worker_a_model,
+                worker_b_model,
+                provider_resolver,
+                run_id=run.run_id,
+                event_factory=run.append,
+                emit_run_completed=moderator_model is None,
+            )
+            async with aclosing(worker_stream):
+                async for source_event in worker_stream:
+                    seat_id = source_event.get("seat_id")
+                    if source_event["type"] == "seat_delta" and seat_id in worker_outputs:
+                        worker_outputs[seat_id] += str(source_event.get("delta") or "")
+                    elif source_event["type"] == "seat_failed" and seat_id:
+                        worker_failures[seat_id] = str(source_event.get("error") or "Worker failed")
+                    elif (
+                        source_event["type"] == "seat_completed"
+                        and seat_id in worker_outputs
+                        and not worker_outputs[seat_id]
+                    ):
+                        worker_failures[seat_id] = "Worker returned no visible output"
+                    if source_event["type"] == "run_completed":
+                        await run.mark_status(str(source_event.get("status") or "completed"))
+
+            if moderator_model is not None:
+                successful_outputs = {
+                    seat_id: output
+                    for seat_id, output in worker_outputs.items()
+                    if seat_id not in worker_failures
+                }
+                if not successful_outputs:
+                    await run.append(
+                        "moderator_failed",
+                        actor="moderator",
+                        error="Insufficient worker input: both workers failed",
+                        reason="insufficient_input",
+                    )
+                    await run.append("run_failed", error="Both workers failed")
+                    await run.mark_status("failed")
+                    return
+
+                moderator_input = assemble_moderator_input(
+                    prompt,
+                    successful_outputs,
+                    worker_failures,
+                )
+                try:
+                    moderator_provider = provider_resolver(moderator_model)
+                except Exception as exc:
+                    await run.append(
+                        "moderator_failed",
+                        actor="moderator",
+                        error=str(exc),
+                    )
+                    await run.append("run_failed", error="Moderator provider resolution failed")
+                    await run.mark_status("failed")
+                    return
+                moderator_ok = await run_moderator(
+                    moderator_model, moderator_provider, moderator_input, run.append
+                )
+                if not moderator_ok:
+                    await run.append("run_failed", error="Moderator failed")
+                    await run.mark_status("failed")
+                    return
+                final_status = "partial" if worker_failures else "completed"
+                await run.append("run_completed", status=final_status)
+                await run.mark_status(final_status)
+        except asyncio.CancelledError:
+            await run.append("run_cancelled")
+            await run.mark_status("cancelled")
+        except Exception as exc:
+            await run.append("run_failed", error=str(exc))
+            await run.mark_status("failed")
+        finally:
+            if run.status not in TERMINAL_STATUSES:
+                await run.mark_status("failed")
+            await self._prune()
+
+    async def _prune(self) -> None:
+        now = time.monotonic()
+        async with self._lock:
+            expired = [
+                run_id
+                for run_id, run in self._runs.items()
+                if run.terminal_at is not None
+                and now - run.terminal_at >= self.terminal_ttl_seconds
+            ]
+            for run_id in expired:
+                self._runs.pop(run_id, None)
+
+            terminal = sorted(
+                (
+                    run
+                    for run in self._runs.values()
+                    if run.terminal_at is not None
+                ),
+                key=lambda run: run.terminal_at or 0,
+            )
+            for run in terminal[: max(0, len(terminal) - self.max_terminal_runs)]:
+                self._runs.pop(run.run_id, None)
+
+
+run_registry = RunRegistry()

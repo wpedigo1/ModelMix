@@ -1,0 +1,103 @@
+export const createModelMixState = () => ({
+  runId: null,
+  lastSeq: 0,
+  overall: 'idle',
+  message: 'Ready',
+  worker_a: { text: '', status: 'idle', error: null },
+  moderator: {
+    text: '',
+    status: 'waiting',
+    error: null,
+    started: false,
+    finishReason: null,
+  },
+  worker_b: { text: '', status: 'idle', error: null },
+});
+
+const terminalOverall = new Set(['completed', 'partial', 'failed', 'cancelled', 'replay_gap', 'expired']);
+
+export const isTerminalOverall = (status) => terminalOverall.has(status);
+
+export function controlState(status) {
+  const running = ['connecting', 'running', 'reconnecting', 'cancelling'].includes(status);
+  return { sendDisabled: running, stopDisabled: status === 'connecting' || !running };
+}
+
+export function applyReplayError(state, status, message = '') {
+  if (status === 409) {
+    return {
+      ...state,
+      overall: 'replay_gap',
+      message: `Replay gap: ${message}. Start a new run to recover.`,
+    };
+  }
+  if (status === 404) {
+    return { ...state, overall: 'expired', message: 'Run expired or was not found. Start a new run.' };
+  }
+  return { ...state, overall: 'failed', message: message || 'Connection failed' };
+}
+
+export function applyModelMixEvent(state, event) {
+  if (!event || !Number.isInteger(event.seq) || event.seq <= state.lastSeq) return state;
+  const next = { ...state, lastSeq: event.seq, runId: event.run_id || state.runId };
+  const seatId = event.seat_id;
+
+  if (seatId === 'worker_a' || seatId === 'worker_b') {
+    const seat = { ...state[seatId] };
+    if (event.type === 'seat_started') seat.status = 'running';
+    if (event.type === 'seat_delta') seat.text += String(event.delta || '');
+    if (event.type === 'seat_completed') seat.status = 'completed';
+    if (event.type === 'seat_failed') {
+      seat.status = 'failed';
+      seat.error = event.error || 'Worker failed';
+    }
+    if (event.type === 'seat_cancelled') seat.status = 'cancelled';
+    next[seatId] = seat;
+  }
+
+  if (event.type?.startsWith('moderator_')) {
+    const moderator = { ...state.moderator };
+    if (event.type === 'moderator_started') {
+      moderator.started = true;
+      moderator.status = 'running';
+      moderator.error = null;
+    } else if (event.type === 'moderator_delta') {
+      moderator.text += String(event.delta || '');
+    } else if (event.type === 'moderator_completed') {
+      moderator.started = true;
+      moderator.status = 'completed';
+      moderator.finishReason = event.finish_reason || null;
+    } else if (event.type === 'moderator_failed') {
+      moderator.status = 'failed';
+      moderator.error = event.error || 'Moderator failed';
+    }
+    next.moderator = moderator;
+  }
+
+  if (event.type === 'run_started') {
+    next.overall = 'running';
+    next.message = 'Both workers are running';
+  } else if (event.type === 'run_cancel_requested') {
+    next.overall = 'cancelling';
+    next.message = 'Cancellation requested';
+  } else if (event.type === 'run_cancelled') {
+    next.overall = 'cancelled';
+    next.message = 'Run cancelled';
+    for (const id of ['worker_a', 'worker_b']) {
+      if (next[id].status === 'running') next[id] = { ...next[id], status: 'cancelled' };
+    }
+    if (next.moderator.status === 'waiting' || next.moderator.status === 'running') {
+      next.moderator = { ...next.moderator, status: 'cancelled' };
+    }
+  } else if (event.type === 'run_failed') {
+    next.overall = 'failed';
+    next.message = event.error || 'Run failed';
+  } else if (event.type === 'run_completed') {
+    next.overall = event.status === 'partial' ? 'partial' : 'completed';
+    next.message = event.status === 'partial' ? 'Run completed with a worker failure' : 'Run completed';
+    if (event.status === 'partial' && next.moderator.status === 'completed') {
+      next.moderator = { ...next.moderator, status: 'partial' };
+    }
+  }
+  return next;
+}

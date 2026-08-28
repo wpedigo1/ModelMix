@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 import httpx
 
 from ..credentials import get_oauth_credential
 from ..oauth.refresh import get_valid_access_token
-from .base import LLMProvider
+from .base import LLMProvider, ProviderStreamEvent
 
 CODEX_BASE = "https://chatgpt.com/backend-api/codex"
 
@@ -75,6 +75,10 @@ def _extract_responses_text(data: Dict[str, Any]) -> str:
 
 
 class OpenAIOauthProvider(LLMProvider):
+    @property
+    def supports_streaming(self) -> bool:
+        return True
+
     async def query(
         self,
         model_id: str,
@@ -82,20 +86,52 @@ class OpenAIOauthProvider(LLMProvider):
         timeout: float = 120.0,
         temperature: float = 0.7,
     ) -> Dict[str, Any]:
+        text_parts: List[str] = []
+        completed_result: Optional[Dict[str, Any]] = None
+        async for event in self.stream_query(model_id, messages, timeout, temperature):
+            if event.type == "text_delta":
+                text_parts.append(event.delta)
+            elif event.type == "completed":
+                completed_result = event.result or {}
+            elif event.type == "error":
+                return {"error": True, "error_message": event.error_message or "ChatGPT OAuth failed"}
+
+        content = "".join(text_parts)
+        if not content and completed_result:
+            content = str(completed_result.get("content") or "")
+        if not content:
+            return {"error": True, "error_message": "ChatGPT OAuth returned empty response"}
+        return {
+            "content": content,
+            "usage": (completed_result or {}).get("usage"),
+            "error": False,
+        }
+
+    async def stream_query(
+        self,
+        model_id: str,
+        messages: List[Dict[str, str]],
+        timeout: float = 120.0,
+        temperature: float = 0.7,
+    ) -> AsyncIterator[ProviderStreamEvent]:
+        """Expose only user-visible output-text deltas from the Codex SSE feed."""
         cred = get_oauth_credential("openai-oauth")
         if not cred:
-            return {"error": True, "error_message": "ChatGPT OAuth not connected"}
+            yield ProviderStreamEvent(type="error", error_message="ChatGPT OAuth not connected")
+            return
         try:
             token = await get_valid_access_token("openai-oauth")
         except Exception as exc:
-            return {"error": True, "error_message": str(exc)}
+            yield ProviderStreamEvent(type="error", error_message=str(exc))
+            return
 
         model = model_id.removeprefix("openai-oauth:")
         if model in CHATGPT_CODEX_UNSUPPORTED:
-            return {
-                "error": True,
-                "error_message": f"Model '{model}' is not supported via ChatGPT OAuth in this version",
-            }
+            yield ProviderStreamEvent(
+                type="error",
+                error_message=f"Model '{model}' is not supported via ChatGPT OAuth in this version",
+            )
+            return
 
         instructions, input_items = _messages_to_responses_input(messages)
         headers = {
@@ -127,18 +163,20 @@ class OpenAIOauthProvider(LLMProvider):
                 ) as response:
                     if response.status_code >= 400:
                         body = await response.aread()
-                        return {
-                            "error": True,
-                            "error_message": (
+                        yield ProviderStreamEvent(
+                            type="error",
+                            error_message=(
                                 f"ChatGPT OAuth API error: {response.status_code} - "
                                 f"{body.decode('utf-8', errors='replace')}"
                             ),
-                        }
+                        )
+                        return
                     # Aggregate SSE or JSON body
                     content_type = response.headers.get("content-type", "")
                     if "text/event-stream" in content_type or payload.get("stream"):
                         text_parts: List[str] = []
                         usage = None
+                        finish_reason = None
                         async for line in response.aiter_lines():
                             if not line or not line.startswith("data:"):
                                 continue
@@ -157,28 +195,43 @@ class OpenAIOauthProvider(LLMProvider):
                                 delta = event.get("delta") or ""
                                 if delta:
                                     text_parts.append(str(delta))
+                                    yield ProviderStreamEvent(type="text_delta", delta=str(delta))
                             elif etype == "response.completed":
                                 resp = event.get("response") or {}
                                 if not text_parts:
-                                    text_parts.append(_extract_responses_text(resp))
+                                    final_text = _extract_responses_text(resp)
+                                    if final_text:
+                                        text_parts.append(final_text)
+                                        yield ProviderStreamEvent(type="text_delta", delta=final_text)
                                 usage = resp.get("usage") or event.get("usage")
+                                finish_reason = resp.get("status") or event.get("finish_reason")
+                            elif etype in {"error", "response.failed"}:
+                                error = event.get("error") or event.get("response", {}).get("error") or {}
+                                message = error.get("message") if isinstance(error, dict) else str(error)
+                                yield ProviderStreamEvent(
+                                    type="error",
+                                    error_message=message or "ChatGPT OAuth stream failed",
+                                )
+                                return
                         content = "".join(text_parts)
                         if not content:
-                            return {
-                                "error": True,
-                                "error_message": "ChatGPT OAuth returned empty response",
-                            }
-                        return {"content": content, "usage": usage, "error": False}
+                            yield ProviderStreamEvent(type="error", error_message="ChatGPT OAuth returned empty response")
+                            return
+                        result = {"content": content, "usage": usage, "error": False}
+                        yield ProviderStreamEvent(
+                            type="completed", result=result, usage=usage, finish_reason=finish_reason
+                        )
+                        return
 
                     data = await response.aread()
                     parsed = json.loads(data)
-                    return {
-                        "content": _extract_responses_text(parsed),
-                        "usage": parsed.get("usage"),
-                        "error": False,
-                    }
+                    content = _extract_responses_text(parsed)
+                    if content:
+                        yield ProviderStreamEvent(type="text_delta", delta=content)
+                    result = {"content": content, "usage": parsed.get("usage"), "error": False}
+                    yield ProviderStreamEvent(type="completed", result=result, usage=parsed.get("usage"))
         except Exception as e:
-            return {"error": True, "error_message": str(e)}
+            yield ProviderStreamEvent(type="error", error_message=str(e))
 
     async def get_models(self) -> List[Dict[str, Any]]:
         if not get_oauth_credential("openai-oauth"):
