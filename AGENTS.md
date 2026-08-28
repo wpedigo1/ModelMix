@@ -1,8 +1,10 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents (Codex, Claude Code, and others) when working with code in this repository. `CLAUDE.md` points Claude Code here; this file is the shared, canonical source of truth for both.
 
 ## Project Overview
+
+**Naming note**: The repository/product is `ModelMix`. "The AI Counsel" is the legacy project name still used in code identifiers you'll see throughout the codebase (`LLM_COUNCIL_*` env vars, `the_ai_counsel_mcp` package, `skills/the-ai-counsel-api/`, MCP tool names like `council_deliberate`). This is intentional — not renamed to avoid breaking env vars, published package names, and MCP tool contracts — so don't be surprised by the mismatch or try to "fix" it by renaming those identifiers.
 
 The AI Counsel is a 3-stage deliberation system where multiple LLMs collaboratively answer user questions through:
 1. **Stage 1**: Individual model responses (with optional web search context)
