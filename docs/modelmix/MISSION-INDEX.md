@@ -1,8 +1,8 @@
 # ModelMix Mission Record Index
 
-Updated: 2026-08-29 CT
+Updated: 2026-08-29 14:23 CT
 
-This index reconciles completed implementation missions with the canonical engineering reports in this repository.
+This index reconciles completed implementation missions with the canonical engineering records in this repository.
 
 Authoritative build order and roadmap: [`PUNCH-BOARD.md`](PUNCH-BOARD.md)  
 Current implementation overlay: [`ENGINEERING-PROGRESS.md`](ENGINEERING-PROGRESS.md)
@@ -18,7 +18,8 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 005 | Codex | PASS | `005-moderator-backend-phase.md` |
 | 006 | Codex | PASS | `006-three-panel-cockpit-slice.md` |
 | 007 | Codex-labeled historical prompt; final implementation/verification completed through ChatGPT Work after repository recovery | PASS | `007-searchable-model-discovery-controls.md` |
-| 008 | **Not yet completed** | OPEN | Next mission should implement the persistence + cockpit hydration gap defined by the Punch Board |
+| 007.5 | Codex | **OPEN — READY TO DISPATCH** | `007.5-mcp-2-security-compatibility.md` |
+| 008 | Not yet dispatched | **BLOCKED ON 007.5** | Next product mission remains persistence + cockpit hydration after the security interlock closes |
 
 ## Mission 007 Provenance Clarification
 
@@ -28,15 +29,36 @@ Accepted Mission 007 implementation commit recorded in the project evidence:
 
 `b10be680c437293d104727ee7f6c26f7e698f79b` — `feat: add ModelMix model discovery selectors`
 
+## Mission 007.5 Security Interlock
+
+Mission 007.5 is a bounded remediation mission inserted between completed Mission 007 and planned Mission 008. It does **not** reorder the locked 47-item Punch Board and does not promote MCP into alpha product scope.
+
+Observed trigger state from the local security remediation:
+
+- frontend dependency audit: **0 vulnerabilities**;
+- frontend production build: **PASS, 432 modules transformed**;
+- Python dependency audit: **No known vulnerabilities found**;
+- Starlette: **0.50.0 → 1.6.0**;
+- MCP: **2.1.1**;
+- full backend test collection blocked by six MCP-related collection errors because inherited code still imports `mcp.server.fastmcp.FastMCP`, an MCP 1.x API.
+
+Remote `main` immediately before this record was created was independently observed at:
+
+`1dcca51c3c20d0c4dde3d14892de512f5ebf7f17` — `docs: update ModelMix coding agent instructions`
+
+The security lockfile changes remain local/uncommitted until Mission 007.5 completes; this index does not claim they are already present on remote `main`.
+
 ## Next Mission
 
-Mission 008 is not recorded as complete.
+**Mission 007.5 is the immediate mission.**
 
-The locked next direct gap is:
+Objective: migrate the inherited MCP integration to the MCP 2.x API, preserve the security-clean dependency set, run the relevant/full backend verification, and push only after acceptable verification.
+
+After 007.5 closes, **Mission 008 remains the next planned product mission**:
 
 **ModelMix-owned durable session/run persistence plus cockpit hydration using versioned atomic JSON, preserving completed/partial seat state and the existing SSE replay contract.**
 
-This corresponds primarily to Punch Board items **11** and **22**.
+Mission 008 corresponds primarily to Punch Board items **11** and **22**.
 
 ## Evidence Rule
 
@@ -49,3 +71,5 @@ The accepted repository state is what is reachable from current `main`. Historic
 On 2026-08-28 CT, project bookkeeping was reconciled after detecting that Mission 001 and Mission 007 reports were missing from `main` even though corresponding work/evidence existed elsewhere. Mission 001 was recovered from its verified Claude branch object; Mission 007 was reconstructed from the observed ChatGPT Work result and verified GitHub commit.
 
 On 2026-08-29 CT, the current Library Punch Board and repo project records were reconciled. The authoritative Punch Board was copied into `docs/modelmix/PUNCH-BOARD.md`, while this index and `ENGINEERING-PROGRESS.md` were refreshed to point to the same current mission state and next gap.
+
+Later on 2026-08-29 CT, Mission 007.5 was inserted as a security/compatibility interlock after dependency remediation reached a clean audit but exposed an MCP 2.x API incompatibility in inherited MCP code.
