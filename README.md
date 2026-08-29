@@ -1,523 +1,473 @@
-# The AI Counsel
+<div align="center">
 
-> ☕ **If you find The AI Counsel useful, consider [buying me a coffee](https://buymeacoffee.com/jacobbd).**
-> It's free and built in my spare time — but testing every provider runs up a real AI bill. A coffee helps me cover it and keep shipping. Thank you! 🙏
->
-> <a href="https://buymeacoffee.com/jacobbd"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="42"></a>
+# ModelMix
 
-> **Collective AI Intelligence** — Convene a council of AI models that deliberate, peer-review, and synthesize the best answer — or assemble a panel of named advisor personas that debate your question and deliver a structured verdict.
+### Stop asking one AI and hoping it's right.
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://reactjs.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+**ModelMix gets independent answers from different AI models, then gives them to a Moderator that compares the evidence, handles disagreement, and builds one stronger answer.**
 
+<br>
 
-<p align="center">
-  <img src="assets/landing_page.png" alt="The AI Counsel Dual-Mode Entry Screen" width="75%">
-</p>
+`Worker A` · `Moderator` · `Worker B`
 
----
+<br>
 
-<p align="center">
-  <strong>📺 Video Overview & Demo</strong>
-  <br>
-  <em>Click below to watch the video demonstration of The AI Counsel:</em>
-</p>
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-yellow)
 
-<p align="center">
-  <a href="https://youtu.be/OQV92Y_4Wo4" target="_blank">
-    <img src="https://img.youtube.com/vi/OQV92Y_4Wo4/maxresdefault.jpg" alt="The AI Counsel Video Overview & Demo" width="75%">
-  </a>
-</p>
+</div>
 
 ---
 
-## What is The AI Counsel?
+## One model gives you one perspective.
 
-The AI Counsel is a **dual-mode multi-model AI deliberation system**. Instead of relying on a single LLM for answers, it orchestrates multiple models working together — either through anonymous peer review or persona-driven debate.
+AI models don't all fail in the same way.
 
-**Choose your experience:**
+They have different training, reasoning tendencies, strengths, blind spots, and levels of confidence. Asking a second model can expose problems the first one missed — but then **you** have to compare the answers and decide what to trust.
 
-- **🏛️ LLM Council** — Multiple AI models independently answer your question, anonymously peer-review each other's responses, and a chairman model synthesizes the collective wisdom into a final answer.
-- **🎭 LLM Advisors** — Named advisor personas (The Skeptic, The Strategist, The Ethicist, etc.) debate your question across configurable rounds, reaching consensus or voting to deliver a structured verdict with an action plan.
+ModelMix does that part too.
 
-**Choosing the right mode:** use **Council** for direct answers, creative prompts, factual questions, and "give me the best response" synthesis. Use **Advisors** when the question has real tradeoffs, disagreement, risk, strategy, ethics, prioritization, or a decision to make. Simple prompts such as "give me one amazing animal fact" are usually Council prompts; advisor personas will naturally turn them into a debate over criteria.
+```text
+                        YOUR PROMPT
+                            │
+                  ┌─────────┴─────────┐
+                  │                   │
+                  ▼                   ▼
+          ┌───────────────┐   ┌───────────────┐
+          │   WORKER A    │   │   WORKER B    │
+          │               │   │               │
+          │ Independent   │   │ Independent   │
+          │ response      │   │ response      │
+          └───────┬───────┘   └───────┬───────┘
+                  │                   │
+                  │   NO CROSS-TALK   │
+                  │                   │
+                  └─────────┬─────────┘
+                            │
+                            ▼
+                    ┌───────────────┐
+                    │   MODERATOR   │
+                    │               │
+                    │ Sees both     │
+                    │ responses     │
+                    └───────┬───────┘
+                            │
+                            ▼
+                    ┌───────────────┐
+                    │ FINAL ANSWER  │
+                    └───────────────┘
+```
+
+> **The side models are independent witnesses.  
+> The Moderator is the only one who knows the full picture.**
 
 ---
 
-## Installation
+## The idea is simple
 
-You can clone, install dependencies, and start the application in one shot:
+**Worker A** gets your request and answers it.
+
+**Worker B** gets the same request and answers it independently.
+
+Neither worker knows the other exists during the run. They don't see each other's response. They don't debate, rank, critique, or converge on a shared answer.
+
+Then the **Moderator** receives both completed responses.
+
+Its job isn't to count votes.
+
+It's to figure out what deserves to survive.
+
+The Moderator can identify agreement, investigate disagreement, weigh supporting evidence, preserve useful minority views, recognize uncertainty, and reject unsupported conclusions before producing the final response.
+
+### Independence first. Synthesis second.
+
+That's ModelMix.
+
+---
+
+## Why?
+
+A polished answer isn't necessarily a correct answer.
+
+And asking the same model to double-check itself still leaves you inside the same model's perspective.
+
+ModelMix is built around a different idea:
+
+> **Get genuinely independent perspectives before asking anyone to reconcile them.**
+
+That gives the Moderator something valuable to work with: **real disagreement**.
+
+If both workers independently reach the same conclusion, that's useful.
+
+If they disagree, that's useful too.
+
+If one catches something the other completely misses, that's exactly the point.
+
+---
+
+## The Cockpit
+
+ModelMix isn't designed as a pile of temporary AI result cards.
+
+It's a three-seat conversation workspace.
+
+```text
+┌────────────────────┬──────────────────────────────┬────────────────────┐
+│                    │                              │                    │
+│      WORKER A      │          MODERATOR           │      WORKER B      │
+│                    │                              │                    │
+│   Independent AI   │      Wider center seat       │   Independent AI   │
+│                    │                              │                    │
+│                    │                              │                    │
+│                    │                              │                    │
+│                    │                              │                    │
+├────────────────────┴──────────────────────────────┴────────────────────┤
+│                                                                       │
+│  Ask ModelMix...                                      [ Send ] [Stop] │
+│                                                                       │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+Each seat is its own persistent conversation surface.
+
+The wider center seat belongs to the Moderator because that's where the final synthesis happens.
+
+The interface stays intentionally simple.
+
+**Three seats. One prompt. Better perspective.**
+
+---
+
+## What makes ModelMix different?
+
+| | ModelMix |
+|---|---|
+| 🧠 **Independent workers** | Workers form their answers without seeing or influencing each other. |
+| ⚖️ **Moderator synthesis** | A separate model evaluates the completed worker responses. |
+| 🔀 **Mix models** | Different AI models and providers can occupy different seats. |
+| 💬 **Persistent seats** | Worker and Moderator conversations are real conversation surfaces, not disposable cards. |
+| 📡 **Live runs** | Responses can stream into their seats while a run is active. |
+| 🔄 **Reconnectable** | Run state is designed to survive ordinary frontend disconnects and reconnects. |
+| ✋ **Explicit cancellation** | Send and Stop are separate controls with honest run state. |
+| 🏠 **Local-first** | ModelMix is designed around local application state and user-controlled provider access. |
+| 🔐 **Credential isolation** | Provider credentials stay separate from ordinary prompts and conversation data. |
+| 📊 **Honest telemetry** | Reported, calculated, estimated, and unavailable information aren't pretended to be the same thing. |
+
+---
+
+## No fake consensus
+
+ModelMix deliberately does **not** make the workers debate each other before synthesis.
+
+Why?
+
+Because the moment Worker B sees Worker A's answer, Worker B is no longer giving you a fully independent second perspective.
+
+The same problem appears when models rank one another, critique one another, or iteratively converge before the final synthesis.
+
+ModelMix keeps that boundary clean:
+
+```text
+Worker A ────────┐
+                 │
+                 ├────► Moderator
+                 │
+Worker B ────────┘
+
+Worker A  ✕  Worker B
+```
+
+Workers produce evidence.
+
+The Moderator sees the whole picture.
+
+---
+
+## Mix the models you trust
+
+ModelMix is being built to sit above individual AI providers rather than belong to one of them.
+
+That means the interesting question becomes:
+
+**Which models do you want in the seats?**
+
+A Mix might use models from different companies.
+
+It might combine cloud and local models.
+
+It might deliberately pair models with different strengths.
+
+And the model occupying a seat can change without changing what that seat means.
+
+**Seats are resources. Roles are assignments.**
+
+ModelMix preserves which provider and model actually produced a response rather than silently swapping one for another.
+
+---
+
+## Honest by design
+
+ModelMix shouldn't tell you something it doesn't know.
+
+That applies to AI answers — and to the application itself.
+
+If a provider reports usage, ModelMix can identify it as provider-reported.
+
+If ModelMix calculates something locally, it can identify it as ModelMix-tracked.
+
+If something is estimated, it should say so.
+
+If the information isn't available:
+
+**Unknown means unknown.**
+
+No invented quota percentages.
+
+No fake provider status.
+
+No imaginary precision.
+
+No silent model substitutions.
+
+---
+
+## Runs that behave like real work
+
+AI requests aren't always instant.
+
+Connections drop. Providers fail. Users hit Stop. One worker may finish while another doesn't.
+
+ModelMix treats those as real states instead of pretending every request ends neatly.
+
+The run architecture is designed around:
+
+- ordered streaming events;
+- persistent run identity;
+- reconnect and replay;
+- duplicate protection;
+- explicit cancellation;
+- preserved partial output;
+- visible failures;
+- honest terminal states.
+
+If useful work was already produced, ModelMix shouldn't casually throw it away.
+
+---
+
+## Local-first
+
+ModelMix is designed as software **you run**, connected to AI providers **you choose**.
+
+Conversation and application state remain under a ModelMix-owned persistence layer rather than requiring ModelMix to operate a paid AI backend for you.
+
+Provider credentials are handled separately from ordinary conversation content and should never be committed to the repository.
+
+---
+
+# Quick Start
+
+## Requirements
+
+- Python **3.10+**
+- Node.js **18+**
+- [`uv`](https://docs.astral.sh/uv/)
+
+## 1. Clone ModelMix
 
 ```bash
-git clone https://github.com/jacob-bd/the-ai-counsel.git && \
-cd the-ai-counsel && \
-uv sync && \
-npm install --prefix frontend && \
+git clone https://github.com/wpedigo1/ModelMix.git
+cd ModelMix
+```
+
+## 2. Install dependencies
+
+```bash
+uv sync
+npm install --prefix frontend
+```
+
+## 3. Start ModelMix
+
+```bash
 ./start.sh
 ```
 
-*(Note: `uv sync` installs the backend dependencies, `npm install --prefix frontend` installs the frontend dependencies, and `./start.sh` spins up both servers together).*
+Open:
 
-Then open **http://localhost:5173** and configure your API keys (or subscription OAuth logins) in Settings.
-
-> **Prerequisites:** Python 3.10+, Node.js 18+, [uv](https://docs.astral.sh/uv/)
-
----
-
-## Two Modes of Deliberation
-
-### 🏛️ LLM Council — Multi-Model Deliberation
-
-The original three-stage pipeline where raw model diversity produces vetted answers:
-
-```
-YOUR QUESTION (+ optional web search / file uploads)
-         │
-         ▼
-  ┌─────────────────────────────────┐
-  │   STAGE 1: DELIBERATION         │
-  │   Claude, GPT-4, Gemini, Llama  │
-  │   Each answers independently    │
-  └──────────────┬──────────────────┘
-                 ▼
-  ┌─────────────────────────────────┐
-  │   STAGE 2: PEER REVIEW          │
-  │   Anonymized as A, B, C, D      │
-  │   Each model ranks all others   │
-  └──────────────┬──────────────────┘
-                 ▼
-  ┌─────────────────────────────────┐
-  │   STAGE 3: CHAIRMAN SYNTHESIS   │
-  │   Reviews all + rankings        │
-  │   Delivers the final answer     │
-  └─────────────────────────────────┘
+```text
+http://localhost:5173
 ```
 
-**Execution modes** control deliberation depth:
+<details>
+<summary><strong>Run the backend and frontend separately</strong></summary>
 
-| Mode | Stages | Best For |
-|------|--------|----------|
-| **Chat Only** | Stage 1 only | Quick responses, comparing model outputs |
-| **Chat + Ranking** | Stages 1 & 2 | Peer review without synthesis |
-| **Full Deliberation** | All 3 stages | Complete council synthesis (default) |
+<br>
 
-#### Multi-Round Iterative Debate (v0.7.0)
+Backend:
 
-Council mode also supports **multi-round iterative debate** — models refine their answers across multiple rounds based on peer critiques, with convergence detection and early stopping:
-
-```
-  ┌─────────────────────────────────┐
-  │   ROUND 1: Initial Responses    │
-  │   + Peer Critique               │
-  └──────────────┬──────────────────┘
-                 ▼
-  ┌─────────────────────────────────┐
-  │   ROUNDS 2–5: Refinement        │
-  │   Cross-pollination of top      │
-  │   claims + targeted critique    │
-  │   (auto-stops on convergence)   │
-  └──────────────┬──────────────────┘
-                 ▼
-  ┌─────────────────────────────────┐
-  │   STAGE 4: CORRECTED DRAFT      │
-  │   Chairman synthesizes final    │
-  │   draft with [REVISED]/[NEW]    │
-  └─────────────────────────────────┘
-```
-
-**Three critique modes** control how models evaluate each other:
-
-| Mode | How It Works |
-|------|-------------|
-| **Free-form** | Open-ended feedback on the full response |
-| **Paragraph-level** | Structured per-paragraph evaluation with stable `[Para N]` markers |
-| **Claim-level** | Chairman extracts falsifiable claims; peers verdict each claim (strong/weak/flawed) |
-
-Configure rounds (1–5), critique mode, and convergence threshold in **Settings > Council Debate**, or via the `run_iterative_debate` MCP tool. See [docs/COUNCIL-DEBATE-CONFIG.md](docs/COUNCIL-DEBATE-CONFIG.md) for a full walkthrough.
-
-### 🎭 LLM Advisors — Persona-Driven Debate
-
-A fundamentally different approach: named personas with distinct thinking styles argue your question in structured rounds.
-
-Advisor mode works best when there is something meaningful to debate: a strategic choice, a product decision, a risk review, an ethical question, or competing options. For simple answer generation, use Council mode instead.
-
-```
-YOUR QUESTION (+ optional web search)
-         │
-         ▼
-  ┌─────────────────────────────────┐
-  │   ROUND 1: OPENING POSITIONS    │
-  │   Each advisor states their case │
-  └──────────────┬──────────────────┘
-                 ▼
-  ┌─────────────────────────────────┐
-  │   ROUND 2–N: DEBATE             │
-  │   Rotating order, respond to    │
-  │   each other by name            │
-  │   (auto-stops on consensus)     │
-  └──────────────┬──────────────────┘
-                 ▼
-  ┌─────────────────────────────────┐
-  │   VERDICT (or TIEBREAKER)       │
-  │   Summary, consensus points,    │
-  │   disagreements table, verdict, │
-  │   next steps, open questions    │
-  └─────────────────────────────────┘
-```
-
-**12 built-in advisor personas:**
-
-| Persona | Role | Style |
-|---------|------|-------|
-| 🔍 **The Skeptic** | Critical Thinker | Challenges assumptions, demands evidence |
-| 🔧 **The Pragmatist** | Practical Advisor | Focuses on feasibility and real-world constraints |
-| 💡 **The Innovator** | Creative Thinker | Pushes boundaries, explores unconventional solutions |
-| 📜 **The Historian** | Pattern Analyst | Draws lessons from historical patterns |
-| ⚖️ **The Ethicist** | Moral Compass | Examines decisions through ethics and fairness |
-| 📊 **The Data Analyst** | Evidence Evaluator | Brings quantitative rigor and measurable evidence |
-| 🎭 **The Contrarian** | Devil's Advocate | Deliberately argues the opposing position |
-| ♟️ **The Strategist** | Big-Picture Thinker | Thinks long-term about positioning and leverage |
-| 🤝 **The Humanist** | People-First Advocate | Centers the human experience and well-being |
-| 🛡️ **The Risk Assessor** | Risk Analyst | Identifies worst-case scenarios and mitigations |
-| 🎤 **The Comedian** | Humorist Critic | Uses wit to expose absurdity and weak framing |
-| 📈 **The Economist** | Incentives Analyst | Analyzes incentives, scarcity, and unintended consequences |
-
-All personas are **fully customizable** — edit name, role, description, system prompt, and emoji. Changes persist across sessions with per-persona reset to defaults.
-
----
-
-## Features
-
-### Multi-Provider Support
-
-Mix and match models from 12 different provider types:
-
-| Provider | Type | Description |
-|----------|------|-------------|
-| **OpenRouter** | Cloud | 100+ models via single API (GPT-4, Claude, Gemini, Mistral, etc.) |
-| **Ollama** | Local | Run open-source models locally (Llama, Mistral, Phi, etc.) |
-| **Groq** | Cloud | Ultra-fast inference for Llama and Mixtral models |
-| **NVIDIA NIM** | Cloud | NVIDIA Build models via `integrate.api.nvidia.com` |
-| **OpenCode Zen** | Cloud | Direct connection to [opencode.ai/zen](https://opencode.ai) (chat/completions only, v1) |
-| **OpenCode Go** | Cloud | Direct connection to OpenCode Go (subscription, chat/completions only, v1) |
-| **OpenAI Direct** | Cloud | Direct connection to OpenAI API |
-| **Anthropic Direct** | Cloud | Direct connection to Anthropic API |
-| **Google Direct** | Cloud | Direct connection to Google AI API |
-| **Mistral Direct** | Cloud | Direct connection to Mistral API |
-| **DeepSeek Direct** | Cloud | Direct connection to DeepSeek API |
-| **Custom Endpoint** | Any | Any OpenAI-compatible API (Together AI, Fireworks, vLLM, LM Studio, GitHub Models, etc.) |
-
-### Web Search Integration
-
-Ground your council's or advisors' responses in real-time information:
-
-| Provider | Type | Notes |
-|----------|------|-------|
-| **DuckDuckGo** | Free | Hybrid web+news search, no API key needed |
-| **TinyFish** | Free | Batch Fetch API for fast multi-URL fetching |
-| **Serper** | API Key | Real Google results, 2,500 free queries |
-| **Tavily** | API Key | Purpose-built for LLMs, rich content |
-| **Brave Search** | API Key | Privacy-focused, 2,000 free queries/month |
-
-**Full Article Fetching**: Uses [Jina Reader](https://jina.ai/reader) to extract full article content from top search results (configurable 0–10 results).
-
-### Temperature Controls
-
-Fine-tune creativity vs consistency per stage:
-
-- **Council Heat** (Stage 1): Individual response creativity (default: 0.5)
-- **Peer Ranking Heat** (Stage 2): Ranking consistency (default: 0.3)
-- **Chairman Heat** (Stage 3): Final synthesis creativity (default: 0.4)
-
-Some provider/model combinations only accept their default temperature. The app automatically omits temperature for those models so preflight and runs do not fail on provider-specific temperature restrictions.
-
-### Additional Features
-
-- **Live Progress Tracking** — See each model or advisor respond in real-time with streaming; reconnect to active runs via `GET /api/conversations/{id}/progress`
-- **Multi-turn Conversations** — Follow-up questions carry full context automatically
-- **Docked Chat Composer** — The input stays below the scrollable conversation so responses remain readable while you type
-- **Text File Uploads** — Attach PDFs and text/code/config files in Council or Advisor mode; extracted text is sent as normalized prompt context across all providers while conversation history stores attachment metadata only
-- **Council Sizing** — Adjust council from 1 to 8 models; advisors from 2 to 4 personas (select from 12)
-- **Advisor Presets** — Save and load named advisor lineups (personas, model mode, optional rounds/web search) from Advisor Setup
-- **Abort Anytime** — Cancel in-progress requests
-- **Conversation History** — All conversations saved locally with search; sidebar cards show stacked date/time, compact run summaries (rounds, critique mode, personas, search), and cumulative cost per thread
-- **Accessible Typography** — Settings → General offers Default (110%) and Large (150%) text sizes across the UI, including existing chats
-- **Customizable System Prompts** — Edit Stage 1, 2, and 3 prompts for Council mode
-- **Run Cost Reporting** — See total cost, input/output token split, call count, pricing confidence, and per-model breakdowns for council and advisor runs
-- **Rate Limit Warnings** — Alerts when your config may hit API limits
-- **"I'm Feeling Lucky"** — Randomize your council composition
-- **Import & Export** — Backup and share your settings and prompts (admin export can include the credential store; see [`docs/CREDENTIALS.md`](docs/CREDENTIALS.md))
-- **Per-request Model Overrides** — Use different models for individual requests without changing global config
-- **One-shot API** — `POST /api/ask` for scripts and MCP agents; each completed run is saved to the UI and returns a `conversation_id`
-- **Docker Deployment** — Single-container production deployment via `docker compose`
-
----
-
-### File Uploads
-
-Attach PDFs and text-like files from the Council input or Advisor setup. The backend extracts text once before model calls, so uploads work the same way across OpenRouter, Ollama, Groq, direct providers, custom endpoints, and MCP.
-
-Supported v1 formats include `.pdf`, `.txt`, `.md`, `.csv`, `.json`, `.yaml`, `.xml`, `.html`, logs, code files, and common config files. Conversation history stores file name/type/size metadata only; it does not store raw file bytes or extracted text.
-
-PDFs use embedded text extraction by default. OCR for scanned or image-only PDFs is optional: set `LLM_COUNCIL_OCR_ENABLED=1` and install OCRmyPDF, Tesseract, Ghostscript, and qpdf in the backend runtime. If OCR is unavailable, the run continues with extracted text and warnings.
-
----
-
-## Quick Start
-
-### Prerequisites
-
-- **Python 3.10+**
-- **Node.js 18+**
-- **[uv](https://docs.astral.sh/uv/)** (Python package manager)
-
-### Running the Application
-
-**Option 1: Use the start script (recommended)**
-```bash
-./start.sh
-```
-
-**Option 2: Run manually**
-
-Terminal 1 (Backend):
 ```bash
 uv run python -m backend.main
 ```
 
-Terminal 2 (Frontend):
+Frontend:
+
 ```bash
 cd frontend
 npm run dev
 ```
 
-Then open **http://localhost:5173** in your browser.
+Then open:
 
-### Docker / VPS Deployment
+```text
+http://localhost:5173
+```
+
+</details>
+
+<details>
+<summary><strong>Docker</strong></summary>
+
+<br>
+
+The inherited application includes Docker-based startup:
 
 ```bash
 docker compose up -d --build
 ```
 
-Then open **http://YOUR_SERVER_IP:8001**. Conversations and settings persist to `./data` automatically.
+Docker and deployment behavior may continue to change while inherited infrastructure is converted to ModelMix.
 
-For Ollama integration, reverse proxy setup, environment variables, and upgrade instructions, see **[docs/DOCKER.md](docs/DOCKER.md)**.
+</details>
 
-> **Coming from LLM Council Plus?** See the **[Migration Guide](docs/MIGRATION.md)** for step-by-step upgrade instructions. Copy your `data/` directory; secrets migrate into `credentials.json` on first launch (see [`docs/CREDENTIALS.md`](docs/CREDENTIALS.md)).
+---
 
-### Network Access
+## Under the hood
 
-The start script exposes both frontend and backend on the network automatically:
+ModelMix currently builds on:
 
-- **Local:** `http://localhost:5173`
-- **Network:** `http://YOUR_IP:5173`
+| Layer | Technology |
+|---|---|
+| Frontend | React 19 |
+| Backend | FastAPI |
+| Language | Python 3.10+ |
+| Package management | uv / npm |
+| Streaming | Server-Sent Events |
+| Alpha persistence | Versioned atomic JSON |
+| Browser development | Local web application |
 
-For manual setup:
-```bash
-# Backend with network access
-LLM_COUNCIL_BIND_HOST=0.0.0.0 uv run python -m backend.main
+The browser experience is the primary alpha surface.
 
-# Frontend with network access
-cd frontend && npm run dev -- --host
+The architecture intentionally keeps important boundaries — providers, persistence, run state, credentials, and UI — replaceable enough to evolve without rewriting the core ModelMix product model.
+
+---
+
+## Built from a strong foundation
+
+ModelMix began as a fork/evolution of **The AI Counsel**, an open-source multi-model AI project.
+
+AI Counsel provided substantial working infrastructure around providers, conversations, model access, streaming, and other capabilities.
+
+ModelMix takes the product in a different direction.
+
+Instead of Council peer review, Chairman ranking, Advisor personas, and multi-round debate, ModelMix centers the experience on:
+
+```text
+Independent Worker
+        +
+Independent Worker
+        +
+     Moderator
 ```
 
-Remote admin endpoints (`/api/settings/export`, `/api/settings/import`, `/api/settings/reset`) require `LLM_COUNCIL_ADMIN_TOKEN` when accessed by proxied or remote clients.
+Some inherited AI Counsel code, documentation, terminology, assets, and configuration may remain in the repository while that transition is underway.
+
+Their presence does not automatically mean they describe current ModelMix behavior.
+
+**Credit to the original AI Counsel project and its contributors for the foundation ModelMix started from.**
 
 ---
 
-## Configuration
+## For developers
 
-### First-Time Setup
+Before changing ModelMix, coding agents should read:
 
-On first launch, configure at least one LLM provider in Settings:
-
-1. **LLM API Keys** — Enter API keys, connect Ollama, or sign in with subscription OAuth; optionally import from [relay-ai](https://github.com/jacob-bd/relay-ai) under **Settings → General**
-2. **Council Config** (Settings) or **welcome-screen Council Setup** — add members and chairman; both edit the same saved lineup (auto-saves)
-
-Settings changes save automatically (~1 second after you stop editing). API keys **auto-save** when you click "Test" / "Connect" and the connection succeeds. See [`docs/CREDENTIALS.md`](docs/CREDENTIALS.md) for where secrets are stored, Disconnect, and relay-ai import.
-
-**Provider toggles are global:** Settings → Council Config **provider toggles** control which sources appear in **all** model pickers — Council Setup and Advisor Setup alike. A provider must be both configured (API key) and enabled (toggle on) to show its models.
-
-**Advisor presets:** In Advisor Setup, save named lineups (personas, models, optional rounds/web search) from the Model Assignment section. Presets persist in `settings.json` as `advisor_presets` (max 20; one default).
-
-### LLM API Keys
-
-At the top of this section you can choose **where secrets are stored**: local file (`data/credentials.json`, plaintext with restricted permissions) or the OS keystore (desktop only; unavailable in Docker).
-
-| Provider | Get API Key |
-|----------|-------------|
-| OpenRouter | [openrouter.ai/keys](https://openrouter.ai/keys) |
-| Groq | [console.groq.com/keys](https://console.groq.com/keys) |
-| NVIDIA | [build.nvidia.com](https://build.nvidia.com/) |
-| OpenAI | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
-| Anthropic | [console.anthropic.com](https://console.anthropic.com/) |
-| Google AI | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
-| Mistral | [console.mistral.ai/api-keys](https://console.mistral.ai/api-keys/) |
-| DeepSeek | [platform.deepseek.com](https://platform.deepseek.com/) |
-
-### Ollama (Local Models)
-
-1. Install [Ollama](https://ollama.com/)
-2. Pull models: `ollama pull llama3.1`
-3. Start Ollama: `ollama serve`
-4. In Settings, enter your Ollama URL (default: `http://localhost:11434`)
-5. Click "Connect" to verify
-
-### Custom OpenAI-Compatible Endpoint
-
-Connect to any OpenAI-compatible API:
-
-1. Go to **LLM API Keys** → **Custom OpenAI-Compatible Endpoint**
-2. Enter **Display Name**, **Base URL**, and **API Key** (optional for local servers)
-3. Click "Connect" to test and save
-
-**Compatible services**: Together AI, Fireworks AI, vLLM, LM Studio, GitHub Models, and more.
-
----
-
-## MCP Server
-
-The AI Counsel exposes a powerful Model Context Protocol (MCP) server that lets AI tools like Claude Code and Gemini CLI interact directly with your local or remote instance.
-
-The server exposes **10 action-based tools** grouped by domain:
-1. **Deliberation**: `council_deliberate` (stage1/stage2/stage3/full), `model_chat` (quick/multi_turn), `advisor_debate`, `run_iterative_debate`
-2. **Configuration**: `council_settings`, `advisor_settings`, `personas`, `providers`, `config_backup`
-3. **History**: `conversations` (list/get)
-
-Legacy 25-tool names were removed in v0.5.2. `run_iterative_debate` was added in v0.7.0. See [docs/mcp/TOOLS.md](docs/mcp/TOOLS.md) for the action parameter on each tool.
-
-Deliberation tools also accept optional document inputs. Base64 files are extracted by the backend before model calls, so raw file bytes are not sent to providers.
-
-**Quick registration for Claude Code:**
-
-* **Option A: Local stdio (Standard for local development)**
-  ```bash
-  pip install -e .
-  claude mcp add the-ai-counsel python -m the_ai_counsel_mcp
-  ```
-
-* **Option B: Remote SSE (Zero-install for containers/servers)**
-  ```bash
-  claude mcp add --transport sse the-ai-counsel http://yourserver.com:8001/mcp/sse
-  ```
-
-Then ask Claude: "check the council health" to verify the connection (`providers` → action `health`; expect 10 tools in `/api/health`).
-
-See **[docs/mcp/](docs/mcp/)** for full setup guides, including stdio/SSE transport configurations, complete tools reference, and usage examples.
-
----
-
-## Claude Code Skill (REST fallback)
-
-When MCP isn't available or you need preset CRUD / raw SSE, install the **`the-ai-counsel-api` skill**. When **both** skill and MCP are present, agents should **use MCP tools first** — the skill documents REST as fallback.
-
-```bash
-# Symlink from your cloned repo
-mkdir -p ~/.claude/skills
-ln -s "$(pwd)/skills/the-ai-counsel-api" ~/.claude/skills/the-ai-counsel-api
+```text
+AGENTS.md
 ```
 
-The skill covers all API endpoints, SSE stream parsing, advisor endpoints, and troubleshooting. See [`skills/the-ai-counsel-api/SKILL.md`](skills/the-ai-counsel-api/SKILL.md) for the full reference.
+That file defines the permanent ModelMix engineering contract, including:
 
-Contributors: keep REST API, MCP tools, skill, and user docs in sync — see [`docs/DOC-SYNC.md`](docs/DOC-SYNC.md).
+- worker independence;
+- Moderator boundaries;
+- run/event integrity;
+- persistence;
+- provider behavior;
+- security;
+- telemetry;
+- UI constraints;
+- testing and validation;
+- scope discipline.
+
+Task prompts should describe the individual change.
+
+`AGENTS.md` describes ModelMix.
 
 ---
 
-## Tech Stack
+## Where ModelMix is going
 
-| Component | Technology |
-|-----------|------------|
-| **Backend** | FastAPI, Python 3.10+, httpx (async HTTP) |
-| **Frontend** | React 19, Vite, react-markdown |
-| **Styling** | CSS with "Midnight Glass" dark theme |
-| **Storage** | JSON files in `data/` directory |
-| **Package Management** | uv (Python), npm (JavaScript) |
+The default experience stays intentionally small:
 
----
+### Worker A · Moderator · Worker B
 
-## Data Storage
+More power can grow around that foundation without turning the main interface into an AI control room.
 
-All data is stored locally in the `data/` directory:
+Future directions can include richer research, additional Mix configurations, deeper evidence inspection, expanded provider capabilities, desktop packaging, mobile experiences, and other advanced tools.
 
+But the core idea doesn't need to get complicated:
+
+```text
+Ask once.
+
+Get independent perspectives.
+
+Let the Moderator make sense of them.
 ```
-data/
-├── settings.json              # Non-secret configuration (council, prompts, toggles)
-├── credentials.json           # API keys & OAuth tokens (file storage mode; mode 0600)
-├── persona_overrides.json     # Advisor persona customizations
-└── conversations/             # Conversation history
-    ├── {uuid}.json
-    └── ...
-```
-
-**Privacy**: Prompts and responses are sent only to your configured LLM/search providers. Cost reporting also fetches public model-pricing catalogs; it does not send prompt text, responses, or API keys.
-
-Full details: [`docs/CREDENTIALS.md`](docs/CREDENTIALS.md).
-
-> **⚠️ Security Warning: Secrets on Disk**
->
-> In file storage mode, API keys and OAuth tokens live in clear text in `data/credentials.json` (not `settings.json`). The `data/` folder is in `.gitignore` by default.
->
-> - **Do NOT remove `data/` from `.gitignore`**
-> - Never commit `data/credentials.json` or `data/settings.json`
-> - If you accidentally expose your keys, rotate them immediately
 
 ---
 
-## Troubleshooting
+## Development Status
 
-**"Failed to load conversations"**
-- Backend might still be starting up — the app retries automatically
+> 🚧 **ModelMix is under active development.**
 
-**Models not appearing in dropdown**
-- Ensure the provider toggle is enabled in **Settings → Council Config** (toggles are global — apply to both Council and Advisor pickers)
-- Check that the API key is configured and tested successfully
-- For Ollama, verify connection is active
+The repository is currently transitioning from its AI Counsel foundation to the ModelMix architecture.
 
-**Jina Reader returns 451 errors**
-- HTTP 451 = site blocks AI scrapers (common with news sites)
-- Try Tavily/Brave instead, or set `full_content_results` to 0
+Some inherited functionality may still exist while replacement work continues.
 
-**Rate limit errors (OpenRouter)**
-- Free models: 20 requests/min, 50/day
-- Consider using Groq (14,400/day) or Ollama (unlimited)
-
-**Binary compatibility errors (node_modules)**
-- When syncing between Intel/Apple Silicon Macs:
-  ```bash
-  rm -rf frontend/node_modules && npm install --prefix frontend
-  ```
-
-**Logs:**
-- Backend: Terminal running `uv run python -m backend.main`
-- Frontend: Browser DevTools console
-
----
-
-## Credits & Acknowledgements
-
-This project builds upon the original **[llm-council](https://github.com/karpathy/llm-council)** by **[Andrej Karpathy](https://github.com/karpathy)**.
-
-**The AI Counsel** extends that foundation with dual-mode deliberation (Council + Advisors), 12 provider integrations (including NVIDIA NIM and OpenCode Zen/Go), web search, persona-driven debates, customizable prompts, an MCP server, Docker deployment, and much more.
-
-We gratefully acknowledge Andrej Karpathy for the original inspiration and codebase.
+Expect things to move.
 
 ---
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+ModelMix retains the repository's existing licensing and applicable upstream attribution requirements.
+
+See the repository's license files for authoritative terms.
 
 ---
 
-## Contributing
+<div align="center">
 
-Contributions are welcome! This project embraces the spirit of "vibe coding" — feel free to fork and make it your own.
+# ModelMix
 
----
+### Don't trust one perspective when you can compare two.
 
-<p align="center">
-  <strong>Built with the collective wisdom of AI</strong><br>
-  <em>Ask the council. Debate with advisors. Get better answers.</em>
-</p>
+**Independent models · Independent perspectives · One Moderator**
+
+<br>
+
+⭐ If the idea interests you, star the repo and follow the build.
+
+</div>
