@@ -4,7 +4,9 @@ import json
 
 
 def get_text(call_tool_result) -> str:
-    """Extract plain text from call_tool's (content_blocks, raw) tuple."""
+    """Extract plain text from call_tool result."""
+    if hasattr(call_tool_result, "content"):
+        return call_tool_result.content[0].text
     content_blocks, _ = call_tool_result
     return content_blocks[0].text
 

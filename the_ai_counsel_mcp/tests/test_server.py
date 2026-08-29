@@ -8,6 +8,6 @@ def test_mcp_initialization_advertises_app_version():
     """The MCP handshake reports The AI Counsel version, not the SDK version."""
     server = create_server()
 
-    initialization = server._mcp_server.create_initialization_options()
+    initialization = server._lowlevel_server.create_initialization_options()
 
     assert initialization.server_version == __version__

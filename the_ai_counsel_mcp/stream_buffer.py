@@ -121,41 +121,48 @@ async def _events_from_list(events: list[dict]) -> AsyncIterator[dict]:
         yield event
 
 
-async def wrap_with_progress(events: AsyncIterator[dict]) -> AsyncIterator[dict]:
+async def wrap_with_progress(events: AsyncIterator[dict], ctx: Any = None) -> AsyncIterator[dict]:
     """
     Wrap an event stream, emitting MCP progress notifications in the background.
     This continuous heartbeat prevents client-side timeouts (e.g., 60 seconds)
     during long-running, silent deliberations (like stage 2 ranking).
     """
-    try:
-        from mcp.server.lowlevel.server import request_ctx
-        ctx = request_ctx.get()
-        progress_token = ctx.meta.progressToken if ctx.meta else None
-    except LookupError:
-        # Not running inside an active MCP request context (e.g., unit tests)
-        ctx = None
-        progress_token = None
+    progress_token = None
+    session = None
+    if ctx is not None:
+        try:
+            if hasattr(ctx, "session"):
+                session = ctx.session
+            if hasattr(ctx, "request_context") and getattr(ctx.request_context, "meta", None):
+                progress_token = getattr(ctx.request_context.meta, "progressToken", None)
+            elif hasattr(ctx, "meta") and getattr(ctx, "meta", None):
+                progress_token = getattr(ctx.meta, "progressToken", None)
+        except Exception:
+            session = None
+            progress_token = None
 
-    if not ctx:
+    if not session and not ctx:
         async for event in events:
             yield event
         return
 
     # Background heartbeat task to prevent 60s client timeouts during silent inference.
-    # Uses send_log_message (no progressToken required) so the heartbeat fires even when
+    # Uses send_log_message / log (no progressToken required) so the heartbeat fires even when
     # the MCP client does not provide a progressToken in its tool call.
     async def heartbeat():
         while True:
             await asyncio.sleep(10)
             try:
-                if progress_token:
-                    await ctx.session.send_progress_notification(
+                if progress_token and session:
+                    await session.send_progress_notification(
                         progress_token=progress_token,
                         progress=0.5,
                         message="Deliberating...",
                     )
-                else:
-                    await ctx.session.send_log_message(
+                elif hasattr(ctx, "info"):
+                    ctx.info("deliberation in progress")
+                elif session:
+                    await session.send_log_message(
                         level="debug",
                         data="deliberation in progress",
                     )
@@ -168,6 +175,7 @@ async def wrap_with_progress(events: AsyncIterator[dict]) -> AsyncIterator[dict]
         async for event in events:
             yield event
     finally:
+
         task.cancel()
 
 
