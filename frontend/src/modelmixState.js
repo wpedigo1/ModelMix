@@ -1,4 +1,5 @@
 export const createModelMixState = () => ({
+  sessionId: null,
   runId: null,
   lastSeq: 0,
   overall: 'idle',
@@ -42,6 +43,7 @@ export function applyReplayError(state, status, message = '') {
 }
 
 export function applyModelMixEvent(state, event) {
+  if (state.runId && event?.run_id && event.run_id !== state.runId) return state;
   if (!event || !Number.isInteger(event.seq) || event.seq <= state.lastSeq) return state;
   const next = { ...state, lastSeq: event.seq, runId: event.run_id || state.runId };
   const seatId = event.seat_id;
@@ -104,4 +106,34 @@ export function applyModelMixEvent(state, event) {
     }
   }
   return next;
+}
+
+export function hydrateModelMixState(document) {
+  if (document?.schema_version !== 1 || !document.session || !Array.isArray(document.session.runs)) {
+    throw new Error('Unsupported or malformed ModelMix session');
+  }
+  const run = document.session.runs.at(-1);
+  if (!run) return createModelMixState();
+  const state = {
+    ...createModelMixState(),
+    runId: run.run_id,
+    sessionId: document.session.session_id,
+    lastSeq: run.latest_seq,
+    overall: run.status,
+    message: `Restored ${run.status} run`,
+    models: run.models,
+    prompt: run.prompt,
+  };
+  for (const message of document.session.messages || []) {
+    if (message.run_id !== run.run_id || !['worker_a', 'worker_b', 'moderator'].includes(message.seat)) continue;
+    state[message.seat] = {
+      ...state[message.seat],
+      text: String(message.content || ''),
+      status: message.status || state[message.seat].status,
+      error: message.error || null,
+    };
+    if (message.seat === 'moderator') state.moderator.started = message.status !== 'waiting';
+  }
+  if (run.status === 'partial' && state.moderator.status === 'completed') state.moderator.status = 'partial';
+  return state;
 }

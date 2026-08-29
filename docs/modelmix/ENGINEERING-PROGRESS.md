@@ -9,7 +9,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed implementation missions: **001–007.5**.
+Completed and locally verified implementation missions: **001–008**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -19,7 +19,7 @@ Accepted Mission 007.5 implementation commit:
 
 Remote `main` was independently verified to resolve to that commit before this documentation update.
 
-Next active product mission: **008**.
+Mission **008** is implemented and verified on the isolated `work` checkout; remote integration remains external to this record.
 
 ## Mission Ledger
 
@@ -33,7 +33,7 @@ Next active product mission: **008**.
 | 006 | PASS | Persistent three-panel cockpit: Worker A / wider Moderator / Worker B, centralized event routing, reconnect and failure UX | `006-three-panel-cockpit-slice.md` |
 | 007 | PASS | Searchable configured-model selectors for Worker A/Moderator/Worker B; exact IDs, active-run locking, accessible keyboard behavior | `007-searchable-model-discovery-controls.md` |
 | 007.5 | **PASS** | MCP 2.x compatibility migration; security-clean dependency set preserved | `007.5-mcp-2-security-compatibility.md` |
-| 008 | **READY** | Durable session/run persistence and cockpit hydration | Punch Board items 11 and 22 |
+| 008 | **PASS (LOCAL)** | Versioned atomic JSON session/run persistence, restart replay reconstruction, and cockpit hydration/deduplication | `008-durable-persistence-cockpit-hydration.md` |
 
 ## Current Verified Product Slice
 
@@ -51,6 +51,8 @@ The accepted implementation through Mission 007 establishes:
 - exact provider/model IDs preserved with no silent substitution;
 - selector locking during active/reconnecting/cancelling runs;
 - explicit worker/Moderator failure and partial-result handling in the implemented slice.
+- durable schema-v1 atomic JSON sessions with canonical seat/audience/role messages and immutable terminal run snapshots;
+- cockpit hydration from persisted truth with the durable sequence used as the existing SSE replay cursor.
 
 ## Mission 007.5 Verification Evidence
 
@@ -79,11 +81,13 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **5 — Lock chassis policy**
 - **6 — Create ModelMix-owned backend boundary**
 - **10 — Define ordered event contract**
+- **11 — ModelMix persistence boundary**
 - **16 — Prove failure + cancellation**
 - **18 — Add normalized provider streaming interface**
 - **19 — Multiplex streams into one ordered SSE run feed**
 - **20 — Stream Moderator**
 - **21 — Build browser-first three-panel cockpit**
+- **22 — Bind UI to durable run/session state**
 - **23 — Add Stop behavior**
 
 ### Partially satisfied — keep open
@@ -93,15 +97,13 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **9 — Run state machine:** core active/terminal outcomes exist; complete timeout/retry/state contract remains open.
 - **12 — Provider capability matrix:** streaming capability/fallback and configured discovery exist; the full capability matrix remains open.
 - **14 — Deterministic mock provider:** current tests use deterministic fakes/mocks, but the full locked failure/timeout/rate-limit fixture matrix remains open.
-- **15 — Non-streaming Mix vertical slice:** worker + Moderator semantics and fallback exist; persistence required by the locked PASS definition remains open.
+- **15 — Non-streaming Mix vertical slice:** worker + Moderator semantics, fallback, and persistence exist; broader acceptance remains governed by the full item contract.
 - **17 — Spend/runtime guardrails:** explicit Stop and some bounding hooks exist; timeout/cost-token ceilings and output warning/hard-cap work remain open.
-- **22 — Durable run/session UI:** reconnect/replay survives subscriber loss; persisted session hydration across reload/reopen remains open.
 - **26 — Provider/settings UX:** searchable configured selectors are complete; full alpha provider/settings flow remains open.
 
 ### Not yet satisfied / upcoming
 
 - **4 — License and provenance distribution work**
-- **11 — ModelMix persistence boundary**
 - **13 — Privacy/data-routing rules**
 - **24 — Thin top controls**
 - **25 — Minimal telemetry**
@@ -125,15 +127,9 @@ The Punch Board safeguards remain active requirements:
 
 These safeguards are not to be implemented prematurely in unrelated missions, but they are **not post-alpha by default** and must be wired when the settings/run-control layer reaches them.
 
-## Immediate Engineering Gap
+## Mission 008 Result
 
-**Mission 008 is now active and should address Punch Board items 11 and 22:** durable ModelMix session/run persistence and cockpit hydration.
-
-Mission 008 direction remains locked:
-
-- versioned atomic JSON for alpha behind a ModelMix-owned persistence interface;
-- no SQLite migration now;
-- persist completed and partial Worker A / Moderator / Worker B state;
-- preserve seat/audience/role isolation metadata;
-- hydrate after page reload/reopen and backend restart where the persisted state permits;
-- integrate with the existing ordered SSE journal/replay contract without turning transient network state into the source of truth.
+Mission 008 directly closes items 11 and 22 with schema-v1 atomic JSON behind a
+ModelMix interface, canonical isolated seat messages, durable run/event cursors,
+restart reconstruction, and three-panel hydration. See
+`008-durable-persistence-cockpit-hydration.md` for observed commands and scope.

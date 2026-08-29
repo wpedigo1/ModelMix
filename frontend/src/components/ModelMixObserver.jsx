@@ -6,6 +6,7 @@ import SearchableModelSelect from './SearchableModelSelect';
 import {
   cancelModelMixRun,
   consumeModelMixSSE,
+  hydrateModelMixSession,
   ModelMixHttpError,
   replayModelMixRun,
   startModelMixRun,
@@ -16,6 +17,7 @@ import {
   controlState,
   createModelMixState,
   isTerminalOverall,
+  hydrateModelMixState,
   modelSelectorsDisabled,
 } from '../modelmixState';
 import './ModelMixObserver.css';
@@ -33,6 +35,7 @@ export default function ModelMixObserver() {
   const [observer, setObserver] = useState(createModelMixState);
   const observerRef = useRef(observer);
   const connectionRef = useRef(null);
+  const historicalModelsRef = useRef(new Set());
 
   const updateObserver = useCallback((updater) => {
     setObserver((current) => {
@@ -49,11 +52,14 @@ export default function ModelMixObserver() {
         const settings = await api.getSettings();
         const discovered = await discoverConfiguredModels(api, settings);
         if (cancelled) return;
-        setModels(discovered);
+        const historical = Array.from(historicalModelsRef.current)
+          .filter((id) => !discovered.some((model) => model.id === id))
+          .map((id) => ({ id, name: `${id} (historical)`, provider: 'Historical' }));
+        setModels([...discovered, ...historical]);
         const discoveredIds = new Set(discovered.map((model) => model.id));
-        setWorkerAModel((current) => discoveredIds.has(current) ? current : '');
-        setModeratorModel((current) => discoveredIds.has(current) ? current : '');
-        setWorkerBModel((current) => discoveredIds.has(current) ? current : '');
+        setWorkerAModel((current) => discoveredIds.has(current) || historicalModelsRef.current.has(current) ? current : '');
+        setModeratorModel((current) => discoveredIds.has(current) || historicalModelsRef.current.has(current) ? current : '');
+        setWorkerBModel((current) => discoveredIds.has(current) || historicalModelsRef.current.has(current) ? current : '');
         if (discovered.length === 0) {
           setModelsError('No models were discovered from configured providers.');
         }
@@ -120,6 +126,42 @@ export default function ModelMixObserver() {
     }
   }, [handleEvent, showConnectionError, updateObserver]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    connectionRef.current = controller;
+    const sessionId = window.localStorage?.getItem('modelmix.sessionId');
+    hydrateModelMixSession(sessionId, controller.signal)
+      .then(async (document) => {
+        const hydrated = hydrateModelMixState(document);
+        updateObserver(hydrated);
+        window.localStorage?.setItem('modelmix.sessionId', hydrated.sessionId);
+        if (hydrated.prompt) setPrompt(hydrated.prompt);
+        if (hydrated.models) {
+          const historicalIds = Object.values(hydrated.models).filter(Boolean);
+          historicalModelsRef.current = new Set(historicalIds);
+          setModels((current) => {
+            const missing = historicalIds
+              .filter((id) => !current.some((model) => model.id === id))
+              .map((id) => ({ id, name: `${id} (historical)`, provider: 'Historical' }));
+            return [...current, ...missing];
+          });
+          setWorkerAModel(hydrated.models.worker_a || '');
+          setModeratorModel(hydrated.models.moderator || '');
+          setWorkerBModel(hydrated.models.worker_b || '');
+        }
+        if (!isTerminalOverall(hydrated.overall)) {
+          const response = await replayModelMixRun(hydrated.runId, hydrated.lastSeq, controller.signal);
+          await observe(response, controller);
+        }
+      })
+      .catch((error) => {
+        if (!(error instanceof ModelMixHttpError && error.status === 404) && !controller.signal.aborted) {
+          showConnectionError(error);
+        }
+      });
+    return () => controller.abort();
+  }, [observe, showConnectionError, updateObserver]);
+
   const send = async (event) => {
     event.preventDefault();
     if (!prompt.trim() || !workerAModel.trim() || !moderatorModel.trim() || !workerBModel.trim()) return;
@@ -128,6 +170,7 @@ export default function ModelMixObserver() {
     connectionRef.current = controller;
     const starting = {
       ...createModelMixState(),
+      sessionId: observerRef.current.sessionId,
       overall: 'connecting',
       message: 'Connecting…',
     };
@@ -138,9 +181,12 @@ export default function ModelMixObserver() {
         worker_a_model: workerAModel.trim(),
         moderator_model: moderatorModel.trim(),
         worker_b_model: workerBModel.trim(),
+        session_id: observerRef.current.sessionId || undefined,
       }, controller.signal);
       const runId = response.headers.get('X-ModelMix-Run-ID');
-      updateObserver((current) => ({ ...current, runId, overall: 'running', message: 'Streaming…' }));
+      const sessionId = response.headers.get('X-ModelMix-Session-ID');
+      if (sessionId) window.localStorage?.setItem('modelmix.sessionId', sessionId);
+      updateObserver((current) => ({ ...current, runId, sessionId, overall: 'running', message: 'Streaming…' }));
       await observe(response, controller);
     } catch (error) {
       if (!controller.signal.aborted) showConnectionError(error);

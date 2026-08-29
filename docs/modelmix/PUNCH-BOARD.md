@@ -21,9 +21,9 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 006 | PASS | Three-panel Worker A / wider Moderator / Worker B cockpit |
 | 007 | PASS | Searchable configured-model selectors, exact IDs, active-run locking, accessible keyboard behavior |
 | 007.5 | **PASS** | MCP 2.x security/compatibility interlock closed; clean dependency set retained |
-| 008 | **READY — NEXT** | Durable persistence + cockpit hydration; Punch Board items 11 and 22 |
+| 008 | **PASS (LOCAL)** | Versioned atomic JSON persistence, restart reconstruction, and cockpit hydration; remote integration pending |
 
-**Immediate mission: 008.**
+**Mission 008 is implemented and verified locally; remote integration is pending.**
 
 ### Mission 007.5 Interlock Result
 
@@ -141,7 +141,7 @@ Created, dispatching, workers_running, moderating, completed, partially_complete
 
 SSE events carry `run_id`, monotonic `seq`, actor/seat identity, type, and payload/timestamp; reconnect uses replay cursor.
 
-### 11. Define persistence boundary — **OPEN — NEXT DIRECT GAP / MISSION 008**
+### 11. Define persistence boundary — **SATISFIED — MISSION 008**
 
 Keep JSON for alpha behind a ModelMix interface; add schema versioning and atomic writes; store canonical messages with seat/audience/role metadata; store immutable run snapshots; preserve partial results; **do not migrate to SQLite now**.
 
@@ -187,9 +187,9 @@ Max workers, run timeout, Stop, optional cost/token ceiling, no automatic provid
 
 Worker A | wider Moderator | Worker B; full-height chat surfaces; independent scrolling; clear states.
 
-### 22. Bind UI to durable run/session state — **PARTIAL — NEXT DIRECT GAP / MISSION 008**
+### 22. Bind UI to durable run/session state — **SATISFIED — MISSION 008**
 
-Hydrate from persisted state, subscribe to events, replay from last sequence, prevent duplicates. Current reconnect works; reload/reopen persistence remains open.
+Hydrate from persisted canonical messages, subscribe to existing events, replay from the durable last sequence, and suppress duplicates. Reload/reopen and backend restart reconstruction are covered by Mission 008.
 
 ### 23. Add Stop behavior — **SATISFIED**
 

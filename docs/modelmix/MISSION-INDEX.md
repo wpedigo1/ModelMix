@@ -19,7 +19,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 006 | Codex | PASS | `006-three-panel-cockpit-slice.md` |
 | 007 | Codex-labeled historical prompt; final implementation/verification completed through ChatGPT Work after repository recovery | PASS | `007-searchable-model-discovery-controls.md` |
 | 007.5 | Codex | **PASS** | `007.5-mcp-2-security-compatibility.md` |
-| 008 | Not yet dispatched | **READY** | Durable persistence + cockpit hydration; Punch Board items 11 and 22 |
+| 008 | Codex isolated checkout | **PASS (LOCAL)** | `008-durable-persistence-cockpit-hydration.md`; remote integration pending |
 
 ## Mission 007 Provenance Clarification
 
@@ -50,15 +50,17 @@ Verified results recorded by the mission:
 
 Remote `main` was independently verified to resolve to `e018ed06807beda2c11531f065b2d4181c346ca8` before this bookkeeping update.
 
-## Next Mission
+## Mission 008 Result
 
-**Mission 008 is now the active next product mission.**
+**Mission 008 is implemented and verified locally.**
 
 Objective:
 
 **ModelMix-owned durable session/run persistence plus cockpit hydration using versioned atomic JSON, preserving completed/partial seat state and the existing SSE replay contract.**
 
-Mission 008 corresponds primarily to Punch Board items **11** and **22**.
+Mission 008 corresponds primarily to Punch Board items **11** and **22** and
+adds schema-v1 atomic JSON persistence plus durable cockpit hydration. Remote
+integration is intentionally deferred to the environment that owns `main`.
 
 ## Evidence Rule
 

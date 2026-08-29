@@ -35,6 +35,14 @@ export function startModelMixRun(payload, signal) {
   });
 }
 
+export async function hydrateModelMixSession(sessionId, signal) {
+  const path = sessionId
+    ? `/api/modelmix/sessions/${encodeURIComponent(sessionId)}`
+    : '/api/modelmix/sessions/latest';
+  const response = await checkedFetch(`${getApiBase()}${path}`, { signal });
+  return response.json();
+}
+
 export function replayModelMixRun(runId, afterSeq, signal) {
   return checkedFetch(
     `${getApiBase()}/api/modelmix/runs/${encodeURIComponent(runId)}/events?after_seq=${afterSeq}`,

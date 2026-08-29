@@ -12,6 +12,7 @@ import {
   applyReplayError,
   controlState,
   createModelMixState,
+  hydrateModelMixState,
   modelSelectorsDisabled,
 } from './modelmixState.js';
 
@@ -26,6 +27,36 @@ test('model selectors freeze for every active lifecycle state only', () => {
   }
 });
 
+test('durable hydration places canonical content by seat and replay remains deduplicated', () => {
+  const document = {
+    schema_version: 1,
+    session: {
+      session_id: 'session-1',
+      runs: [{
+        run_id: 'run-1', latest_seq: 8, status: 'partial',
+        prompt: 'Persisted question',
+        models: { worker_a: 'p:a', moderator: 'p:m', worker_b: 'p:b' },
+      }],
+      messages: [
+        { run_id: 'run-1', seat: 'worker_a', content: 'A', status: 'completed' },
+        { run_id: 'run-1', seat: 'moderator', content: 'M', status: 'completed' },
+        { run_id: 'run-1', seat: 'worker_b', content: 'B partial', status: 'failed', error: 'stopped' },
+      ],
+    },
+  };
+  let state = hydrateModelMixState(document);
+  assert.equal(state.worker_a.text, 'A');
+  assert.equal(state.moderator.text, 'M');
+  assert.equal(state.worker_b.text, 'B partial');
+  assert.equal(state.moderator.status, 'partial');
+  assert.equal(state.lastSeq, 8);
+  assert.equal(state.prompt, 'Persisted question');
+  state = applyModelMixEvent(state, {
+    run_id: 'run-1', seq: 8, type: 'seat_delta', seat_id: 'worker_b', delta: ' duplicate',
+  });
+  assert.equal(state.worker_b.text, 'B partial');
+});
+
 test('seat deltas route independently and duplicate or replayed seq is ignored', () => {
   let state = createModelMixState();
   state = applyModelMixEvent(state, { run_id: 'run', seq: 1, type: 'seat_delta', seat_id: 'worker_a', delta: 'A' });
@@ -36,6 +67,20 @@ test('seat deltas route independently and duplicate or replayed seq is ignored',
   assert.equal(state.worker_b.text, 'B');
   assert.equal(state.moderator.text, '');
   assert.equal(state.lastSeq, 3);
+});
+
+test('late events from another run cannot contaminate hydrated state', () => {
+  const state = {
+    ...createModelMixState(),
+    runId: 'current-run',
+    lastSeq: 4,
+    worker_a: { text: 'kept', status: 'completed', error: null },
+  };
+  const unchanged = applyModelMixEvent(state, {
+    run_id: 'old-run', seq: 99, type: 'seat_delta', seat_id: 'worker_a', delta: ' leaked',
+  });
+  assert.equal(unchanged, state);
+  assert.equal(unchanged.worker_a.text, 'kept');
 });
 
 test('Moderator waits, starts, streams once, and completes with finish reason', () => {

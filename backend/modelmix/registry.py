@@ -17,6 +17,7 @@ from .journal import (
 )
 from .orchestrator import ProviderResolver, multiplex_workers
 from .moderator import assemble_moderator_input, run_moderator
+from .persistence import ModelMixPersistence, modelmix_persistence
 
 
 class RunRegistry:
@@ -28,10 +29,12 @@ class RunRegistry:
         max_events_per_run: int = MAX_EVENTS_PER_RUN,
         max_terminal_runs: int = MAX_RETAINED_TERMINAL_RUNS,
         terminal_ttl_seconds: float = TERMINAL_RUN_TTL_SECONDS,
+        persistence: ModelMixPersistence = modelmix_persistence,
     ) -> None:
         self.max_events_per_run = max_events_per_run
         self.max_terminal_runs = max_terminal_runs
         self.terminal_ttl_seconds = terminal_ttl_seconds
+        self.persistence = persistence
         self._runs: Dict[str, RunEventJournal] = {}
         self._lock = asyncio.Lock()
 
@@ -42,9 +45,28 @@ class RunRegistry:
         worker_b_model: str,
         provider_resolver: ProviderResolver,
         moderator_model: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> RunEventJournal:
         await self._prune()
+        session_id = session_id or str(uuid.uuid4())
+        await self.persistence.create_session(session_id)
         run = RunEventJournal(str(uuid.uuid4()), max_events=self.max_events_per_run)
+        await self.persistence.create_run(session_id, {
+            "run_id": run.run_id,
+            "prompt": prompt,
+            "models": {
+                "worker_a": worker_a_model,
+                "moderator": moderator_model,
+                "worker_b": worker_b_model,
+            },
+            "status": "created",
+            "latest_seq": 0,
+            "events": [],
+        })
+        run.persist_event = lambda event, status: self.persistence.append_event(
+            session_id, run.run_id, event, status
+        )
+        run.session_id = session_id
         async with self._lock:
             self._runs[run.run_id] = run
         run.task = asyncio.create_task(
@@ -58,6 +80,36 @@ class RunRegistry:
             )
         )
         return run
+
+    async def restore(self, run_id: str, session: Dict[str, object]) -> Optional[RunEventJournal]:
+        """Restore one durable run into this process for replay after restart."""
+        snapshot = next((item for item in session["session"]["runs"] if item["run_id"] == run_id), None)
+        if snapshot is None:
+            return None
+        session_id = session["session"]["session_id"]
+        if snapshot["status"] not in TERMINAL_STATUSES:
+            await self.persistence.append_event(session_id, run_id, {
+                "run_id": run_id,
+                "seq": snapshot["latest_seq"] + 1,
+                "type": "run_failed",
+                "error": "Backend restarted before the run reached a terminal state",
+                "reason": "backend_restart",
+            }, "failed")
+            refreshed = await self.persistence.load_session(session_id)
+            snapshot = next(item for item in refreshed["session"]["runs"] if item["run_id"] == run_id)
+        run = RunEventJournal.restore(snapshot, max_events=self.max_events_per_run)
+        run.session_id = session_id
+        async with self._lock:
+            existing = self._runs.setdefault(run_id, run)
+        return existing
+
+    async def restore_persisted(self, run_id: str) -> Optional[RunEventJournal]:
+        """Locate and restore a run from any durable session."""
+        found = await self.persistence.find_run(run_id)
+        if found is None:
+            return None
+        session, _snapshot = found
+        return await self.restore(run_id, session)
 
     async def get(self, run_id: str) -> Optional[RunEventJournal]:
         await self._prune()
