@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { api } from '../api';
+import { discoverConfiguredModels } from '../configuredModels';
 import MarkdownContent from './MarkdownContent';
+import SearchableModelSelect from './SearchableModelSelect';
 import {
   cancelModelMixRun,
   consumeModelMixSSE,
@@ -13,6 +16,7 @@ import {
   controlState,
   createModelMixState,
   isTerminalOverall,
+  modelSelectorsDisabled,
 } from '../modelmixState';
 import './ModelMixObserver.css';
 
@@ -23,6 +27,9 @@ export default function ModelMixObserver() {
   const [workerAModel, setWorkerAModel] = useState('openai-oauth:gpt-5');
   const [moderatorModel, setModeratorModel] = useState('');
   const [workerBModel, setWorkerBModel] = useState('ollama:llama3');
+  const [models, setModels] = useState([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
+  const [modelsError, setModelsError] = useState('');
   const [observer, setObserver] = useState(createModelMixState);
   const observerRef = useRef(observer);
   const connectionRef = useRef(null);
@@ -35,7 +42,35 @@ export default function ModelMixObserver() {
     });
   }, []);
 
-  useEffect(() => () => connectionRef.current?.abort(), []);
+  useEffect(() => {
+    let cancelled = false;
+    const loadModels = async () => {
+      try {
+        const settings = await api.getSettings();
+        const discovered = await discoverConfiguredModels(api, settings);
+        if (cancelled) return;
+        setModels(discovered);
+        const discoveredIds = new Set(discovered.map((model) => model.id));
+        setWorkerAModel((current) => discoveredIds.has(current) ? current : '');
+        setModeratorModel((current) => discoveredIds.has(current) ? current : '');
+        setWorkerBModel((current) => discoveredIds.has(current) ? current : '');
+        if (discovered.length === 0) {
+          setModelsError('No models were discovered from configured providers.');
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setModelsError(error instanceof Error ? error.message : 'Failed to discover configured models.');
+        }
+      } finally {
+        if (!cancelled) setModelsLoading(false);
+      }
+    };
+    loadModels();
+    return () => {
+      cancelled = true;
+      connectionRef.current?.abort();
+    };
+  }, []);
 
   const handleEvent = useCallback((event) => {
     updateObserver((current) => applyModelMixEvent(current, event));
@@ -123,6 +158,13 @@ export default function ModelMixObserver() {
   };
 
   const controls = controlState(observer.overall);
+  const selectorsDisabled = modelsLoading || modelSelectorsDisabled(observer.overall);
+  const sendDisabled = controls.sendDisabled
+    || modelsLoading
+    || !prompt.trim()
+    || !workerAModel
+    || !moderatorModel
+    || !workerBModel;
   return (
     <main className="modelmix-observer">
       <header className="modelmix-header">
@@ -136,12 +178,49 @@ export default function ModelMixObserver() {
       <form className="modelmix-composer" onSubmit={send}>
         <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} aria-label="Prompt" rows="3" required />
         <div className="modelmix-models">
-          <label>Worker A model<input value={workerAModel} onChange={(event) => setWorkerAModel(event.target.value)} required /></label>
-          <label>Moderator model<input value={moderatorModel} placeholder="provider:model" onChange={(event) => setModeratorModel(event.target.value)} required /></label>
-          <label>Worker B model<input value={workerBModel} onChange={(event) => setWorkerBModel(event.target.value)} required /></label>
+          <label htmlFor="modelmix-worker-a-model">
+            Worker A model
+            <SearchableModelSelect
+              inputId="modelmix-worker-a-model"
+              ariaLabel="Worker A model"
+              models={models}
+              allModels={models}
+              value={workerAModel}
+              onChange={setWorkerAModel}
+              isDisabled={selectorsDisabled}
+              isLoading={modelsLoading}
+            />
+          </label>
+          <label htmlFor="modelmix-moderator-model">
+            Moderator model
+            <SearchableModelSelect
+              inputId="modelmix-moderator-model"
+              ariaLabel="Moderator model"
+              models={models}
+              allModels={models}
+              value={moderatorModel}
+              onChange={setModeratorModel}
+              isDisabled={selectorsDisabled}
+              isLoading={modelsLoading}
+            />
+          </label>
+          <label htmlFor="modelmix-worker-b-model">
+            Worker B model
+            <SearchableModelSelect
+              inputId="modelmix-worker-b-model"
+              ariaLabel="Worker B model"
+              models={models}
+              allModels={models}
+              value={workerBModel}
+              onChange={setWorkerBModel}
+              isDisabled={selectorsDisabled}
+              isLoading={modelsLoading}
+            />
+          </label>
         </div>
+        {modelsError && <p className="modelmix-model-error" role="alert">{modelsError}</p>}
         <div className="modelmix-actions">
-          <button type="submit" disabled={controls.sendDisabled}>Send</button>
+          <button type="submit" disabled={sendDisabled}>Send</button>
           <button type="button" className="stop" disabled={controls.stopDisabled} onClick={stop}>Stop</button>
           <span role="status">{observer.message}</span>
         </div>

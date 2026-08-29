@@ -12,9 +12,19 @@ import {
   applyReplayError,
   controlState,
   createModelMixState,
+  modelSelectorsDisabled,
 } from './modelmixState.js';
 
 globalThis.window = { location: { hostname: 'localhost' } };
+
+test('model selectors freeze for every active lifecycle state only', () => {
+  for (const status of ['connecting', 'running', 'reconnecting', 'cancelling']) {
+    assert.equal(modelSelectorsDisabled(status), true, status);
+  }
+  for (const status of ['idle', 'completed', 'partial', 'failed', 'cancelled', 'replay_gap', 'expired']) {
+    assert.equal(modelSelectorsDisabled(status), false, status);
+  }
+});
 
 test('seat deltas route independently and duplicate or replayed seq is ignored', () => {
   let state = createModelMixState();

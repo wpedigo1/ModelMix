@@ -23,6 +23,10 @@ export function controlState(status) {
   return { sendDisabled: running, stopDisabled: status === 'connecting' || !running };
 }
 
+export function modelSelectorsDisabled(status) {
+  return controlState(status).sendDisabled;
+}
+
 export function applyReplayError(state, status, message = '') {
   if (status === 409) {
     return {
