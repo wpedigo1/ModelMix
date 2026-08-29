@@ -1,7 +1,8 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 007: 2026-08-29
+Reconciled through Mission 007: 2026-08-29  
+Security interlock inserted: 2026-08-29 14:23 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -20,8 +21,25 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 005 | PASS | Moderator backend fan-in/synthesis, isolation, partial/failure handling |
 | 006 | PASS | Three-panel Worker A / wider Moderator / Worker B cockpit |
 | 007 | PASS | Searchable configured-model selectors, exact IDs, active-run locking, accessible keyboard behavior |
+| 007.5 | **OPEN — READY TO DISPATCH** | Security/compatibility interlock: migrate inherited MCP integration to MCP 2.x while preserving the clean dependency set |
+| 008 | **BLOCKED ON 007.5** | Planned persistence + cockpit hydration mission after the security interlock closes |
 
-**Next mission number: 008.**
+**Immediate mission: 007.5. Next planned product mission after closure: 008.**
+
+### Mission 007.5 Interlock Rationale
+
+Mission 007.5 does **not** reorder the locked 47-item build plan. It is a bounded remediation interlock created from an observed repository compatibility blocker after dependency-security cleanup.
+
+Observed local trigger state on 2026-08-29:
+
+- frontend dependency audit: **0 vulnerabilities**;
+- frontend production build: **PASS, 432 modules transformed**;
+- Python dependency audit: **No known vulnerabilities found**;
+- Starlette: **0.50.0 → 1.6.0**;
+- MCP: **2.1.1**;
+- backend test collection stopped with six MCP-related import errors because inherited MCP code still imports the MCP 1.x `FastMCP` API.
+
+Mission 007.5 exists to migrate that inherited integration to MCP 2.x and verify the security-clean dependency state. MCP remains an **alpha non-goal** as a ModelMix product capability; compatibility maintenance does not promote it into alpha scope.
 
 ## Progress Against the Locked Board
 
@@ -118,7 +136,7 @@ Created, dispatching, workers_running, moderating, completed, partially_complete
 
 SSE events carry `run_id`, monotonic `seq`, actor/seat identity, type, and payload/timestamp; reconnect uses replay cursor.
 
-### 11. Define persistence boundary — **OPEN — NEXT DIRECT GAP**
+### 11. Define persistence boundary — **OPEN — NEXT PRODUCT GAP AFTER 007.5**
 
 Keep JSON for alpha behind a ModelMix interface; add schema versioning and atomic writes; store canonical messages with seat/audience/role metadata; store immutable run snapshots; preserve partial results; **do not migrate to SQLite now**.
 
@@ -164,7 +182,7 @@ Max workers, run timeout, Stop, optional cost/token ceiling, no automatic provid
 
 Worker A | wider Moderator | Worker B; full-height chat surfaces; independent scrolling; clear states.
 
-### 22. Bind UI to durable run/session state — **PARTIAL — NEXT DIRECT GAP**
+### 22. Bind UI to durable run/session state — **PARTIAL — NEXT PRODUCT GAP AFTER 007.5**
 
 Hydrate from persisted state, subscribe to events, replay from last sequence, prevent duplicates. Current reconnect works; reload/reopen persistence remains open.
 
@@ -314,4 +332,6 @@ Hard cap is **not post-alpha by default**. Wire it when settings/run-control rea
 
 ## Immediate Next Engineering Gap
 
-**Mission 008 should address Punch Board items 11 and 22:** the ModelMix-owned persistence boundary and cockpit hydration using versioned atomic JSON, persisted completed/partial run state, reload/reopen hydration, seat isolation, and the existing SSE journal/replay contract.
+**Mission 007.5 must close before Mission 008:** migrate the inherited MCP integration to MCP 2.x, preserve the security-clean dependency set, restore backend test collection/execution, verify the audit state, and only then commit/push the remediation.
+
+After 007.5 closes, **Mission 008 should address Punch Board items 11 and 22:** the ModelMix-owned persistence boundary and cockpit hydration using versioned atomic JSON, persisted completed/partial run state, reload/reopen hydration, seat isolation, and the existing SSE journal/replay contract.
