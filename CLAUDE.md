@@ -1,27 +1,88 @@
-# CLAUDE.md
+# Claude Code — ModelMix
 
-# Please read and follow all technical guidelines in ./AGENTS.md before writing code.
+@AGENTS.md
 
-Be concise, direct, useful, and fun. Work does not have to be boring. Profanity is fine when natural.
+`AGENTS.md` is the canonical ModelMix project instruction file.
 
-Be an active thinking partner, not a cheerleader or passive responder. Do not reflexively agree with me. Internally challenge my premise first: look for reasons it may be wrong, incomplete, inefficient, risky, outdated, or contradicted by evidence. If a valid objection exists, say so clearly. If not, agree and move forward. I make the final decision.
+Follow it as the source of truth for:
 
-Accuracy beats conversational smoothness. Never fill gaps just to make an answer sound complete. Distinguish verified facts from observations, hypotheses, assumptions, questions, and recommendations. If something is unknown or unverified, leave it unknown and say what is actually known.
+* product architecture;
+* Worker A / Moderator / Worker B isolation;
+* run and SSE behavior;
+* persistence boundaries;
+* UI constraints;
+* provider behavior;
+* telemetry honesty;
+* security;
+* testing;
+* validation;
+* scope discipline;
+* definition of done.
 
-Do not turn impressions into facts. Do not make comparative claims such as “most people,” “usually,” “best,” “everyone,” or similar unless they are supported by evidence or clearly labeled as an inference.
+Do not duplicate or reinterpret those rules here.
 
-Before giving a next step in ongoing work, reconcile the current conversation, relevant prior context, available Library/files, connected tools, and actual observed actions/state. Ask internally: “Has this already been satisfied?” If yes, move forward instead of repeating it.
+## Claude-Specific Working Rules
 
-Use tools and live research when they materially improve correctness. Prefer checking actual state over relying on summaries, previous assistant claims, reported success, or memory.
+Before editing:
 
-Never claim an external action succeeded unless there is direct evidence of success. “Saved,” “uploaded,” “pushed,” “committed,” “running,” “connected,” “fixed,” “filed,” “sent,” and “done” require verification from the relevant system/tool. A model report saying it happened is not proof.
+1. Read `AGENTS.md`.
+2. Inspect the relevant implementation and tests.
+3. Search the repository for existing working patterns.
+4. Trace the affected state/data path before introducing new abstractions.
+5. Prefer the smallest change consistent with existing ModelMix architecture.
 
-When I catch an error, do not merely restate a lesson or promise to do better. Identify the specific failure mechanism and change the next action accordingly.
+For routine, well-defined tasks, inspect and proceed without stopping for plan approval.
 
-Think beyond my latest message. Surface important missing pieces, contradictions, risks, connections, outdated assumptions, simpler approaches, and better options when they materially improve the outcome. Do not manufacture idea dumps.
+Ask before implementation only when a material ambiguity, destructive action, security issue, architectural conflict, or major product decision cannot be resolved from the repository and project instructions.
 
-Protect my time, money, tokens, compute, and attention. Avoid unnecessary checks, duplicated work, ritual QC, repeated explanations, and recovery work caused by unverified assumptions.
+For broad architectural changes, authentication/credential changes, persistence redesign, or major cross-cutting refactors, provide a short implementation plan before editing.
 
-For execution handoffs, cut the fat. Give the worker only the context required to execute correctly.
+## Repository Behavior
 
-Monitor long conversations for context degradation, clutter, repeated state, or continuity risk. At a natural stopping point, recommend a fresh chat only when it would genuinely improve reliability. Do not interrupt active work or create a handoff unless I approve.
+Do not treat previous Claude sessions, mission reports, summaries, commit SHAs, branch names, or PASS statements as proof of current repository state.
+
+Inspect the actual repository.
+
+Do not:
+
+* create a second implementation beside an existing working path;
+* replace established ModelMix infrastructure merely because another pattern is stylistically preferable;
+* broaden a focused mission into cleanup or redesign;
+* resurrect Council/Advisor/debate architecture;
+* silently change locked ModelMix decisions.
+
+When project documentation and repository behavior conflict, identify the conflict instead of silently resolving it.
+
+## Validation
+
+Use the repository's actual commands and configuration.
+
+Do not invent test, lint, build, or type-check commands.
+
+Run the narrowest relevant validation first, followed by broader validation justified by the change.
+
+Never report a command as successful unless its successful result was observed.
+
+Before reporting completion, review the final diff for:
+
+* unintended files;
+* unrelated refactors;
+* accidental formatting churn;
+* leaked credentials;
+* broken worker isolation;
+* duplicated state ownership;
+* architectural drift.
+
+## Completion Report
+
+Keep the final report short.
+
+Include:
+
+* what changed;
+* files changed;
+* validation actually run and results;
+* material assumptions;
+* unresolved failures or risks.
+
+Never claim external actions or successful state that was not directly verified.
