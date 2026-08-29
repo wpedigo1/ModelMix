@@ -1,6 +1,6 @@
 # ModelMix Mission Record Index
 
-Updated: 2026-08-29 14:23 CT
+Updated: 2026-08-29 15:00 CT
 
 This index reconciles completed implementation missions with the canonical engineering records in this repository.
 
@@ -18,8 +18,8 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 005 | Codex | PASS | `005-moderator-backend-phase.md` |
 | 006 | Codex | PASS | `006-three-panel-cockpit-slice.md` |
 | 007 | Codex-labeled historical prompt; final implementation/verification completed through ChatGPT Work after repository recovery | PASS | `007-searchable-model-discovery-controls.md` |
-| 007.5 | Codex | **OPEN — READY TO DISPATCH** | `007.5-mcp-2-security-compatibility.md` |
-| 008 | Not yet dispatched | **BLOCKED ON 007.5** | Next product mission remains persistence + cockpit hydration after the security interlock closes |
+| 007.5 | Codex | **PASS** | `007.5-mcp-2-security-compatibility.md` |
+| 008 | Not yet dispatched | **READY** | Durable persistence + cockpit hydration; Punch Board items 11 and 22 |
 
 ## Mission 007 Provenance Clarification
 
@@ -29,32 +29,32 @@ Accepted Mission 007 implementation commit recorded in the project evidence:
 
 `b10be680c437293d104727ee7f6c26f7e698f79b` — `feat: add ModelMix model discovery selectors`
 
-## Mission 007.5 Security Interlock
+## Mission 007.5 Security Interlock — CLOSED
 
-Mission 007.5 is a bounded remediation mission inserted between completed Mission 007 and planned Mission 008. It does **not** reorder the locked 47-item Punch Board and does not promote MCP into alpha product scope.
+Mission 007.5 was a bounded remediation mission inserted between completed Mission 007 and planned Mission 008. It did **not** reorder the locked 47-item Punch Board and did not promote MCP into alpha product scope.
 
-Observed trigger state from the local security remediation:
+Accepted result on remote `main`:
 
+`e018ed06807beda2c11531f065b2d4181c346ca8` — `fix(mcp): migrate inherited MCP integration to MCP 2.x API`
+
+Verified results recorded by the mission:
+
+- MCP retained at **2.1.1**;
+- MCP tests: **146 passed**;
+- full backend suite: **458 passed, 5 failed**;
+- the five remaining failures were recorded as pre-existing Windows-specific legacy chassis test issues, not MCP migration regressions;
+- Python security audit: **0 known vulnerabilities** across 95 locked dependencies;
+- backend import/runtime mount verified with MCP mounted at `/mcp` and SSE at `/mcp/sse`;
 - frontend dependency audit: **0 vulnerabilities**;
-- frontend production build: **PASS, 432 modules transformed**;
-- Python dependency audit: **No known vulnerabilities found**;
-- Starlette: **0.50.0 → 1.6.0**;
-- MCP: **2.1.1**;
-- full backend test collection blocked by six MCP-related collection errors because inherited code still imports `mcp.server.fastmcp.FastMCP`, an MCP 1.x API.
+- frontend production build: **PASS**.
 
-Remote `main` immediately before this record was created was independently observed at:
-
-`1dcca51c3c20d0c4dde3d14892de512f5ebf7f17` — `docs: update ModelMix coding agent instructions`
-
-The security lockfile changes remain local/uncommitted until Mission 007.5 completes; this index does not claim they are already present on remote `main`.
+Remote `main` was independently verified to resolve to `e018ed06807beda2c11531f065b2d4181c346ca8` before this bookkeeping update.
 
 ## Next Mission
 
-**Mission 007.5 is the immediate mission.**
+**Mission 008 is now the active next product mission.**
 
-Objective: migrate the inherited MCP integration to the MCP 2.x API, preserve the security-clean dependency set, run the relevant/full backend verification, and push only after acceptable verification.
-
-After 007.5 closes, **Mission 008 remains the next planned product mission**:
+Objective:
 
 **ModelMix-owned durable session/run persistence plus cockpit hydration using versioned atomic JSON, preserving completed/partial seat state and the existing SSE replay contract.**
 
@@ -72,4 +72,4 @@ On 2026-08-28 CT, project bookkeeping was reconciled after detecting that Missio
 
 On 2026-08-29 CT, the current Library Punch Board and repo project records were reconciled. The authoritative Punch Board was copied into `docs/modelmix/PUNCH-BOARD.md`, while this index and `ENGINEERING-PROGRESS.md` were refreshed to point to the same current mission state and next gap.
 
-Later on 2026-08-29 CT, Mission 007.5 was inserted as a security/compatibility interlock after dependency remediation reached a clean audit but exposed an MCP 2.x API incompatibility in inherited MCP code.
+Later on 2026-08-29 CT, Mission 007.5 was inserted as a security/compatibility interlock after dependency remediation reached a clean audit but exposed an MCP 2.x API incompatibility in inherited MCP code. Mission 007.5 subsequently completed and was verified on remote `main` at `e018ed06807beda2c11531f065b2d4181c346ca8`.
