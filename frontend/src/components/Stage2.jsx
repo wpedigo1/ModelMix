@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Skeleton from './common/Skeleton';
 import MarkdownContent from './MarkdownContent';
 import { getModelVisuals, getShortModelName } from '../utils/modelHelpers';
@@ -30,13 +30,24 @@ function hexToRgb(hex) {
 export default function Stage2({ rankings, labelToModel, aggregateRankings, startTime, endTime, canonicalClaims, aggregateClaimVerdicts }) {
     const [activeTab, setActiveTab] = useState(0);
     const [viewMode, setViewMode] = useState('leaderboard'); // 'leaderboard' or 'heatmap'
+    const [isCopied, setIsCopied] = useState(false);
 
     // Reset activeTab if it becomes out of bounds (e.g., during streaming)
-    useEffect(() => {
-        if (rankings && rankings.length > 0 && activeTab >= rankings.length) {
-            setActiveTab(rankings.length - 1);
+    const rankingsCount = rankings?.length ?? 0;
+    const [prevRankingsCount, setPrevRankingsCount] = useState(rankingsCount);
+    if (prevRankingsCount !== rankingsCount) {
+        setPrevRankingsCount(rankingsCount);
+        if (rankingsCount > 0 && activeTab >= rankingsCount) {
+            setActiveTab(rankingsCount - 1);
         }
-    }, [rankings, activeTab]);
+    }
+
+    // Reset copy state when tab changes
+    const [prevActiveTab, setPrevActiveTab] = useState(activeTab);
+    if (prevActiveTab !== activeTab) {
+        setPrevActiveTab(activeTab);
+        setIsCopied(false);
+    }
 
     if (!rankings || rankings.length === 0) {
         return null;
@@ -58,14 +69,6 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
         : 'Response A, Response B, etc.';
 
     const isClaimMode = !!(canonicalClaims && aggregateClaimVerdicts);
-
-    // Copy functionality
-    const [isCopied, setIsCopied] = useState(false);
-
-    // Reset copy state when tab changes
-    useEffect(() => {
-        setIsCopied(false);
-    }, [activeTab]);
 
     const handleCopy = async () => {
         const ranking = currentRanking?.ranking;
@@ -110,7 +113,6 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
                         <RawEvaluationTabs
                             rankings={rankings}
                             labelToModel={labelToModel}
-                            activeTab={activeTab}
                             setActiveTab={setActiveTab}
                             currentRanking={currentRanking}
                             currentVisuals={currentVisuals}
@@ -118,7 +120,6 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
                             isCopied={isCopied}
                             handleCopy={handleCopy}
                             safeActiveTab={safeActiveTab}
-                            anonymizedLabelText={anonymizedLabelText}
                             parsedRanking={parsedRanking}
                         />
                     </div>
@@ -133,7 +134,6 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
                     <RawEvaluationTabs
                         rankings={rankings}
                         labelToModel={labelToModel}
-                        activeTab={activeTab}
                         setActiveTab={setActiveTab}
                         currentRanking={currentRanking}
                         currentVisuals={currentVisuals}
@@ -141,7 +141,6 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, star
                         isCopied={isCopied}
                         handleCopy={handleCopy}
                         safeActiveTab={safeActiveTab}
-                        anonymizedLabelText={anonymizedLabelText}
                         parsedRanking={parsedRanking}
                     />
                 </>
@@ -304,7 +303,6 @@ export function Stage2Skeleton() {
 function RawEvaluationTabs({
     rankings,
     labelToModel,
-    activeTab,
     setActiveTab,
     currentRanking,
     currentVisuals,
@@ -312,7 +310,6 @@ function RawEvaluationTabs({
     isCopied,
     handleCopy,
     safeActiveTab,
-    anonymizedLabelText,
     parsedRanking
 }) {
     return (

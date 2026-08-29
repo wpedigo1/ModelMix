@@ -77,7 +77,7 @@ async def query_model(
                     try:
                         error_data = response.json()
                         error_detail = error_data.get("error", {}).get("message", "bad_request")
-                    except:
+                    except Exception:
                         pass
                     print(f"Bad request for {model}: {error_detail}")
                     return {
@@ -218,13 +218,20 @@ async def fetch_models() -> List[Dict[str, Any]]:
                 if "/" in model_id:
                     provider_slug = model_id.split("/")[0]
                     # Capitalize nicely
-                    if provider_slug == "openai": provider = "OpenAI"
-                    elif provider_slug == "anthropic": provider = "Anthropic"
-                    elif provider_slug == "google": provider = "Google"
-                    elif provider_slug == "meta-llama": provider = "Meta"
-                    elif provider_slug == "mistralai": provider = "Mistral"
-                    elif provider_slug == "deepseek": provider = "DeepSeek"
-                    else: provider = provider_slug.title()
+                    if provider_slug == "openai":
+                        provider = "OpenAI"
+                    elif provider_slug == "anthropic":
+                        provider = "Anthropic"
+                    elif provider_slug == "google":
+                        provider = "Google"
+                    elif provider_slug == "meta-llama":
+                        provider = "Meta"
+                    elif provider_slug == "mistralai":
+                        provider = "Mistral"
+                    elif provider_slug == "deepseek":
+                        provider = "DeepSeek"
+                    else:
+                        provider = provider_slug.title()
                 
                 models.append({
                     "id": model_id,

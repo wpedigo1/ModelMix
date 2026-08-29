@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from ..credentials import get_oauth_credential, set_oauth_credential
 from . import github_copilot, openai_chatgpt, xai

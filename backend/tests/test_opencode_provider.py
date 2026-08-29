@@ -3,6 +3,8 @@
 import json
 import pytest
 
+from backend.providers.opencode import OpenCodeProvider
+
 @pytest.fixture(autouse=True)
 def _isolate_opencode_credentials(monkeypatch, tmp_path):
     from backend.credentials import file_backend, store
@@ -12,9 +14,6 @@ def _isolate_opencode_credentials(monkeypatch, tmp_path):
     monkeypatch.setattr(store, "ENV_OVERRIDES", {})
     # Clear any accidental env
     monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
-
-
-from backend.providers.opencode import OpenCodeProvider
 
 
 class _FakeResponse:
@@ -80,23 +79,10 @@ def fake_httpx(monkeypatch):
 
 
 @pytest.fixture
-def fake_settings(monkeypatch):
-    class FakeSettings:
-        opencode_api_key = "sk-zen-test"
-
-    from backend import settings as settings_module
+def fake_settings():
     from backend.credentials import store
-    from backend.providers import opencode as opencode_module
 
     store.set_secret("api:opencode", "sk-zen-test")
-
-    def fake():
-        return FakeSettings()
-
-    monkeypatch.setattr(settings_module, "get_settings", fake)
-    # Provider does `from ..settings import get_settings`, so the local name
-    # must be patched too — patching the settings module alone has no effect.
-    monkeypatch.setattr(opencode_module, "get_settings", fake)
 
 
 @pytest.mark.asyncio
@@ -134,13 +120,9 @@ async def test_query_strips_prefix_from_model_id(fake_httpx, fake_settings):
 
 
 @pytest.mark.asyncio
-async def test_query_without_key_returns_error(fake_httpx, monkeypatch):
-    class EmptySettings:
-        opencode_api_key = None
-
-    import backend.providers.opencode as oc_module
-    monkeypatch.setattr(oc_module, "get_settings", lambda: EmptySettings())
-
+async def test_query_without_key_returns_error(fake_httpx):
+    # The autouse fixture isolates the credential store to an empty temp
+    # file, so no API key is resolvable for the provider.
     provider = OpenCodeProvider(product="zen")
     result = await provider.query("opencode-zen:glm-5.1", [{"role": "user", "content": "hi"}])
 

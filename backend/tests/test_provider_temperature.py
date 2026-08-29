@@ -89,7 +89,6 @@ def test_anthropic_deprecated_temperature_model_detection(model_id):
 
 @pytest.mark.asyncio
 async def test_openai_omits_temperature_for_fixed_temperature_models(fake_httpx, monkeypatch):
-    import backend.providers.openai as openai_module
 
     monkeypatch.setattr(
         "backend.credentials.get_api_key",
@@ -111,7 +110,6 @@ async def test_openai_omits_temperature_for_fixed_temperature_models(fake_httpx,
 
 @pytest.mark.asyncio
 async def test_openai_keeps_temperature_for_standard_chat_models(fake_httpx, monkeypatch):
-    import backend.providers.openai as openai_module
 
     monkeypatch.setattr(
         "backend.credentials.get_api_key",
@@ -131,7 +129,6 @@ async def test_openai_keeps_temperature_for_standard_chat_models(fake_httpx, mon
 
 @pytest.mark.asyncio
 async def test_anthropic_omits_temperature_for_new_claude_models(fake_httpx, monkeypatch):
-    import backend.providers.anthropic as anthropic_module
 
     monkeypatch.setattr(
         "backend.credentials.get_api_key",
@@ -156,7 +153,6 @@ async def test_anthropic_omits_temperature_for_new_claude_models(fake_httpx, mon
 
 @pytest.mark.asyncio
 async def test_anthropic_keeps_temperature_for_older_claude_models(fake_httpx, monkeypatch):
-    import backend.providers.anthropic as anthropic_module
 
     monkeypatch.setattr(
         "backend.credentials.get_api_key",

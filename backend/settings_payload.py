@@ -139,7 +139,7 @@ def build_admin_export() -> Dict[str, Any]:
 
 
 def apply_admin_import(payload: Dict[str, Any]) -> None:
-    from .credentials import import_secrets, wipe_all_secrets
+    from .credentials import import_secrets
     from .credentials.ids import SETTINGS_FIELD_TO_SECRET_ID
     from .settings import Settings, _normalize_prompt_defaults, save_settings
 

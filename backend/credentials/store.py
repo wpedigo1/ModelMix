@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from . import file_backend, keyring_backend
 from .availability import (
@@ -322,7 +322,7 @@ async def migrate_storage_mode(target: str) -> Dict[str, Any]:
         )
 
     async with _lock:
-        from ..settings import get_settings, update_settings
+        from ..settings import update_settings
 
         source = get_effective_mode()
         # When preferred is keyring but effective is file, still load from file.

@@ -6,7 +6,7 @@ import asyncio
 import logging
 import time
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from ..credentials import set_oauth_credential
 from ..settings import get_settings, update_settings

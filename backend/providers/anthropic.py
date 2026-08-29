@@ -4,7 +4,6 @@ import httpx
 from typing import List, Dict, Any
 from .base import LLMProvider
 from .temperature import add_temperature_if_supported
-from ..settings import get_settings
 
 class AnthropicProvider(LLMProvider):
     """Anthropic API provider."""

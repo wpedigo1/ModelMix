@@ -37,7 +37,7 @@ export default function DocumentUpload({
     setWarnings([]);
     onChange?.(EMPTY_PAYLOAD);
     if (inputRef.current) inputRef.current.value = '';
-  }, [resetKey]);
+  }, [resetKey, onChange]);
 
   const updatePayload = (nextDocuments, nextAttachments, nextWarnings) => {
     setDocuments(nextDocuments);

@@ -1,9 +1,7 @@
 import React from 'react';
 import { formatDatePart } from '../../utils/dateFormat';
 import { FONT_SIZE_OPTIONS } from '../../utils/fontSize';
-import { RESPONSE_LANGUAGE_DEFAULT, RESPONSE_LANGUAGES_FALLBACK } from '../../constants/responseLanguages';
-
-export { RESPONSE_LANGUAGE_DEFAULT };
+import { RESPONSE_LANGUAGES_FALLBACK } from '../../constants/responseLanguages';
 
 export default function GeneralSettings({
   dateFormat,

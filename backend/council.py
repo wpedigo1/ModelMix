@@ -8,14 +8,6 @@ from .config import get_council_models, get_chairman_model
 from .costs import attach_cost
 from .settings import get_settings
 from .prompts import apply_response_language
-
-logger = logging.getLogger(__name__)
-
-
-THINK_BLOCK_RE = re.compile(r"<think\b[^>]*>[\s\S]*?</think>", re.IGNORECASE)
-UNCLOSED_THINK_RE = re.compile(r"<think\b[^>]*>[\s\S]*$", re.IGNORECASE)
-
-
 from .providers.openai import OpenAIProvider
 from .providers.anthropic import AnthropicProvider
 from .providers.google import GoogleProvider
@@ -30,6 +22,12 @@ from .providers.opencode import OpenCodeProvider
 from .providers.xai_oauth import XaiOAuthProvider
 from .providers.openai_oauth import OpenAIOauthProvider
 from .providers.github_copilot import GitHubCopilotProvider
+
+logger = logging.getLogger(__name__)
+
+
+THINK_BLOCK_RE = re.compile(r"<think\b[^>]*>[\s\S]*?</think>", re.IGNORECASE)
+UNCLOSED_THINK_RE = re.compile(r"<think\b[^>]*>[\s\S]*$", re.IGNORECASE)
 
 # Initialize providers
 PROVIDERS = {
@@ -73,7 +71,6 @@ async def query_model(model: str, messages: List[Dict[str, str]], timeout: float
 async def query_models_parallel(models: List[str], messages: List[Dict[str, str]]) -> Dict[str, Any]:
     """Dispatch parallel query to appropriate providers."""
     tasks = []
-    model_to_task_map = {}
     
     # Group models by provider to optimize batching if supported (mostly for OpenRouter/Ollama legacy)
     # But for simplicity and modularity, we'll just spawn individual tasks for now

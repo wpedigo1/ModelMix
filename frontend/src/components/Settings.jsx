@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { api, DEFAULT_EXECUTION_MODE } from '../api';
 import SearchableModelSelect from './SearchableModelSelect';
 import ProviderSettings from './settings/ProviderSettings';
@@ -6,7 +6,8 @@ import CouncilConfig from './settings/CouncilConfig';
 import SearchSettings from './settings/SearchSettings';
 import PromptSettings from './settings/PromptSettings';
 import DebateSettings from './settings/DebateSettings';
-import GeneralSettings, { RESPONSE_LANGUAGE_DEFAULT } from './settings/GeneralSettings';
+import GeneralSettings from './settings/GeneralSettings';
+import { RESPONSE_LANGUAGE_DEFAULT } from '../constants/responseLanguages';
 import { RESPONSE_LANGUAGES_FALLBACK } from '../constants/responseLanguages';
 import { normalizeFontSize } from '../utils/fontSize';
 import { countStoredCredentials, filterOAuthModels, OAUTH_PROVIDERS } from '../constants/oauthProviders';
@@ -193,7 +194,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
   const [autoConverge, setAutoConverge] = useState(true);
   const [convergenceThreshold, setConvergenceThreshold] = useState(2);
 
-  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [, setIsLoadingModels] = useState(false);
   const [showFreeOnly, setShowFreeOnly] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -206,9 +207,10 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
   // Remote/Local filter toggles per model type
   const [councilMemberFilters, setCouncilMemberFilters] = useState({});  // Per-member filters (indexed by member index)
   const [chairmanFilter, setChairmanFilter] = useState('remote');
+  const loadSettingsRef = useRef(null);
 
   useEffect(() => {
-    loadSettings();
+    loadSettingsRef.current?.();
   }, []);
 
   // Update activeSection when initialSection prop changes
@@ -344,11 +346,11 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
     || OAUTH_PROVIDERS.some((p) => enabledProviders[p.id]);
   const isLocalAvailable = enabledProviders.ollama;
 
-  const getNewFilter = (currentFilter) => {
+  const getNewFilter = useCallback((currentFilter) => {
     if (currentFilter === 'remote' && !isRemoteAvailable && isLocalAvailable) return 'local';
     if (currentFilter === 'local' && !isLocalAvailable && isRemoteAvailable) return 'remote';
     return currentFilter;
-  };
+  }, [isRemoteAvailable, isLocalAvailable]);
 
   // Effect 1: Auto-update Council Member filters when providers change or members are added
   useEffect(() => {
@@ -380,7 +382,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         return updated;
       });
     }
-  }, [enabledProviders, councilModels.length]);
+  }, [enabledProviders, councilModels.length, getNewFilter]);
 
   // Effect 2: Auto-update Chairman and Search filters when providers change
   // Note: We intentionally exclude councilModels.length to prevent resetting these when adding members
@@ -392,7 +394,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       setChairmanModel('');
     }
 
-  }, [enabledProviders, chairmanFilter]);
+  }, [enabledProviders, chairmanFilter, getNewFilter]);
 
   // Clear validation errors when chairman or council members change
   useEffect(() => {
@@ -552,6 +554,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       setError('Failed to load settings');
     }
   };
+  loadSettingsRef.current = loadSettings;
 
   const loadModels = async () => {
     setIsLoadingModels(true);
@@ -699,7 +702,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       await loadModels();
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {
+    } catch {
       setError('Failed to disconnect custom endpoint');
     }
   };
@@ -799,7 +802,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
       }
-    } catch (err) {
+    } catch {
       setSerperTestResult({ success: false, message: 'Test failed' });
     } finally {
       setIsTestingSerper(false);
@@ -834,7 +837,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
       }
-    } catch (err) {
+    } catch {
       setTavilyTestResult({ success: false, message: 'Test failed' });
     } finally {
       setIsTestingTavily(false);
@@ -869,7 +872,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
       }
-    } catch (err) {
+    } catch {
       setBraveTestResult({ success: false, message: 'Test failed' });
     } finally {
       setIsTestingBrave(false);
@@ -899,7 +902,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
       }
-    } catch (err) {
+    } catch {
       setTinyfishTestResult({ success: false, message: 'Test failed' });
     } finally {
       setIsTestingTinyfish(false);
@@ -935,7 +938,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
       }
-    } catch (err) {
+    } catch {
       setOpenrouterTestResult({ success: false, message: 'Test failed' });
     } finally {
       setIsTestingOpenRouter(false);
@@ -972,7 +975,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
       }
-    } catch (err) {
+    } catch {
       setGroqTestResult({ success: false, message: 'Test failed' });
     } finally {
       setIsTestingGroq(false);
@@ -1006,7 +1009,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
       }
-    } catch (err) {
+    } catch {
       setOllamaTestResult({ success: false, message: 'Connection failed' });
 
       // Refresh parent status on exception too
@@ -1231,7 +1234,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       setActiveSection('council');
 
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {
+    } catch {
       setError('Failed to reset settings');
     }
   };
@@ -1614,7 +1617,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
   };
 
   // Helper function to check if a direct provider is configured
-  const isDirectProviderConfigured = (providerName) => {
+  const isDirectProviderConfigured = useCallback((providerName) => {
     switch (providerName) {
       case 'OpenAI': return !!(directKeys.openai_api_key || settings?.openai_api_key_set);
       case 'Anthropic': return !!(directKeys.anthropic_api_key || settings?.anthropic_api_key_set);
@@ -1626,7 +1629,7 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
       case 'OpenCode Go': return !!settings?.opencode_api_key_set;
       default: return false;
     }
-  };
+  }, [directKeys, settings]);
 
   // Get all available models from all sources
   const allAvailableModels = useMemo(() => {
@@ -1692,8 +1695,8 @@ export default function Settings({ onClose, ollamaStatus, onRefreshOllama, initi
     directAvailableModels,
     customEndpointModels,
     directProviderToggles,
-    directKeys,
-    settings
+    settings,
+    isDirectProviderConfigured
   ]);
 
 

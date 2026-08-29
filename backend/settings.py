@@ -6,6 +6,23 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from .search import SearchProvider
+from .prompts import (
+    STAGE1_PROMPT_DEFAULT,
+    STAGE2_PROMPT_DEFAULT,
+    STAGE3_PROMPT_DEFAULT,
+    TITLE_PROMPT_DEFAULT,
+    QUERY_PROMPT_DEFAULT,
+    STAGE4_CORRECTED_DRAFT_PROMPT,
+    RESPONSE_LANGUAGE_DEFAULT,
+    VALID_RESPONSE_LANGUAGES,
+)
+from .advisor_prompts import (
+    ADVISOR_ROUND1_PROMPT,
+    ADVISOR_FOLLOWUP_PROMPT,
+    ADVISOR_CROSS_POLLINATION_PROMPT,
+    ADVISOR_VERDICT_PROMPT,
+    ADVISOR_TIEBREAKER_PROMPT,
+)
 
 
 class AdvisorPreset(BaseModel):
@@ -94,24 +111,6 @@ AVAILABLE_MODELS = [
     {"id": "deepseek/deepseek-chat", "name": "DeepSeek V3 [OpenRouter]", "provider": "DeepSeek", "source": "openrouter"},
 ]
 
-
-from .prompts import (
-    STAGE1_PROMPT_DEFAULT,
-    STAGE2_PROMPT_DEFAULT,
-    STAGE3_PROMPT_DEFAULT,
-    TITLE_PROMPT_DEFAULT,
-    QUERY_PROMPT_DEFAULT,
-    STAGE4_CORRECTED_DRAFT_PROMPT,
-    RESPONSE_LANGUAGE_DEFAULT,
-    VALID_RESPONSE_LANGUAGES,
-)
-from .advisor_prompts import (
-    ADVISOR_ROUND1_PROMPT,
-    ADVISOR_FOLLOWUP_PROMPT,
-    ADVISOR_CROSS_POLLINATION_PROMPT,
-    ADVISOR_VERDICT_PROMPT,
-    ADVISOR_TIEBREAKER_PROMPT,
-)
 
 class Settings(BaseModel):
     """Application settings."""

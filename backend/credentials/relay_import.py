@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .availability import is_container_environment, probe_keyring
+from .availability import is_container_environment
 from .ids import KNOWN_SECRET_IDS, OAUTH_SECRET_IDS
 from .store import has_secret, set_secret
 

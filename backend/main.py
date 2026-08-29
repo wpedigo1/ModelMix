@@ -44,7 +44,6 @@ from .credentials import (
     wipe_all_secrets,
 )
 from .credentials.relay_import import discover_relay_ai_credentials, import_relay_ai_credentials
-from .credentials.upgrade import ensure_credentials_upgraded
 from .oauth.sessions import disconnect_oauth, get_oauth_session_status, start_oauth_session
 from .prompts import VALID_RESPONSE_LANGUAGES, RESPONSE_LANGUAGE_DEFAULT
 from .personas import get_all_personas, save_persona_override, delete_persona_override, get_persona

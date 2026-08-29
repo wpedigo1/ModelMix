@@ -3,7 +3,6 @@
 import httpx
 from typing import List, Dict, Any
 from .base import LLMProvider
-from ..settings import get_settings
 
 class MistralProvider(LLMProvider):
     """Mistral API provider."""

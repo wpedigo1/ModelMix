@@ -24,7 +24,6 @@ from typing import Any, Dict, List
 
 import httpx
 
-from ..settings import get_settings
 from .base import LLMProvider
 
 logger = logging.getLogger(__name__)

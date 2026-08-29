@@ -193,9 +193,9 @@ function App() {
   // Check initial configuration on mount
   useEffect(() => {
     checkInitialSetup();
-  }, []);
+  }, [checkInitialSetup]);
 
-  const checkInitialSetup = async () => {
+  const checkInitialSetup = useCallback(async () => {
     try {
       // 1. Get Settings to check for API keys
       const settings = await api.getSettings();
@@ -257,7 +257,7 @@ function App() {
     } catch (error) {
       console.error('Failed to check initial setup:', error);
     }
-  };
+  }, [computeCouncilConfigured]);
 
   // Re-check council configuration when settings close
   const handleSettingsClose = async () => {
@@ -301,7 +301,7 @@ function App() {
   // Load conversations on mount
   useEffect(() => {
     loadConversations();
-  }, []);
+  }, [loadConversations]);
 
   // Periodically refresh the conversation list so MCP/API-created conversations
   // appear in the sidebar without requiring a page reload.
@@ -313,7 +313,7 @@ function App() {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', tick);
     };
-  }, []);
+  }, [loadConversations]);
 
   // Auto-save execution mode preference when changed
   useEffect(() => {
@@ -384,9 +384,9 @@ function App() {
         checkForActiveRun(convId);
       });
     }
-  }, [currentConversationId]);
+  }, [currentConversationId, loadConversation, checkForActiveRun]);
 
-  const loadConversations = async (retryCount = 0) => {
+  const loadConversations = useCallback(async (retryCount = 0) => {
     try {
       const convs = await api.listConversations();
       setConversations((prev) =>
@@ -416,9 +416,9 @@ function App() {
         setTimeout(() => loadConversations(retryCount + 1), (retryCount + 1) * 1000);
       }
     }
-  };
+  }, []);
 
-  const loadConversation = async (id, expectedVersion) => {
+  const loadConversation = useCallback(async (id, expectedVersion) => {
     try {
       const conv = await api.getConversation(id);
       // Only apply if no newer optimistic update has occurred since we started
@@ -430,14 +430,14 @@ function App() {
     } catch (error) {
       console.error('Failed to load conversation:', error);
     }
-  };
+  }, []);
 
-  const stopProgressPolling = () => {
+  const stopProgressPolling = useCallback(() => {
     if (progressPollRef.current) {
       clearInterval(progressPollRef.current);
       progressPollRef.current = null;
     }
-  };
+  }, []);
 
   const abortAllStreams = () => {
     stopProgressPolling();
@@ -451,15 +451,15 @@ function App() {
     }
   };
 
-  const loadingFlagsFromStage = (stage) => ({
+  const loadingFlagsFromStage = useCallback((stage) => ({
     search: stage === 'search',
     stage1: stage === 'stage1' || stage === 'initializing',
     stage2: stage === 'stage2',
     stage3: stage === 'stage3',
     stage4: stage === 'stage4',
-  });
+  }), []);
 
-  const applyAdvisorProgress = (conversationId, progress) => {
+  const applyAdvisorProgress = useCallback((conversationId, progress) => {
     setAppMode('advisors');
     setIsLoading(true);
     setCurrentConversation(prev => {
@@ -480,9 +480,9 @@ function App() {
 
       return { ...prev, mode: 'advisors', messages };
     });
-  };
+  }, []);
 
-  const checkForActiveRun = async (conversationId) => {
+  const checkForActiveRun = useCallback(async (conversationId) => {
     stopProgressPolling();
     try {
       const progress = await api.getConversationProgress(conversationId);
@@ -564,7 +564,7 @@ function App() {
     } catch {
       // Progress endpoint unavailable — no-op
     }
-  };
+  }, [stopProgressPolling, applyAdvisorProgress, loadingFlagsFromStage, loadConversation, loadConversations]);
 
   const handleNewConversation = async () => {
     abortAllStreams();
@@ -629,7 +629,7 @@ function App() {
 
   const handleStartDebate = async (options) => {
     stopProgressPolling();
-    const currentRequestId = ++requestIdRef.current;
+    ++requestIdRef.current;
 
     setIsLoading(true);
     let activeConversationId = currentConversationId;

@@ -115,6 +115,8 @@ export default function CouncilSetup({
   const initialLoadDone = useRef(false);
   const onCouncilChangeRef = useRef(onCouncilChange);
   onCouncilChangeRef.current = onCouncilChange;
+  const councilModelsRef = useRef(councilModels);
+  councilModelsRef.current = councilModels;
 
   const members = useMemo(() => filterMembers(councilModels), [councilModels]);
   const showChairman = editable || executionMode === 'full';
@@ -192,7 +194,7 @@ export default function CouncilSetup({
 
         if (!initialLoadDone.current && editable) {
           initialLoadDone.current = true;
-          const currentMembers = filterMembers(councilModels);
+          const currentMembers = filterMembers(councilModelsRef.current);
           if (currentMembers.length === 0) {
             const defaultPreset = loadedPresets.find((p) => p.is_default) || null;
             if (defaultPreset) {

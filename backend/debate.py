@@ -560,10 +560,6 @@ async def run_iterative_debate(
             # Build label_to_model for mode-specific prompt building
             successful_results = [r for r in stage1_results if not r.get("error")]
             labels = [chr(65 + i) for i in range(len(successful_results))]
-            label_to_model_preview = {
-                f"Response {label}": result["model"]
-                for label, result in zip(labels, successful_results)
-            }
 
             stage2_prompt_override = None
 
