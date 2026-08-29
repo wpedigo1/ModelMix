@@ -298,10 +298,14 @@ def extract_pdf_bytes(
     filename = sanitize_filename(name)
     warnings: list[str] = []
     ocr_used = False
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=True) as tmp:
-        tmp.write(data)
-        tmp.flush()
-        page_count, page_texts, weak_pages = _read_pdf_text(tmp.name, filename, limits)
+
+    input_fd, input_path = tempfile.mkstemp(suffix=".pdf")
+    try:
+        with os.fdopen(input_fd, "wb") as tmp:
+            tmp.write(data)
+            tmp.flush()
+
+        page_count, page_texts, weak_pages = _read_pdf_text(input_path, filename, limits)
 
         if weak_pages and len(weak_pages) <= limits.max_ocr_pages and ocr_available():
             output_path = ""
@@ -309,12 +313,15 @@ def extract_pdf_bytes(
             os.close(fd)
             os.unlink(output_path)
             try:
-                _run_ocrmypdf(tmp.name, output_path, limits)
+                _run_ocrmypdf(input_path, output_path, limits)
                 page_count, page_texts, weak_pages = _read_pdf_text(output_path, filename, limits)
                 ocr_used = True
             finally:
                 if output_path and os.path.exists(output_path):
                     os.unlink(output_path)
+    finally:
+        if os.path.exists(input_path):
+            os.unlink(input_path)
 
     if weak_pages:
         if len(weak_pages) > limits.max_ocr_pages:
