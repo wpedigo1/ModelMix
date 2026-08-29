@@ -1,6 +1,6 @@
 # ModelMix Engineering Progress
 
-Updated: 2026-08-29 14:23 CT
+Updated: 2026-08-29 15:00 CT
 
 This is the current implementation-state overlay for the locked ModelMix Punch Board. It records observed implementation progress without silently reordering or deleting locked board items.
 
@@ -9,17 +9,17 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed implementation missions: **001–007**.
+Completed implementation missions: **001–007.5**.
 
-Immediate interlock mission: **007.5 — OPEN / READY TO DISPATCH**.
+Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
-Next planned product mission after the interlock: **008**.
+Accepted Mission 007.5 implementation commit:
 
-Remote `main` immediately before Mission 007.5 documentation began was independently observed at:
+`e018ed06807beda2c11531f065b2d4181c346ca8` — `fix(mcp): migrate inherited MCP integration to MCP 2.x API`
 
-`1dcca51c3c20d0c4dde3d14892de512f5ebf7f17` — `docs: update ModelMix coding agent instructions`
+Remote `main` was independently verified to resolve to that commit before this documentation update.
 
-The dependency-security remediation that triggered Mission 007.5 is currently local/uncommitted state and is not represented here as already accepted into remote `main`.
+Next active product mission: **008**.
 
 ## Mission Ledger
 
@@ -32,8 +32,8 @@ The dependency-security remediation that triggered Mission 007.5 is currently lo
 | 005 | PASS | Moderator backend fan-in/synthesis phase, isolation, partial/failure handling, replay/cancellation integration | `005-moderator-backend-phase.md` |
 | 006 | PASS | Persistent three-panel cockpit: Worker A / wider Moderator / Worker B, centralized event routing, reconnect and failure UX | `006-three-panel-cockpit-slice.md` |
 | 007 | PASS | Searchable configured-model selectors for Worker A/Moderator/Worker B; exact IDs, active-run locking, accessible keyboard behavior | `007-searchable-model-discovery-controls.md` |
-| 007.5 | **OPEN** | Security/compatibility interlock: migrate inherited MCP integration to MCP 2.x while preserving the clean dependency set | `007.5-mcp-2-security-compatibility.md` |
-| 008 | **BLOCKED ON 007.5** | Planned durable session/run persistence and cockpit hydration | Punch Board items 11 and 22 |
+| 007.5 | **PASS** | MCP 2.x compatibility migration; security-clean dependency set preserved | `007.5-mcp-2-security-compatibility.md` |
+| 008 | **READY** | Durable session/run persistence and cockpit hydration | Punch Board items 11 and 22 |
 
 ## Current Verified Product Slice
 
@@ -52,36 +52,20 @@ The accepted implementation through Mission 007 establishes:
 - selector locking during active/reconnecting/cancelling runs;
 - explicit worker/Moderator failure and partial-result handling in the implemented slice.
 
-## Verification Evidence Preserved From Mission 007
+## Mission 007.5 Verification Evidence
 
-The Mission 007 record preserves these observed results from its final ChatGPT Work verification:
+Accepted Mission 007.5 results:
 
-- frontend tests: **19 passed**;
-- focused lint: **passed**;
-- frontend production build: **passed — 432 modules transformed**;
-- backend ModelMix regressions: **25 passed**;
-- live browser keyboard/accessibility behavior: **verified**;
-- browser console: **no errors observed**;
-- repository-wide frontend lint: **26 existing unrelated errors**.
+- MCP retained at **2.1.1**;
+- MCP tests: **146 passed**;
+- full backend suite: **458 passed, 5 failed**;
+- the five remaining failures were recorded as pre-existing Windows-specific legacy chassis test issues rather than MCP migration regressions;
+- Python security audit: **0 known vulnerabilities** across 95 locked dependencies;
+- backend import/runtime mount: verified, MCP mounted at `/mcp` with SSE `/mcp/sse`;
+- frontend dependency audit: **0 vulnerabilities**;
+- frontend production build: **PASS**.
 
-These are historical observed results from that mission and are not represented as a fresh rerun during later documentation work.
-
-## Dependency-Security Remediation State — Mission 007.5 Trigger
-
-Observed locally on 2026-08-29 after dependency remediation:
-
-- frontend `npm audit`: **0 vulnerabilities**;
-- frontend production build: **PASS — 432 modules transformed**;
-- Python `pip-audit`: **No known vulnerabilities found**;
-- Starlette resolved at **1.6.0**, upgraded from 0.50.0;
-- MCP resolved at **2.1.1**;
-- backend `pytest` did not reach execution because collection stopped with **6 MCP-related import errors**;
-- all six collection errors trace through inherited `the_ai_counsel_mcp/server.py`, which still imports `mcp.server.fastmcp.FastMCP`;
-- MCP 2.x identifies that API as renamed to `MCPServer` and indicates additional API changes.
-
-This establishes a real compatibility blocker, not a reason to redesign ModelMix. Mission 007.5 is therefore a bounded migration/security interlock.
-
-MCP remains an **alpha non-goal** for ModelMix product scope; keeping inherited MCP code compatible and testable does not promote MCP into the alpha feature plan.
+MCP remains an **alpha non-goal** for ModelMix product scope; compatibility maintenance did not promote it into the alpha feature plan.
 
 ## Punch Board Progress Mapping
 
@@ -143,9 +127,7 @@ These safeguards are not to be implemented prematurely in unrelated missions, bu
 
 ## Immediate Engineering Gap
 
-**Mission 007.5 must close first:** migrate the inherited MCP integration to the MCP 2.x API, preserve the clean dependency set, restore backend test collection/execution, and verify the security state before committing/pushing the remediation.
-
-After Mission 007.5 closes, **Mission 008 should address Punch Board items 11 and 22:** durable ModelMix session/run persistence and cockpit hydration.
+**Mission 008 is now active and should address Punch Board items 11 and 22:** durable ModelMix session/run persistence and cockpit hydration.
 
 Mission 008 direction remains locked:
 
