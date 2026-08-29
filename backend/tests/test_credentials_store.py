@@ -1,6 +1,7 @@
 """Tests for file credential store."""
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -26,9 +27,10 @@ def test_file_set_get_delete(cred_file):
     assert cred_file.exists()
     data = json.loads(cred_file.read_text())
     assert data["api:openai"] == "sk-test"
-    # mode 0o600 on unix
-    mode = cred_file.stat().st_mode & 0o777
-    assert mode == 0o600 or mode == 0o644  # some CI umasks differ; still wrote file
+    if os.name != "nt":
+        # POSIX mode bits are meaningful on Unix-like platforms only.
+        mode = cred_file.stat().st_mode & 0o777
+        assert mode in {0o600, 0o644}  # some CI umasks differ; still wrote file
     store.delete_secret("api:openai")
     assert store.get_secret("api:openai") is None
 
