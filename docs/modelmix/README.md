@@ -12,7 +12,7 @@ This directory is the repository home for ModelMix implementation state, mission
 
 ## Mission Reports
 
-Historical engineering evidence accepted through Mission 007 plus the current 007.5 interlock record:
+Historical engineering evidence accepted through Mission 007.5:
 
 1. [`001-baseline-architecture-spike.md`](001-baseline-architecture-spike.md)
 2. [`002-first-streaming-slice.md`](002-first-streaming-slice.md)
@@ -21,7 +21,7 @@ Historical engineering evidence accepted through Mission 007 plus the current 00
 5. [`005-moderator-backend-phase.md`](005-moderator-backend-phase.md)
 6. [`006-three-panel-cockpit-slice.md`](006-three-panel-cockpit-slice.md)
 7. [`007-searchable-model-discovery-controls.md`](007-searchable-model-discovery-controls.md)
-8. [`007.5-mcp-2-security-compatibility.md`](007.5-mcp-2-security-compatibility.md) — **OPEN / READY TO DISPATCH**
+8. [`007.5-mcp-2-security-compatibility.md`](007.5-mcp-2-security-compatibility.md) — **PASS**
 
 Mission reports preserve what was observed or delivered during that slice. They do not automatically override a later locked decision in the Punch Board.
 
@@ -39,14 +39,14 @@ Do not silently promote an older proposal into a current architecture decision.
 
 ## Current Project Checkpoint
 
-As of 2026-08-29 14:23 CT:
+As of 2026-08-29 15:00 CT:
 
-- Missions **001–007** are recorded as PASS.
-- Mission **007.5** is **OPEN / READY TO DISPATCH** as a security/compatibility interlock.
-- Mission **008** remains the next planned product mission but is blocked until 007.5 closes.
-- The 007.5 trigger is a verified MCP 2.x API incompatibility exposed after dependency remediation reached clean frontend and Python audits.
-- The local remediation state is not represented as already accepted on remote `main`; remote state and the local working tree must be reconciled before implementation/commit.
-- The next product gap after 007.5 remains durable ModelMix session/run persistence and cockpit hydration.
+- Missions **001–007.5** are recorded as PASS.
+- Mission **007.5** closed the MCP 2.x security/compatibility interlock.
+- Accepted Mission 007.5 implementation commit: `e018ed06807beda2c11531f065b2d4181c346ca8`.
+- MCP remains at **2.1.1**; Python and frontend dependency audits were recorded clean.
+- Mission **008** is now the active next product mission.
+- The immediate product gap is durable ModelMix session/run persistence and cockpit hydration.
 - Alpha persistence remains **versioned atomic JSON behind a ModelMix-owned interface**.
 - **SQLite migration is not part of the alpha plan.**
 - Browser/React single-window cockpit remains the alpha surface.
@@ -54,9 +54,9 @@ As of 2026-08-29 14:23 CT:
 
 ## Mission 007.5 Boundary
 
-Mission 007.5 exists only to keep the repository security-clean and compatible with MCP 2.x.
+Mission 007.5 existed only to keep the repository security-clean and compatible with MCP 2.x.
 
-It does **not** promote MCP into ModelMix alpha scope. The work should update only the inherited MCP integration and directly affected tests/dependency state, preserve the existing ModelMix architecture, and close with observed audit/test/remote verification evidence.
+It did **not** promote MCP into ModelMix alpha scope. The accepted work changed only the inherited MCP integration and directly affected tests/dependency state while preserving ModelMix architecture.
 
 ## Stable Product Doctrine
 
