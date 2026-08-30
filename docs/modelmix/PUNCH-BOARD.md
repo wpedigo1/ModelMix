@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 009: 2026-08-29 CT
+Reconciled through Mission 010: 2026-08-29 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -23,6 +23,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 007.5 | **PASS** | MCP 2.x security/compatibility interlock closed; clean dependency set retained |
 | 008 | **PASS** | Versioned atomic JSON persistence, restart reconstruction, and cockpit hydration on `main` |
 | 009 | **PASS (LOCAL)** | Seat-scoped bounded multi-turn Worker/Moderator history with hot-swap continuity and leakage tests |
+| 010 | **PASS (LOCAL)** | Seat history owned character budgets: per-message 4k and per-seat 24k deterministic bounding with whole-turn oldest-first eviction |
 
 **Mission 008 is present on `main` and its persistence tests pass.**
 
@@ -74,7 +75,7 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 - **9 — Define run state machine:** core active/terminal outcomes exist; complete timeout/retry/state contract remains open.
 - **12 — Define provider capability matrix:** streaming/fallback and configured discovery exist; full matrix remains open.
 - **14 — Build deterministic mock provider:** deterministic fakes/mocks support current tests; full failure/timeout/rate-limit fixture matrix remains open.
-- **17 — Add basic spend/runtime guardrails:** Stop and some bounding hooks exist; timeout/cost-token ceilings/output warning/hard cap remain open.
+- **17 — Add basic spend/runtime guardrails:** Stop, turn cap, and seat-history per-message/per-seat character budgets exist (Mission 010 partial progress on context/spend bounding); timeout/cost-token ceilings/output warning/hard cap remain open.
 - **29 — Finalize Mix multi-turn session behavior:** seat-scoped Worker/Moderator history, bounding, failure-partial reuse, and hot-swap continuity are implemented; retention/delete UX remains open.
 - **26 — Add provider/settings UX sufficient for alpha:** searchable configured selectors are complete; full alpha provider/settings flow remains open.
 
@@ -172,7 +173,7 @@ One/both worker failure, Moderator failure, timeout/rate limit/cancellation/part
 
 ### 17. Add basic spend/runtime guardrails — **PARTIAL**
 
-Max workers, run timeout, Stop, optional cost/token ceiling, no automatic provider/model substitution without permission.
+Max workers, run timeout, Stop, seat-history character budgets (Mission 010 partial), optional cost/token ceiling, no automatic provider/model substitution without permission.
 
 ## PHASE 4 — Streaming
 
@@ -338,4 +339,4 @@ Hard cap is **not post-alpha by default**. Wire it when settings/run-control rea
 
 ## Immediate Next Engineering Gap
 
-Mission 009 completes seat-scoped multi-turn context. Remaining alpha gaps stay ordered by this Punch Board; Mission 009 does not add retention/delete UX, telemetry, guardrails, Solo, or Compare.
+Mission 010 gives seat history its own bounded character budget. Remaining alpha gaps stay ordered by this Punch Board; Mission 010 does not add retention/delete UX, telemetry, guardrails, Solo, or Compare.

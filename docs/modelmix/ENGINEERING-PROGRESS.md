@@ -9,7 +9,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–009**.
+Completed and locally verified implementation missions: **001–010**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -35,6 +35,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 007.5 | **PASS** | MCP 2.x compatibility migration; security-clean dependency set preserved | `007.5-mcp-2-security-compatibility.md` |
 | 008 | **PASS** | Versioned atomic JSON session/run persistence, restart replay reconstruction, and cockpit hydration/deduplication | `008-durable-persistence-cockpit-hydration.md` |
 | 009 | **PASS (LOCAL)** | Bounded seat-scoped Worker/Moderator history, failure-partial reuse, hot-swap continuity, and leakage proof | `009-seat-scoped-multi-turn-context.md` |
+| 010 | **PASS (LOCAL)** | Seat history character budgets: 4k per message (`MAX_HISTORY_MESSAGE_CHARS`) and 24k per seat (`MAX_HISTORY_TOTAL_CHARS`) with deterministic middle truncation and whole-turn oldest-first eviction | `010-seat-history-budget.md` |
 
 ## Current Verified Product Slice
 
@@ -56,6 +57,7 @@ The accepted implementation through Mission 009 establishes:
 - cockpit hydration from persisted truth with the durable sequence used as the existing SSE replay cursor.
 - bounded multi-turn history keyed only by seat identity, including a Moderator history that excludes prior-turn worker output;
 - worker model hot-swaps that preserve the seat's history and failed/cancelled seat partial output when non-empty.
+- a deterministic seat-history character budget: each historical message middle-truncated to 4,000 characters and each single-seat assembled history capped at 24,000 characters via whole-turn oldest-first eviction (never an orphan assistant message).
 
 ## Mission 007.5 Verification Evidence
 
@@ -102,7 +104,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **12 — Provider capability matrix:** streaming capability/fallback and configured discovery exist; the full capability matrix remains open.
 - **14 — Deterministic mock provider:** current tests use deterministic fakes/mocks, but the full locked failure/timeout/rate-limit fixture matrix remains open.
 - **29 — Finalized Mix multi-turn behavior:** seat histories, Moderator history, hot-swap continuity, and deterministic context bounding are implemented; retention/delete UX remains open.
-- **17 — Spend/runtime guardrails:** explicit Stop and some bounding hooks exist; timeout/cost-token ceilings and output warning/hard-cap work remain open.
+- **17 — Spend/runtime guardrails:** explicit Stop, the turn cap, and seat-history per-message/per-seat character budgets exist (Mission 010 partial progress on context/spend bounding); timeout/cost-token ceilings and output warning/hard-cap work remain open.
 - **26 — Provider/settings UX:** searchable configured selectors are complete; full alpha provider/settings flow remains open.
 
 ### Not yet satisfied / upcoming
@@ -145,3 +147,12 @@ those histories into the existing worker and Moderator provider calls. Prior
 worker output is never added to Moderator history, and Moderator output is never
 added to either worker history. See `009-seat-scoped-multi-turn-context.md` for
 the observed validation output and exact scope.
+
+## Mission 010 Result
+
+Mission 010 replaces the previous 100,000-character-per-message history bound
+with a ModelMix-owned per-message budget of 4,000 characters and adds a
+24,000-character per-seat assembled-history budget with whole-turn oldest-first
+eviction. `history.py` no longer imports a private symbol from `moderator.py`;
+current-turn Moderator bounding and the `build_seat_history` contract are
+unchanged. See `010-seat-history-budget.md` for the observed validation output.

@@ -64,19 +64,22 @@ def test_build_seat_history_uses_only_own_nonempty_messages_without_mutation():
 
 
 def test_build_seat_history_caps_latest_qualifying_turns_and_bounds_each_message():
-    from backend.modelmix.history import MAX_SEAT_HISTORY_TURNS, build_seat_history
-    from backend.modelmix.moderator import MAX_VISIBLE_OUTPUT_CHARS
+    from backend.modelmix.history import (
+        MAX_HISTORY_MESSAGE_CHARS,
+        MAX_SEAT_HISTORY_TURNS,
+        build_seat_history,
+    )
 
     document = _history_document(MAX_SEAT_HISTORY_TURNS + 2)
-    document["session"]["runs"][-1]["prompt"] = "P" * (MAX_VISIBLE_OUTPUT_CHARS + 1)
-    document["session"]["messages"][-3]["content"] = "A" * (MAX_VISIBLE_OUTPUT_CHARS + 1)
+    document["session"]["runs"][-1]["prompt"] = "P" * (MAX_HISTORY_MESSAGE_CHARS + 1)
+    document["session"]["messages"][-3]["content"] = "A" * (MAX_HISTORY_MESSAGE_CHARS + 1)
 
     history = build_seat_history(document, "worker_a", exclude_run_id="current-run")
 
     assert len(history) == MAX_SEAT_HISTORY_TURNS * 2
     assert history[0]["content"] == "PROMPT_2_SENTINEL"
-    assert len(history[-2]["content"]) == MAX_VISIBLE_OUTPUT_CHARS
-    assert len(history[-1]["content"]) == MAX_VISIBLE_OUTPUT_CHARS
+    assert len(history[-2]["content"]) == MAX_HISTORY_MESSAGE_CHARS
+    assert len(history[-1]["content"]) == MAX_HISTORY_MESSAGE_CHARS
     assert "truncated deterministically" in history[-2]["content"]
     assert "truncated deterministically" in history[-1]["content"]
 

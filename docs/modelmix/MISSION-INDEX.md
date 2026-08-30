@@ -21,6 +21,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 007.5 | Codex | **PASS** | `007.5-mcp-2-security-compatibility.md` |
 | 008 | Codex isolated checkout | **PASS** | `008-durable-persistence-cockpit-hydration.md`; accepted on `main` |
 | 009 | Codex | **PASS (LOCAL)** | `009-seat-scoped-multi-turn-context.md` |
+| 010 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `010-seat-history-budget.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -70,6 +71,17 @@ Mission 009 adds bounded, seat-scoped multi-turn history for Worker A, Worker B,
 and Moderator. It closes Punch Board items **8** and **15**, partially satisfies
 item **29**, preserves history across model hot-swaps, and proves by sentinel
 tests that no prior Worker or Moderator content leaks into another worker seat.
+
+## Mission 010 Result
+
+**Mission 010 is implemented and verified locally.**
+
+Mission 010 gives seat history its own owned character budgets: each historical
+message is deterministically middle-truncated at 4,000 characters and the
+assembled single-seat history is capped at 24,000 characters with whole-turn
+oldest-first eviction. It makes partial progress on Punch Board item **17**
+(context/spend bounding) while leaving `moderator.py`, `registry.py`, and
+`orchestrator.py` untouched.
 
 ## Evidence Rule
 
