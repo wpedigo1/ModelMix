@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Optional
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 
 from ..providers.base import LLMProvider
 from .events import EventSequencer
@@ -24,6 +24,7 @@ async def multiplex_workers(
     run_id: Optional[str] = None,
     event_factory: Optional[EventFactory] = None,
     emit_run_completed: bool = True,
+    seat_histories: Optional[Dict[str, List[Dict[str, str]]]] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
     """Run exactly two isolated model calls and multiplex their visible output."""
     run_id = run_id or str(uuid.uuid4())
@@ -37,10 +38,14 @@ async def multiplex_workers(
 
     queue: asyncio.Queue[tuple[str, str, Dict[str, Any]]] = asyncio.Queue()
     models = {"worker_a": worker_a_model, "worker_b": worker_b_model}
+    histories = seat_histories or {}
 
     async def run_seat(seat_id: str, model_id: str) -> None:
         await queue.put((seat_id, "seat_started", {"model": model_id}))
-        messages = [{"role": "user", "content": prompt}]
+        messages = [
+            *histories.get(seat_id, []),
+            {"role": "user", "content": prompt},
+        ]
         try:
             provider = provider_resolver(model_id)
             if provider.supports_streaming:

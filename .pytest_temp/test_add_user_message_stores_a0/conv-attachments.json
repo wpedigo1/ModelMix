@@ -1,0 +1,23 @@
+{
+  "id": "conv-attachments",
+  "created_at": "2026-08-29T22:48:52.418725+00:00",
+  "title": "Analyze this.",
+  "mode": "council",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Analyze this.",
+      "attachments": [
+        {
+          "name": "report.pdf",
+          "mime_type": "application/pdf",
+          "char_count": 123,
+          "truncated": false,
+          "ocr_used": false,
+          "page_count": 1,
+          "warnings": []
+        }
+      ]
+    }
+  ]
+}

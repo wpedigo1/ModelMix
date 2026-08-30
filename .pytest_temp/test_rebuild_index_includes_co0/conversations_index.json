@@ -1,0 +1,12 @@
+[
+  {
+    "id": "legacy-cost",
+    "created_at": "2026-06-02T00:00:00+00:00",
+    "title": "Legacy Cost Thread",
+    "mode": "council",
+    "message_count": 1,
+    "total_cost": 0.005,
+    "cost_status": "estimated",
+    "total_calls": 1
+  }
+]

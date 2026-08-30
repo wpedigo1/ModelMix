@@ -6,8 +6,9 @@ import asyncio
 import time
 import uuid
 from contextlib import aclosing
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
+from .history import build_seat_history
 from .journal import (
     MAX_EVENTS_PER_RUN,
     MAX_RETAINED_TERMINAL_RUNS,
@@ -51,6 +52,17 @@ class RunRegistry:
         session_id = session_id or str(uuid.uuid4())
         await self.persistence.create_session(session_id)
         run = RunEventJournal(str(uuid.uuid4()), max_events=self.max_events_per_run)
+        session_document = await self.persistence.load_session(session_id)
+        if session_document is None:
+            raise RuntimeError("ModelMix session disappeared before run creation")
+        seat_histories = {
+            seat_id: build_seat_history(
+                session_document,
+                seat_id,
+                exclude_run_id=run.run_id,
+            )
+            for seat_id in ("worker_a", "worker_b", "moderator")
+        }
         await self.persistence.create_run(session_id, {
             "run_id": run.run_id,
             "prompt": prompt,
@@ -77,6 +89,7 @@ class RunRegistry:
                 worker_b_model,
                 provider_resolver,
                 moderator_model,
+                seat_histories,
             )
         )
         return run
@@ -136,6 +149,7 @@ class RunRegistry:
         worker_b_model: str,
         provider_resolver: ProviderResolver,
         moderator_model: Optional[str],
+        seat_histories: Dict[str, List[Dict[str, str]]],
     ) -> None:
         await run.mark_status("active")
         worker_outputs = {"worker_a": "", "worker_b": ""}
@@ -149,6 +163,10 @@ class RunRegistry:
                 run_id=run.run_id,
                 event_factory=run.append,
                 emit_run_completed=moderator_model is None,
+                seat_histories={
+                    "worker_a": seat_histories["worker_a"],
+                    "worker_b": seat_histories["worker_b"],
+                },
             )
             async with aclosing(worker_stream):
                 async for source_event in worker_stream:
@@ -187,6 +205,7 @@ class RunRegistry:
                     prompt,
                     successful_outputs,
                     worker_failures,
+                    history=seat_histories["moderator"],
                 )
                 try:
                     moderator_provider = provider_resolver(moderator_model)

@@ -1,12 +1,92 @@
 """Focused Mission 008 persistence and restart coverage."""
 
 import json
+from copy import deepcopy
 
 import pytest
 
 from backend.modelmix.journal import RunEventJournal
 from backend.modelmix.persistence import AtomicJsonModelMixPersistence, PersistenceError
 from backend.modelmix.registry import RunRegistry
+
+
+def _history_document(run_count=1):
+    runs = [
+        {
+            "run_id": f"run-{index}",
+            "prompt": f"PROMPT_{index}_SENTINEL",
+            "models": {},
+            "status": "completed",
+            "latest_seq": 0,
+            "events": [],
+        }
+        for index in range(run_count)
+    ]
+    messages = []
+    for index in range(run_count):
+        messages.extend([
+            {
+                "run_id": f"run-{index}",
+                "seat": "worker_a",
+                "content": f"WORKER_A_{index}_SENTINEL",
+            },
+            {
+                "run_id": f"run-{index}",
+                "seat": "worker_b",
+                "content": f"WORKER_B_{index}_SENTINEL",
+            },
+            {
+                "run_id": f"run-{index}",
+                "seat": "moderator",
+                "content": f"MODERATOR_{index}_SENTINEL",
+            },
+        ])
+    return {"schema_version": 1, "session": {"runs": runs, "messages": messages}}
+
+
+def test_build_seat_history_uses_only_own_nonempty_messages_without_mutation():
+    from backend.modelmix.history import build_seat_history
+
+    document = _history_document(2)
+    document["session"]["messages"][0]["content"] = "WORKER_A_PARTIAL_FAILED_SENTINEL"
+    document["session"]["messages"][3]["content"] = ""
+    original = deepcopy(document)
+
+    history = build_seat_history(document, "worker_a", exclude_run_id="run-1")
+
+    assert history == [
+        {"role": "user", "content": "PROMPT_0_SENTINEL"},
+        {"role": "assistant", "content": "WORKER_A_PARTIAL_FAILED_SENTINEL"},
+    ]
+    assert "WORKER_B_0_SENTINEL" not in str(history)
+    assert "MODERATOR_0_SENTINEL" not in str(history)
+    assert document == original
+
+
+def test_build_seat_history_caps_latest_qualifying_turns_and_bounds_each_message():
+    from backend.modelmix.history import MAX_SEAT_HISTORY_TURNS, build_seat_history
+    from backend.modelmix.moderator import MAX_VISIBLE_OUTPUT_CHARS
+
+    document = _history_document(MAX_SEAT_HISTORY_TURNS + 2)
+    document["session"]["runs"][-1]["prompt"] = "P" * (MAX_VISIBLE_OUTPUT_CHARS + 1)
+    document["session"]["messages"][-3]["content"] = "A" * (MAX_VISIBLE_OUTPUT_CHARS + 1)
+
+    history = build_seat_history(document, "worker_a", exclude_run_id="current-run")
+
+    assert len(history) == MAX_SEAT_HISTORY_TURNS * 2
+    assert history[0]["content"] == "PROMPT_2_SENTINEL"
+    assert len(history[-2]["content"]) == MAX_VISIBLE_OUTPUT_CHARS
+    assert len(history[-1]["content"]) == MAX_VISIBLE_OUTPUT_CHARS
+    assert "truncated deterministically" in history[-2]["content"]
+    assert "truncated deterministically" in history[-1]["content"]
+
+
+def test_build_seat_history_is_empty_for_fresh_session():
+    from backend.modelmix.history import build_seat_history
+
+    document = {"schema_version": 1, "session": {"runs": [], "messages": []}}
+
+    assert build_seat_history(document, "worker_a", exclude_run_id="new-run") == []
 
 
 async def persisted_run(store, session_id="session-1", status="completed"):

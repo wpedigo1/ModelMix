@@ -1,0 +1,10 @@
+[
+  {
+    "id": "legacy",
+    "created_at": "2026-06-02T00:00:00+00:00",
+    "title": "Legacy Council",
+    "mode": "council",
+    "message_count": 1,
+    "run_summary": "Chat Only \u00b7 Search"
+  }
+]

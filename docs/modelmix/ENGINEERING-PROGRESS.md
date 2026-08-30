@@ -1,6 +1,6 @@
 # ModelMix Engineering Progress
 
-Updated: 2026-08-29 15:00 CT
+Updated: 2026-08-29 CT
 
 This is the current implementation-state overlay for the locked ModelMix Punch Board. It records observed implementation progress without silently reordering or deleting locked board items.
 
@@ -9,7 +9,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–008**.
+Completed and locally verified implementation missions: **001–009**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -19,7 +19,7 @@ Accepted Mission 007.5 implementation commit:
 
 Remote `main` was independently verified to resolve to that commit before this documentation update.
 
-Mission **008** is implemented and verified on the isolated `work` checkout; remote integration remains external to this record.
+Mission **008** persistence is present on current `main` and passes the current backend suite.
 
 ## Mission Ledger
 
@@ -33,11 +33,12 @@ Mission **008** is implemented and verified on the isolated `work` checkout; rem
 | 006 | PASS | Persistent three-panel cockpit: Worker A / wider Moderator / Worker B, centralized event routing, reconnect and failure UX | `006-three-panel-cockpit-slice.md` |
 | 007 | PASS | Searchable configured-model selectors for Worker A/Moderator/Worker B; exact IDs, active-run locking, accessible keyboard behavior | `007-searchable-model-discovery-controls.md` |
 | 007.5 | **PASS** | MCP 2.x compatibility migration; security-clean dependency set preserved | `007.5-mcp-2-security-compatibility.md` |
-| 008 | **PASS (LOCAL)** | Versioned atomic JSON session/run persistence, restart replay reconstruction, and cockpit hydration/deduplication | `008-durable-persistence-cockpit-hydration.md` |
+| 008 | **PASS** | Versioned atomic JSON session/run persistence, restart replay reconstruction, and cockpit hydration/deduplication | `008-durable-persistence-cockpit-hydration.md` |
+| 009 | **PASS (LOCAL)** | Bounded seat-scoped Worker/Moderator history, failure-partial reuse, hot-swap continuity, and leakage proof | `009-seat-scoped-multi-turn-context.md` |
 
 ## Current Verified Product Slice
 
-The accepted implementation through Mission 007 establishes:
+The accepted implementation through Mission 009 establishes:
 
 - two independent worker seats with no cross-worker answer leakage in the implemented run path;
 - one Moderator phase that receives the allowed completed worker outputs;
@@ -53,6 +54,8 @@ The accepted implementation through Mission 007 establishes:
 - explicit worker/Moderator failure and partial-result handling in the implemented slice.
 - durable schema-v1 atomic JSON sessions with canonical seat/audience/role messages and immutable terminal run snapshots;
 - cockpit hydration from persisted truth with the durable sequence used as the existing SSE replay cursor.
+- bounded multi-turn history keyed only by seat identity, including a Moderator history that excludes prior-turn worker output;
+- worker model hot-swaps that preserve the seat's history and failed/cancelled seat partial output when non-empty.
 
 ## Mission 007.5 Verification Evidence
 
@@ -80,8 +83,10 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **3 — Spike the four unknowns**
 - **5 — Lock chassis policy**
 - **6 — Create ModelMix-owned backend boundary**
+- **8 — Context isolation policy**
 - **10 — Define ordered event contract**
 - **11 — ModelMix persistence boundary**
+- **15 — Non-streaming Mix vertical slice**
 - **16 — Prove failure + cancellation**
 - **18 — Add normalized provider streaming interface**
 - **19 — Multiplex streams into one ordered SSE run feed**
@@ -93,11 +98,10 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 ### Partially satisfied — keep open
 
 - **7 — Domain objects:** run/event/seat concepts exist, but the full locked domain/schema-version contract is incomplete.
-- **8 — Context isolation policy:** current run isolation is implemented/tested; multi-turn seat-history/hot-swap proof remains open.
 - **9 — Run state machine:** core active/terminal outcomes exist; complete timeout/retry/state contract remains open.
 - **12 — Provider capability matrix:** streaming capability/fallback and configured discovery exist; the full capability matrix remains open.
 - **14 — Deterministic mock provider:** current tests use deterministic fakes/mocks, but the full locked failure/timeout/rate-limit fixture matrix remains open.
-- **15 — Non-streaming Mix vertical slice:** worker + Moderator semantics, fallback, and persistence exist; broader acceptance remains governed by the full item contract.
+- **29 — Finalized Mix multi-turn behavior:** seat histories, Moderator history, hot-swap continuity, and deterministic context bounding are implemented; retention/delete UX remains open.
 - **17 — Spend/runtime guardrails:** explicit Stop and some bounding hooks exist; timeout/cost-token ceilings and output warning/hard-cap work remain open.
 - **26 — Provider/settings UX:** searchable configured selectors are complete; full alpha provider/settings flow remains open.
 
@@ -109,7 +113,6 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **25 — Minimal telemetry**
 - **27 — Solo**
 - **28 — Compare**
-- **29 — Finalized Mix multi-turn behavior**
 - **30 — Credential verification in actual packaging model**
 - **31 — Local backend hardening**
 - **32 — Basic structured observability**
@@ -133,3 +136,12 @@ Mission 008 directly closes items 11 and 22 with schema-v1 atomic JSON behind a
 ModelMix interface, canonical isolated seat messages, durable run/event cursors,
 restart reconstruction, and three-panel hydration. See
 `008-durable-persistence-cockpit-hydration.md` for observed commands and scope.
+
+## Mission 009 Result
+
+Mission 009 reads schema-v1 canonical runs/messages without mutation, builds at
+most eight prior prompt/answer pairs independently for each seat, and passes
+those histories into the existing worker and Moderator provider calls. Prior
+worker output is never added to Moderator history, and Moderator output is never
+added to either worker history. See `009-seat-scoped-multi-turn-context.md` for
+the observed validation output and exact scope.

@@ -12,7 +12,7 @@ This directory is the repository home for ModelMix implementation state, mission
 
 ## Mission Reports
 
-Historical engineering evidence through locally verified Mission 008:
+Historical engineering evidence through locally verified Mission 009:
 
 1. [`001-baseline-architecture-spike.md`](001-baseline-architecture-spike.md)
 2. [`002-first-streaming-slice.md`](002-first-streaming-slice.md)
@@ -22,7 +22,8 @@ Historical engineering evidence through locally verified Mission 008:
 6. [`006-three-panel-cockpit-slice.md`](006-three-panel-cockpit-slice.md)
 7. [`007-searchable-model-discovery-controls.md`](007-searchable-model-discovery-controls.md)
 8. [`007.5-mcp-2-security-compatibility.md`](007.5-mcp-2-security-compatibility.md) — **PASS**
-9. [`008-durable-persistence-cockpit-hydration.md`](008-durable-persistence-cockpit-hydration.md) — **PASS (LOCAL)**
+9. [`008-durable-persistence-cockpit-hydration.md`](008-durable-persistence-cockpit-hydration.md) — **PASS**
+10. [`009-seat-scoped-multi-turn-context.md`](009-seat-scoped-multi-turn-context.md) — **PASS (LOCAL)**
 
 Mission reports preserve what was observed or delivered during that slice. They do not automatically override a later locked decision in the Punch Board.
 
@@ -42,11 +43,12 @@ Do not silently promote an older proposal into a current architecture decision.
 
 As of 2026-08-29 15:00 CT:
 
-- Missions **001–008** are recorded as implemented; Mission 008 awaits remote integration.
+- Missions **001–009** are recorded as implemented; Mission 008 is present on current `main`.
 - Mission **007.5** closed the MCP 2.x security/compatibility interlock.
 - Accepted Mission 007.5 implementation commit: `e018ed06807beda2c11531f065b2d4181c346ca8`.
 - MCP remains at **2.1.1**; Python and frontend dependency audits were recorded clean.
 - Mission **008** adds durable ModelMix session/run persistence and cockpit hydration.
+- Mission **009** adds bounded seat-scoped Worker/Moderator history with hot-swap continuity and explicit cross-seat leakage tests.
 - Schema-v1 session files live under `data/modelmix/sessions/` by default and are written atomically behind the ModelMix persistence interface.
 - Alpha persistence remains **versioned atomic JSON behind a ModelMix-owned interface**.
 - **SQLite migration is not part of the alpha plan.**

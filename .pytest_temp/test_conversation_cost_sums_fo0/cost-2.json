@@ -1,0 +1,56 @@
+{
+  "id": "cost-2",
+  "created_at": "2026-06-04T01:00:00+00:00",
+  "title": "Follow-up Thread",
+  "mode": "council",
+  "messages": [
+    {
+      "role": "user",
+      "content": "First"
+    },
+    {
+      "role": "assistant",
+      "stage1": [],
+      "metadata": {
+        "cost_report": {
+          "currency": "USD",
+          "total_cost": 0.001,
+          "total_calls": 2,
+          "has_unknown_costs": false,
+          "has_estimates": false,
+          "by_model": [
+            {
+              "name": "test",
+              "total_cost": 0.001,
+              "calls": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "Second"
+    },
+    {
+      "role": "assistant",
+      "stage1": [],
+      "metadata": {
+        "cost_report": {
+          "currency": "USD",
+          "total_cost": 0.003,
+          "total_calls": 3,
+          "has_unknown_costs": false,
+          "has_estimates": false,
+          "by_model": [
+            {
+              "name": "test",
+              "total_cost": 0.003,
+              "calls": 3
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

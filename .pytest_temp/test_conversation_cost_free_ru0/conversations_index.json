@@ -1,0 +1,12 @@
+[
+  {
+    "id": "cost-free",
+    "created_at": "2026-06-04T01:00:00+00:00",
+    "title": "Local Ollama Chat",
+    "mode": "council",
+    "message_count": 1,
+    "total_cost": 0.0,
+    "cost_status": "free",
+    "total_calls": 1
+  }
+]

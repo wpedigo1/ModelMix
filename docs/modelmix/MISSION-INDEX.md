@@ -19,7 +19,8 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 006 | Codex | PASS | `006-three-panel-cockpit-slice.md` |
 | 007 | Codex-labeled historical prompt; final implementation/verification completed through ChatGPT Work after repository recovery | PASS | `007-searchable-model-discovery-controls.md` |
 | 007.5 | Codex | **PASS** | `007.5-mcp-2-security-compatibility.md` |
-| 008 | Codex isolated checkout | **PASS (LOCAL)** | `008-durable-persistence-cockpit-hydration.md`; remote integration pending |
+| 008 | Codex isolated checkout | **PASS** | `008-durable-persistence-cockpit-hydration.md`; accepted on `main` |
+| 009 | Codex | **PASS (LOCAL)** | `009-seat-scoped-multi-turn-context.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -52,15 +53,23 @@ Remote `main` was independently verified to resolve to `e018ed06807beda2c11531f0
 
 ## Mission 008 Result
 
-**Mission 008 is implemented and verified locally.**
+**Mission 008 is implemented on current `main` and its persistence behavior passes the current backend suite.**
 
 Objective:
 
 **ModelMix-owned durable session/run persistence plus cockpit hydration using versioned atomic JSON, preserving completed/partial seat state and the existing SSE replay contract.**
 
 Mission 008 corresponds primarily to Punch Board items **11** and **22** and
-adds schema-v1 atomic JSON persistence plus durable cockpit hydration. Remote
-integration is intentionally deferred to the environment that owns `main`.
+adds schema-v1 atomic JSON persistence plus durable cockpit hydration.
+
+## Mission 009 Result
+
+**Mission 009 is implemented and verified locally.**
+
+Mission 009 adds bounded, seat-scoped multi-turn history for Worker A, Worker B,
+and Moderator. It closes Punch Board items **8** and **15**, partially satisfies
+item **29**, preserves history across model hot-swaps, and proves by sentinel
+tests that no prior Worker or Moderator content leaks into another worker seat.
 
 ## Evidence Rule
 

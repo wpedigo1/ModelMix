@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 007.5: 2026-08-29 15:00 CT
+Reconciled through Mission 009: 2026-08-29 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -21,9 +21,10 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 006 | PASS | Three-panel Worker A / wider Moderator / Worker B cockpit |
 | 007 | PASS | Searchable configured-model selectors, exact IDs, active-run locking, accessible keyboard behavior |
 | 007.5 | **PASS** | MCP 2.x security/compatibility interlock closed; clean dependency set retained |
-| 008 | **PASS (LOCAL)** | Versioned atomic JSON persistence, restart reconstruction, and cockpit hydration; remote integration pending |
+| 008 | **PASS** | Versioned atomic JSON persistence, restart reconstruction, and cockpit hydration on `main` |
+| 009 | **PASS (LOCAL)** | Seat-scoped bounded multi-turn Worker/Moderator history with hot-swap continuity and leakage tests |
 
-**Mission 008 is implemented and verified locally; remote integration is pending.**
+**Mission 008 is present on `main` and its persistence tests pass.**
 
 ### Mission 007.5 Interlock Result
 
@@ -55,36 +56,36 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 - **3 — Spike the four unknowns**
 - **5 — Lock chassis policy**
 - **6 — Create ModelMix-owned backend boundary**
+- **8 — Define context isolation policy**
 - **10 — Define ordered event contract**
+- **11 — Define persistence boundary**
+- **15 — Build NON-STREAMING Mix vertical slice first**
 - **16 — Prove failure + cancellation**
 - **18 — Add normalized provider streaming interface**
 - **19 — Multiplex streams into one ordered SSE run feed**
 - **20 — Stream Moderator**
 - **21 — Build browser-first three-panel cockpit**
+- **22 — Bind UI to durable run/session state**
 - **23 — Add Stop behavior**
 
 ### Partially satisfied — keep open
 
 - **7 — Define domain objects:** run/event/seat concepts exist; full locked domain/schema-version contract remains incomplete.
-- **8 — Define context isolation policy:** current run isolation is implemented/tested; multi-turn seat-history/hot-swap proof remains open.
 - **9 — Define run state machine:** core active/terminal outcomes exist; complete timeout/retry/state contract remains open.
 - **12 — Define provider capability matrix:** streaming/fallback and configured discovery exist; full matrix remains open.
 - **14 — Build deterministic mock provider:** deterministic fakes/mocks support current tests; full failure/timeout/rate-limit fixture matrix remains open.
-- **15 — Build NON-STREAMING Mix vertical slice first:** worker + Moderator semantics and fallback work; persistence PASS condition remains open.
 - **17 — Add basic spend/runtime guardrails:** Stop and some bounding hooks exist; timeout/cost-token ceilings/output warning/hard cap remain open.
-- **22 — Bind UI to durable run/session state:** reconnect/replay works for the current journal; persisted hydration across reload/reopen remains open.
+- **29 — Finalize Mix multi-turn session behavior:** seat-scoped Worker/Moderator history, bounding, failure-partial reuse, and hot-swap continuity are implemented; retention/delete UX remains open.
 - **26 — Add provider/settings UX sufficient for alpha:** searchable configured selectors are complete; full alpha provider/settings flow remains open.
 
 ### Open / upcoming
 
 - **4 — Lock license and provenance**
-- **11 — Define persistence boundary**
 - **13 — Define privacy/data-routing rules**
 - **24 — Build thin top controls**
 - **25 — Add minimal telemetry**
 - **27 — Add Solo**
 - **28 — Add Compare**
-- **29 — Finalize Mix multi-turn session behavior**
 - **30 — Verify credential storage in actual packaging model**
 - **31 — Harden local backend boundary**
 - **32 — Add basic structured observability**
@@ -129,7 +130,7 @@ Dedicated ModelMix domain/session/run/seat/Moderator/orchestration/event/persist
 
 Session, Run, Seat, Message, Moderator, Provider/Model reference, ProviderCapabilities, UsageRecord, RunEvent, Artifact/reference, Error/terminal result, with schema versions.
 
-### 8. Define context isolation policy — **PARTIAL**
+### 8. Define context isolation policy — **SATISFIED — MISSION 009**
 
 Workers see only user/authorized shared context plus their own seat history. Moderator sees authorized user/context and current worker outputs. Seat history belongs to the seat, not the selected model.
 
@@ -161,9 +162,9 @@ Document what each provider may receive; credentials are references; no raw secr
 
 Support normal response, stream, slow stream, failure, timeout, rate limit, cancellation, malformed event, missing usage, duplicate/out-of-order fixtures.
 
-### 15. Build NON-STREAMING Mix vertical slice first — **PARTIAL**
+### 15. Build NON-STREAMING Mix vertical slice first — **SATISFIED — MISSION 009**
 
-Two isolated workers → complete bounded outputs → Moderator → persisted session. Core semantics exist; persistence PASS condition remains open.
+Two isolated workers → complete bounded outputs → Moderator → persisted session. Mission 009 adds bounded seat-scoped continuation while preserving the same isolated worker and Moderator flow.
 
 ### 16. Prove failure + cancellation with the same loop — **SUBSTANTIALLY SATISFIED**
 
@@ -213,9 +214,9 @@ Mission 007 completed searchable configured selectors. Provider credential/endpo
 
 ### 28. Add Compare — **OPEN**
 
-### 29. Finalize Mix multi-turn session behavior — **OPEN**
+### 29. Finalize Mix multi-turn session behavior — **PARTIAL — MISSION 009**
 
-Independent seat histories, Moderator history, hot-swap continuity, reopen, retention/delete basics, bounded context without branch leakage.
+Independent bounded seat histories, Moderator history, hot-swap continuity, and context without cross-seat leakage are implemented. Reopen remains covered by durable session identity; retention/delete basics remain open.
 
 ## PHASE 7 — Security Hardening for Alpha
 
@@ -337,4 +338,4 @@ Hard cap is **not post-alpha by default**. Wire it when settings/run-control rea
 
 ## Immediate Next Engineering Gap
 
-**Mission 008 should address Punch Board items 11 and 22:** the ModelMix-owned persistence boundary and cockpit hydration using versioned atomic JSON, persisted completed/partial run state, reload/reopen hydration, seat isolation, and the existing SSE journal/replay contract.
+Mission 009 completes seat-scoped multi-turn context. Remaining alpha gaps stay ordered by this Punch Board; Mission 009 does not add retention/delete UX, telemetry, guardrails, Solo, or Compare.

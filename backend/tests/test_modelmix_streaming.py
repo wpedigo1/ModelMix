@@ -87,6 +87,48 @@ async def test_workers_start_concurrently_and_remain_isolated():
     assert events[-1]["status"] == "completed"
 
 
+async def test_workers_receive_only_their_own_supplied_history():
+    worker_a = FakeProvider(("A2",))
+    worker_b = FakeProvider(("B2",))
+    providers = {"model-a": worker_a, "model-b": worker_b}
+    histories = {
+        "worker_a": [
+            {"role": "user", "content": "TURN1_PROMPT_SENTINEL"},
+            {"role": "assistant", "content": "TURN1_WORKER_A_SENTINEL"},
+        ],
+        "worker_b": [
+            {"role": "user", "content": "TURN1_PROMPT_SENTINEL"},
+            {"role": "assistant", "content": "TURN1_WORKER_B_SENTINEL"},
+        ],
+    }
+
+    events = [
+        event
+        async for event in multiplex_workers(
+            "TURN2_PROMPT_SENTINEL",
+            "model-a",
+            "model-b",
+            providers.__getitem__,
+            seat_histories=histories,
+        )
+    ]
+
+    assert worker_a.messages == [[
+        {"role": "user", "content": "TURN1_PROMPT_SENTINEL"},
+        {"role": "assistant", "content": "TURN1_WORKER_A_SENTINEL"},
+        {"role": "user", "content": "TURN2_PROMPT_SENTINEL"},
+    ]]
+    assert worker_b.messages == [[
+        {"role": "user", "content": "TURN1_PROMPT_SENTINEL"},
+        {"role": "assistant", "content": "TURN1_WORKER_B_SENTINEL"},
+        {"role": "user", "content": "TURN2_PROMPT_SENTINEL"},
+    ]]
+    assert "TURN1_WORKER_B_SENTINEL" not in str(worker_a.messages)
+    assert "TURN1_WORKER_A_SENTINEL" not in str(worker_b.messages)
+    assert "TURN1_MODERATOR_SENTINEL" not in str(worker_a.messages + worker_b.messages)
+    assert events[-1]["type"] == "run_completed"
+
+
 async def test_deltas_are_tagged_and_run_metadata_is_ordered():
     events = await collect(FakeProvider(("a1", "a2")), FakeProvider(("b1", "b2")))
     deltas = [event for event in events if event["type"] == "seat_delta"]

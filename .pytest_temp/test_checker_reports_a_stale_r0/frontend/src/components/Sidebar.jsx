@@ -1,0 +1,1 @@
+<div className="sidebar-version">v0.11.2</div>

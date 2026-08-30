@@ -44,6 +44,7 @@ def assemble_moderator_input(
     prompt: str,
     worker_outputs: Dict[str, str],
     worker_failures: Dict[str, str],
+    history: Optional[List[Dict[str, str]]] = None,
 ) -> ModeratorInput:
     """Build a bounded handoff from visible deltas and structured failure notes only."""
     sections = [f"Original user prompt:\n{prompt}"]
@@ -63,6 +64,7 @@ def assemble_moderator_input(
     return ModeratorInput(
         messages=[
             {"role": "system", "content": MODERATOR_INSTRUCTIONS},
+            *(history or []),
             {"role": "user", "content": "\n\n".join(sections)},
         ],
         truncation=truncation,

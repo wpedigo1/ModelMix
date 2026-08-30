@@ -9,6 +9,7 @@ from backend.modelmix.moderator import (
     run_moderator,
 )
 from backend.modelmix.registry import RunRegistry
+from backend.modelmix.persistence import AtomicJsonModelMixPersistence
 from backend.providers.base import LLMProvider, ProviderStreamEvent
 
 
@@ -66,6 +67,14 @@ class NonStreamingModerator(StreamingProvider):
         return {"content": "fallback synthesis", "finish_reason": "stop", "error": False}
 
 
+class PartialFailureProvider(StreamingProvider):
+    async def stream_query(self, model_id, messages, timeout=120.0, temperature=0.7):
+        self.started = True
+        self.messages.append(messages)
+        yield ProviderStreamEvent(type="text_delta", delta=self.deltas[0])
+        yield ProviderStreamEvent(type="error", error_message=self.failure)
+
+
 async def wait_for(predicate, timeout=1):
     deadline = asyncio.get_running_loop().time() + timeout
     while not predicate():
@@ -116,6 +125,131 @@ async def test_moderator_waits_for_both_workers_and_receives_visible_isolated_ou
     assert [event["seq"] for event in events] == list(range(1, len(events) + 1))
     assert events[-1]["type"] == "run_completed"
     assert events[-1]["status"] == "completed"
+
+
+def test_moderator_input_places_own_history_before_current_worker_handoff():
+    moderator_input = assemble_moderator_input(
+        "TURN2_PROMPT_SENTINEL",
+        {
+            "worker_a": "TURN2_WORKER_A_SENTINEL",
+            "worker_b": "TURN2_WORKER_B_SENTINEL",
+        },
+        {},
+        history=[
+            {"role": "user", "content": "TURN1_PROMPT_SENTINEL"},
+            {"role": "assistant", "content": "TURN1_MODERATOR_SENTINEL"},
+        ],
+    )
+
+    assert moderator_input.messages[1:3] == [
+        {"role": "user", "content": "TURN1_PROMPT_SENTINEL"},
+        {"role": "assistant", "content": "TURN1_MODERATOR_SENTINEL"},
+    ]
+    current_handoff = moderator_input.messages[3]["content"]
+    assert "TURN2_PROMPT_SENTINEL" in current_handoff
+    assert "TURN2_WORKER_A_SENTINEL" in current_handoff
+    assert "TURN2_WORKER_B_SENTINEL" in current_handoff
+    assert "TURN1_WORKER_A_SENTINEL" not in str(moderator_input.messages)
+    assert "TURN1_WORKER_B_SENTINEL" not in str(moderator_input.messages)
+
+
+async def test_registry_preserves_seat_history_across_turns_and_model_hot_swap(tmp_path):
+    store = AtomicJsonModelMixPersistence(tmp_path)
+    registry = RunRegistry(persistence=store)
+    first = {
+        "a-v1": StreamingProvider(("TURN1_WORKER_A_SENTINEL",)),
+        "b-v1": StreamingProvider(("TURN1_WORKER_B_SENTINEL",)),
+        "m-v1": StreamingProvider(("TURN1_MODERATOR_SENTINEL",)),
+    }
+    run_1 = await registry.start(
+        "TURN1_PROMPT_SENTINEL",
+        "a-v1",
+        "b-v1",
+        first.__getitem__,
+        "m-v1",
+        "shared-session",
+    )
+    await run_1.task
+
+    second = {
+        "a-v2": StreamingProvider(("TURN2_WORKER_A_SENTINEL",)),
+        "b-v1": StreamingProvider(("TURN2_WORKER_B_SENTINEL",)),
+        "m-v2": StreamingProvider(("TURN2_MODERATOR_SENTINEL",)),
+    }
+    run_2 = await registry.start(
+        "TURN2_PROMPT_SENTINEL",
+        "a-v2",
+        "b-v1",
+        second.__getitem__,
+        "m-v2",
+        "shared-session",
+    )
+    await run_2.task
+
+    worker_a_messages = second["a-v2"].messages[0]
+    worker_b_messages = second["b-v1"].messages[0]
+    moderator_messages = second["m-v2"].messages[0]
+    assert worker_a_messages == [
+        {"role": "user", "content": "TURN1_PROMPT_SENTINEL"},
+        {"role": "assistant", "content": "TURN1_WORKER_A_SENTINEL"},
+        {"role": "user", "content": "TURN2_PROMPT_SENTINEL"},
+    ]
+    assert worker_b_messages == [
+        {"role": "user", "content": "TURN1_PROMPT_SENTINEL"},
+        {"role": "assistant", "content": "TURN1_WORKER_B_SENTINEL"},
+        {"role": "user", "content": "TURN2_PROMPT_SENTINEL"},
+    ]
+    assert "TURN1_WORKER_B_SENTINEL" not in str(worker_a_messages)
+    assert "TURN1_WORKER_A_SENTINEL" not in str(worker_b_messages)
+    assert "TURN1_MODERATOR_SENTINEL" not in str(worker_a_messages + worker_b_messages)
+    assert moderator_messages[1:3] == [
+        {"role": "user", "content": "TURN1_PROMPT_SENTINEL"},
+        {"role": "assistant", "content": "TURN1_MODERATOR_SENTINEL"},
+    ]
+    assert "TURN1_WORKER_A_SENTINEL" not in str(moderator_messages)
+    assert "TURN1_WORKER_B_SENTINEL" not in str(moderator_messages)
+    assert "TURN2_WORKER_A_SENTINEL" in moderator_messages[-1]["content"]
+    assert "TURN2_WORKER_B_SENTINEL" in moderator_messages[-1]["content"]
+
+
+async def test_failed_seat_partial_history_is_reused_and_empty_failure_is_skipped(tmp_path):
+    store = AtomicJsonModelMixPersistence(tmp_path)
+    registry = RunRegistry(persistence=store)
+    first = {
+        "a": PartialFailureProvider(("TURN1_A_PARTIAL_SENTINEL",), failure="A failed"),
+        "b": StreamingProvider(failure="B failed empty"),
+    }
+    run_1 = await registry.start(
+        "TURN1_FAILURE_PROMPT_SENTINEL",
+        "a",
+        "b",
+        first.__getitem__,
+        session_id="failure-session",
+    )
+    await run_1.task
+
+    second = {
+        "a-next": StreamingProvider(("TURN2_A_SENTINEL",)),
+        "b-next": StreamingProvider(("TURN2_B_SENTINEL",)),
+    }
+    run_2 = await registry.start(
+        "TURN2_AFTER_FAILURE_SENTINEL",
+        "a-next",
+        "b-next",
+        second.__getitem__,
+        session_id="failure-session",
+    )
+    await run_2.task
+
+    assert second["a-next"].messages[0] == [
+        {"role": "user", "content": "TURN1_FAILURE_PROMPT_SENTINEL"},
+        {"role": "assistant", "content": "TURN1_A_PARTIAL_SENTINEL"},
+        {"role": "user", "content": "TURN2_AFTER_FAILURE_SENTINEL"},
+    ]
+    assert second["b-next"].messages[0] == [
+        {"role": "user", "content": "TURN2_AFTER_FAILURE_SENTINEL"},
+    ]
+    assert run_2.status == "completed"
 
 
 async def test_one_worker_failure_allows_honest_partial_moderation():
