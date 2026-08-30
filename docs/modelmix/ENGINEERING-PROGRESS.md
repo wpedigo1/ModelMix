@@ -44,7 +44,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 015 | **PASS (LOCAL)** | Telemetry truth layer: events carry wall-clock `ts`; persistence keeps provider `usage`/`finish_reason` (opaque) and `started_at`/`completed_at` on messages — fixing the moderator finish_reason reload bug; the frontend truth layer + `describeUsage` capture everything without rendering; the last polling test is isolated | `015-telemetry-truth-layer.md` |
 | 016 | **PASS (LOCAL)** | Compact top bar + panel view controls (frontend-only): one thin persistent top strip (brand, inert `Mode: Mix` label, session status, New Session moved from `.modelmix-actions`, Details-hidden run metadata, Back to Council; no Settings), and CSS-driven per-panel Collapse/Maximize/Reset controls that hide panels from layout without unmounting them, with view state confined to local component state + pure `panelView.js` helpers and `modelmixState.js`/backend untouched | `016-compact-top-bar-and-panel-controls.md` |
 | 017 | **PASS (LOCAL)** | Settings shell (frontend-only): a gear entry in the compact top bar opens a conditionally-rendered overlay — About (real `pkg.version` from an imported `../../package.json`, MIT/copyright, text-only AI Counsel attribution, repo URL), Providers (read-only Connected/Not-connected rows computed from the now-exported `configuredSources` with zero credential values and an honest unavailable state), Defaults (`modelmix.defaultSeatModels` localStorage trio saved/cleared and applied at initial mount, with frozen `FALLBACK_SEAT_MODELS` preserving the exact built-in defaults) | `017-settings-shell.md` |
-| 018 | **PASS (LOCAL)** | Telemetry rendering (frontend-only): `seatTelemetry.js` builds honest per-seat footers — usage labeled `authoritative (provider-reported)` via `describeUsage` with raw provider keys or `unavailable`, Moderator-only `finish_reason` (`stop`/`not reported`), ModelMix-calculated elapsed labeled `(calculated)` with the raw wall-clock `HH:MM:SS → HH:MM:SS` range (running seats show `Started:`), rendered only for the live turn | `018-telemetry-rendering.md` |
+| 018 | **PASS (LOCAL)** | Telemetry rendering (frontend-only): `seatTelemetry.js` builds honest per-seat footers — usage labeled `authoritative (provider-reported)` via `describeUsage` showing the provider-reported total token count (`total_tokens`/`totalTokenCount`, `<n> tokens`) when finite, else the raw key names, or `unavailable`, Moderator-only `finish_reason` (`stop`/`not reported`), ModelMix-calculated elapsed labeled `(calculated)` with the raw wall-clock `HH:MM:SS → HH:MM:SS` range (running seats show `Started:`), rendered only for the live turn | `018-telemetry-rendering.md` |
 
 ## Current Verified Product Slice
 
@@ -355,10 +355,11 @@ vocabulary and builds a footer item list per seat, gated on real activity:
 idle and waiting seats render nothing. Rendered items in
 `TranscriptPane`'s `.modelmix-telemetry` footer:
 
-- **Usage** — `authoritative (provider-reported)` with the raw provider key
-  names (bounded to 8, then `N fields`) when `usage` is a non-null object;
-  honest `unavailable` otherwise (no token drilling, no normalization, no fake
-  percentage).
+- **Usage** — `authoritative (provider-reported)`; when the provider-reported
+  usage carries a finite `total_tokens` or `totalTokenCount`, the detail shows
+  that number formatted as `<n> tokens`; otherwise it falls back to the raw
+  provider key names (bounded to 8, then `N fields`). Honest `unavailable`
+  otherwise (no guessed totals, no normalization, no fake percentage).
 - **Finish** — Moderator only, from `finish_reason` (`stop`, `tool-calls`, …)
   or `not reported` when absent.
 - **Elapsed** — `HH:MM:SS → HH:MM:SS` range plus a duration explicitly labeled

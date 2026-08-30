@@ -31,13 +31,16 @@ New node-testable module with no React/DOM dependencies:
   completion_tokens · total_tokens`), bounded to 8 keys then summarized as
   `N fields`; `null` when there is nothing to show. The values are never
   read, normalized, summed, or merged into a percentage.
+- `usageDetail(usage)` — when the provider-reported usage carries a finite
+  `total_tokens` or `totalTokenCount`, returns that number formatted as
+  `<n> tokens`; otherwise falls back exactly to `rawUsageKeys(usage)`.
 - `buildSeatTelemetry(seat, seatKey)` — returns the footer item list, importing
   the existing `describeUsage` from `modelmixState.js` so there is exactly one
   provenance vocabulary:
 
 | Key | Label | When | Value |
 |---|---|---|---|
-| `usage` | Usage | every active seat | `authoritative (provider-reported)` + raw key names, or honest `unavailable` |
+| `usage` | Usage | every active seat | `authoritative (provider-reported)` + the provider-reported total (`<n> tokens`) when it is a finite number, else the raw key names; or honest `unavailable` |
 | `finish` | Finish | Moderator only | `finish_reason` as reported, or `not reported` |
 | `timing` | Elapsed | both bounds present | duration `(calculated)` + `HH:MM:SS → HH:MM:SS` range |
 | `timing` | Started | only `startedAt` | `HH:MM:SS` (running seat — no duration fabricated) |
@@ -95,7 +98,7 @@ ModelMix-computed values carry that label, provider-reported usage carries the
 
 2 new files; no existing test file was modified.
 
-### New — `frontend/src/seatTelemetry.test.js` (node env, 13 tests)
+### New — `frontend/src/seatTelemetry.test.js` (node env, 14 tests)
 
 1. `formatTimestamp returns local HH:MM:SS for a finite timestamp`.
 2. `formatTimestamp returns null for missing or non-finite input`.
@@ -104,17 +107,20 @@ ModelMix-computed values carry that label, provider-reported usage carries the
 4. `formatElapsed returns null for missing, inverted, or zero duration`.
 5. `idle seats produce no telemetry items` (worker `idle`, moderator `waiting`).
 6. `a completed seat with usage shows authoritative provider-reported usage`
-   (labels + raw key names; values never rendered).
-7. `a completed seat without usage shows honest unavailable`.
-8. `elapsed timing is labeled calculated with a time range detail` (value
+   (label + the provider-reported total `46 tokens`; values are never
+   normalized).
+7. `a usage object without total_tokens falls back to totalTokenCount`
+   (`77 tokens`).
+8. `a completed seat without usage shows honest unavailable`.
+9. `elapsed timing is labeled calculated with a time range detail` (value
    `12.4s (calculated)`, detail `HH:MM:SS → HH:MM:SS`).
-9. `a started but not completed seat shows a Started item without fabricating a
-   duration`.
-10. `a completed seat with only completedAt shows a Completed item`.
-11. `moderator finish reason is rendered only for the moderator seat`.
-12. `moderator without a reported finish reason stays known-unknown`
+10. `a started but not completed seat shows a Started item without fabricating a
+    duration`.
+11. `a completed seat with only completedAt shows a Completed item`.
+12. `moderator finish reason is rendered only for the moderator seat`.
+13. `moderator without a reported finish reason stays known-unknown`
     (`not reported`).
-13. `an oversized usage object is summarized by field count, never merged`
+14. `an oversized usage object is summarized by field count, never merged`
     (`10 fields` for > 8 keys).
 
 ### New — `frontend/src/components/ModelMixTelemetry.test.jsx` (jsdom render tests, 3)
@@ -129,9 +135,9 @@ deterministic cleanup unmounts/removes containers and clears `localStorage`.
    default stays clean (zero `.modelmix-telemetry`).
 2. `completed seats render authoritative provider-reported usage, finish reason,
    and calculated timing` — three footers; Worker A shows `authoritative
-   (provider-reported)`, the raw `prompt_tokens · completion_tokens ·
-   total_tokens` keys, `Elapsed`, `(calculated)`, and the `HH:MM:SS → HH:MM:SS`
-   arrow; Moderator shows `Finish: stop`; Worker B (no usage) shows honest
+   (provider-reported)` with the provider-reported total `46 tokens`, `Elapsed`,
+   `(calculated)`, and the `HH:MM:SS → HH:MM:SS` arrow; Moderator shows
+   `Finish: stop` and `99 tokens`; Worker B (no usage) shows honest
    `unavailable`.
 3. `prior-turn archives keep their telemetry hidden while live seats still
    render footers` — a two-run session where the prior run carries usage/timing
@@ -145,8 +151,8 @@ deterministic cleanup unmounts/removes containers and clears `localStorage`.
 `modelmixState.test.js` (35), `configuredModels.test.js` (3), `fontSize.test.js`
 (3), `panelView.test.js` (4), `configuredSources.test.js` (5),
 `defaultSeatModels.test.js` (5), `ModelMixObserver.test.jsx` (6), and
-`ModelMixSettings.test.jsx` (8) all pass untouched. Total observed: **85
-passed** (was 69).
+`ModelMixSettings.test.jsx` (8) all pass untouched. Total observed at the
+original Mission 018 close: **85 passed** (was 69).
 
 ## Validation — raw, unedited
 
@@ -172,6 +178,10 @@ npm test
  Test Files  10 passed (10)
       Tests  85 passed (85)
 ```
+
+(Original Mission 018 close; see the Follow-up Fix addendum for the post-fix
+run — **86 passed**, with the usage detail now preferring the provider-reported
+total.)
 
 ```text
 npm run lint
@@ -229,8 +239,9 @@ observed result.
 - **Item 25 — minimal telemetry (SUBSTANTIALLY SATISFIED — MISSIONS 015/018):**
   the truth layer (Mission 015) is now rendered honestly per seat: state was
   already visible; elapsed time renders labeled `(calculated)`; provider-
-  reported tokens surface as `authoritative (provider-reported)` labels with raw
-  key names; estimates never exist so nothing is estimated; cost stays open
+  reported tokens surface as `authoritative (provider-reported)` labels showing
+  the provider-reported total token count (`<n> tokens`) when finite, else the
+  raw key names; estimates never exist so nothing is estimated; cost stays open
   (deferral 1 — reliable per-call cost/pricing wiring is deliberately out of
   scope); per-historical-turn footers are deferred (deferral 2 — archived turns
   render zero telemetry today). Confidence colors were never introduced; the
@@ -258,3 +269,42 @@ observed result.
   `history`; rendering is intentionally withheld this mission).
 - Cost/pricing wiring remains open and is never guessed.
 - The future guardrail layer (usage/output warning, hard cap) remains open.
+
+## Follow-up Fix — provider-reported token totals
+
+2026-08-30, immediately after the original Mission 018 close. Review flagged
+that the authoritative usage detail steered into a raw key-name derivation
+(`prompt_tokens · completion_tokens · total_tokens`) instead of surfacing the
+provider-reported total the user asked for. One function-level extension in
+`frontend/src/seatTelemetry.js`: `buildSeatTelemetry` now routes through a
+private `usageDetail(usage)` which, when `usage.total_tokens` or
+`usage.totalTokenCount` is a finite number, returns that number formatted as
+`<n> tokens` INSTEAD of the raw key list; `rawUsageKeys` is byte-identical and
+remains the fallback for every other shape. Test impact: the existing unit test
+assertion changed from the key list to `46 tokens`, the jsdom render test's
+Worker A/Moderator assertions changed to `46 tokens`/`99 tokens`, and one new
+test covers the `totalTokenCount` branch (`77 tokens`) — no new test files.
+Validated from `frontend/`:
+
+```text
+npm test
+ ✓ src/utils/fontSize.test.js (3 tests) 6ms
+ ✓ src/defaultSeatModels.test.js (5 tests) 9ms
+ ✓ src/configuredSources.test.js (5 tests) 8ms
+ ✓ src/panelView.test.js (4 tests) 8ms
+ ✓ src/seatTelemetry.test.js (14 tests) 11ms
+ ✓ src/configuredModels.test.js (3 tests) 29ms
+ ✓ src/modelmixState.test.js (35 tests) 54ms
+ ✓ src/components/ModelMixTelemetry.test.jsx (3 tests) 252ms
+ ✓ src/components/ModelMixObserver.test.jsx (6 tests) 484ms
+ ✓ src/components/ModelMixSettings.test.jsx (8 tests) 519ms
+
+ Test Files  10 passed (10)
+      Tests  86 passed (86)
+
+npm run lint   (eslint . — clean)
+npm run build  (437 modules transformed, built in 1.71s)
+```
+
+Backend unchanged (prior run: 360 passed). Committed as a separate follow-up
+commit on `main`.

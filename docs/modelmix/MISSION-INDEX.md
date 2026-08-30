@@ -245,7 +245,9 @@ Mission 018 makes Mission 015's captured telemetry visibly honest in the
 cockpit. A new pure module `frontend/src/seatTelemetry.js` builds a compact
 footer item list per seat via `buildSeatTelemetry(seat, seatKey)`, reusing the
 single `describeUsage` provenance vocabulary: usage renders as `authoritative
-(provider-reported)` with the raw provider key names (never normalized, never
+(provider-reported)` showing the provider-reported total token count
+(`total_tokens`/`totalTokenCount`, formatted `<n> tokens`) when it is a finite
+number, else the raw provider key names as fallback (never normalized, never
 merged into a fake percentage) or honest `unavailable`; Moderator-only
 `finish_reason` renders as-is or `not reported`; elapsed timing from
 `started_at`/`completed_at` renders as `HH:MM:SS → HH:MM:SS` and is explicitly

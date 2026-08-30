@@ -65,7 +65,21 @@ test('a completed seat with usage shows authoritative provider-reported usage', 
   const usage = items.find((item) => item.key === 'usage');
   assert.equal(usage.label, 'Usage');
   assert.equal(usage.value, 'authoritative (provider-reported)');
-  assert.equal(usage.detail, 'prompt_tokens · completion_tokens · total_tokens');
+  assert.equal(usage.detail, '46 tokens');
+});
+
+test('a usage object without total_tokens falls back to totalTokenCount', () => {
+  const seat = {
+    text: 'answer',
+    status: 'completed',
+    error: null,
+    usage: { prompt_tokens: 5, totalTokenCount: 77 },
+    startedAt: 100,
+    completedAt: 112.4,
+  };
+  const usage = buildSeatTelemetry(seat, 'worker_a').find((item) => item.key === 'usage');
+  assert.equal(usage.value, 'authoritative (provider-reported)');
+  assert.equal(usage.detail, '77 tokens');
 });
 
 test('a completed seat without usage shows honest unavailable', () => {

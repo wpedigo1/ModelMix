@@ -153,7 +153,7 @@ test('completed seats render authoritative provider-reported usage, finish reaso
   const workerAFooter = panelFooter('Worker A');
   assert.ok(workerAFooter.textContent.includes('Usage'));
   assert.ok(workerAFooter.textContent.includes('authoritative (provider-reported)'));
-  assert.ok(workerAFooter.textContent.includes('prompt_tokens · completion_tokens · total_tokens'));
+  assert.ok(workerAFooter.textContent.includes('46 tokens'));
   assert.ok(workerAFooter.textContent.includes('Elapsed'));
   assert.ok(workerAFooter.textContent.includes('(calculated)'));
   assert.ok(workerAFooter.textContent.includes('→'));
@@ -161,7 +161,7 @@ test('completed seats render authoritative provider-reported usage, finish reaso
   const moderatorFooter = panelFooter('Moderator');
   assert.ok(moderatorFooter.textContent.includes('Finish'));
   assert.ok(moderatorFooter.textContent.includes('stop'));
-  assert.ok(moderatorFooter.textContent.includes('total_tokens'));
+  assert.ok(moderatorFooter.textContent.includes('99 tokens'));
 
   const workerBFooter = panelFooter('Worker B');
   assert.ok(workerBFooter.textContent.includes('unavailable'));

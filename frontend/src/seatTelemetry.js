@@ -29,6 +29,18 @@ function rawUsageKeys(usage) {
   return keys.length > 8 ? `${keys.length} fields` : keys.join(' · ');
 }
 
+function usageDetail(usage) {
+  if (typeof usage === 'object' && usage !== null && !Array.isArray(usage)) {
+    if (typeof usage.total_tokens === 'number' && Number.isFinite(usage.total_tokens)) {
+      return `${usage.total_tokens} tokens`;
+    }
+    if (typeof usage.totalTokenCount === 'number' && Number.isFinite(usage.totalTokenCount)) {
+      return `${usage.totalTokenCount} tokens`;
+    }
+  }
+  return rawUsageKeys(usage);
+}
+
 function isSeatActive(seat) {
   if (!seat || typeof seat !== 'object') return false;
   const ran = typeof seat.status === 'string' && !['idle', 'waiting'].includes(seat.status);
@@ -45,7 +57,7 @@ export function buildSeatTelemetry(seat, seatKey) {
     key: 'usage',
     label: 'Usage',
     value: describeUsage(usage) === 'authoritative' ? 'authoritative (provider-reported)' : 'unavailable',
-    detail: describeUsage(usage) === 'authoritative' ? rawUsageKeys(usage) : null,
+    detail: describeUsage(usage) === 'authoritative' ? usageDetail(usage) : null,
   });
   if (seatKey === 'moderator') {
     items.push({
