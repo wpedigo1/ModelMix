@@ -10,6 +10,7 @@ import {
 import {
   applyModelMixEvent,
   applyReplayError,
+  archiveCurrentRun,
   controlState,
   createModelMixState,
   hydrateModelMixState,
@@ -282,4 +283,130 @@ test('409 and 404 replay errors have clear recovery states', () => {
   assert.match(gap.message, /Start a new run/);
   assert.equal(expired.overall, 'expired');
   assert.match(expired.message, /expired or was not found/i);
+});
+
+function persistedDocument(runCount) {
+  const runs = [];
+  const messages = [];
+  for (let index = 0; index < runCount; index += 1) {
+    const runId = `run-${index}`;
+    runs.push({
+      run_id: runId,
+      prompt: `PROMPT_${index}`,
+      models: { worker_a: `m:a${index}`, moderator: `m:m${index}`, worker_b: `m:b${index}` },
+      status: 'completed',
+      latest_seq: 10 + index,
+    });
+    messages.push(
+      { run_id: runId, seat: 'worker_a', content: `A_${index}`, status: 'completed' },
+      { run_id: runId, seat: 'moderator', content: `M_${index}`, status: 'completed' },
+      { run_id: runId, seat: 'worker_b', content: `B_${index}`, status: 'completed' },
+    );
+  }
+  return { schema_version: 1, session: { session_id: 'session-1', runs, messages } };
+}
+
+test('hydrating three runs archives the two prior runs in chronological order', () => {
+  const state = hydrateModelMixState(persistedDocument(3));
+
+  assert.equal(state.history.length, 2);
+  assert.equal(state.history[0].runId, 'run-0');
+  assert.equal(state.history[1].runId, 'run-1');
+  assert.equal(state.history[0].prompt, 'PROMPT_0');
+  assert.equal(state.history[1].worker_a.text, 'A_1');
+  assert.equal(state.history[0].moderator.finishReason, null);
+  assert.equal(state.runId, 'run-2');
+  assert.equal(state.lastSeq, 12);
+  assert.equal(state.overall, 'completed');
+  assert.equal(state.worker_a.text, 'A_2');
+  assert.equal(state.moderator.text, 'M_2');
+  assert.equal(state.worker_b.text, 'B_2');
+});
+
+test('hydrating a single run leaves history empty and fills the live slots', () => {
+  const state = hydrateModelMixState(persistedDocument(1));
+
+  assert.deepEqual(state.history, []);
+  assert.equal(state.sessionId, 'session-1');
+  assert.equal(state.runId, 'run-0');
+  assert.equal(state.lastSeq, 10);
+  assert.equal(state.overall, 'completed');
+  assert.equal(state.worker_a.text, 'A_0');
+  assert.equal(state.moderator.text, 'M_0');
+  assert.equal(state.moderator.started, true);
+  assert.equal(state.worker_b.text, 'B_0');
+});
+
+test('hydrating an empty session returns the fresh initialState', () => {
+  const document = { schema_version: 1, session: { session_id: 'session-1', runs: [], messages: [] } };
+  assert.deepEqual(hydrateModelMixState(document), createModelMixState());
+});
+
+test('archiveCurrentRun appends the outgoing run, resets live slots, and keeps sessionId', () => {
+  const state = {
+    ...createModelMixState(),
+    sessionId: 'session-9',
+    runId: 'run-9',
+    prompt: 'Outgoing question',
+    models: { worker_a: 'p:a', moderator: 'p:m', worker_b: 'p:b' },
+    overall: 'completed',
+    lastSeq: 42,
+  };
+  state.worker_a = { text: 'A evidence', status: 'completed', error: null };
+  state.moderator = { text: 'M synthesis', status: 'completed', error: null, started: true, finishReason: 'stop' };
+  state.worker_b = { text: 'B evidence', status: 'completed', error: null };
+
+  const archived = archiveCurrentRun(state);
+
+  assert.equal(state.history.length, 0);
+  assert.equal(archived.sessionId, 'session-9');
+  assert.equal(archived.history.length, 1);
+  assert.equal(archived.history[0].runId, 'run-9');
+  assert.equal(archived.history[0].prompt, 'Outgoing question');
+  assert.equal(archived.history[0].status, 'completed');
+  assert.deepEqual(archived.history[0].worker_a, { text: 'A evidence', status: 'completed', error: null });
+  assert.deepEqual(archived.history[0].moderator, { text: 'M synthesis', status: 'completed', error: null, finishReason: 'stop' });
+  assert.deepEqual(archived.history[0].worker_b, { text: 'B evidence', status: 'completed', error: null });
+  assert.equal(archived.runId, null);
+  assert.equal(archived.lastSeq, 0);
+  assert.equal(archived.overall, 'idle');
+  assert.equal(archived.worker_a.text, '');
+  assert.equal(archived.moderator.text, '');
+  assert.equal(archived.moderator.started, false);
+  assert.equal(archived.worker_b.text, '');
+});
+
+test('archiveCurrentRun appends nothing when the outgoing run has no seat content', () => {
+  const state = {
+    ...createModelMixState(),
+    sessionId: 'session-9',
+    runId: 'run-9',
+    prompt: 'A question with no output',
+    overall: 'failed',
+    lastSeq: 3,
+  };
+
+  const archived = archiveCurrentRun(state);
+
+  assert.equal(archived.history.length, 0);
+  assert.equal(archived.sessionId, 'session-9');
+  assert.equal(archived.overall, 'idle');
+  assert.equal(archived.runId, null);
+});
+
+test('archived history preserves per-seat isolation with distinctive sentinels', () => {
+  const document = persistedDocument(2);
+  document.session.messages[0].content = 'PURE_A_CONTENT_SENTINEL';
+  document.session.messages[1].content = 'PURE_M_CONTENT_SENTINEL';
+  document.session.messages[2].content = 'PURE_B_CONTENT_SENTINEL';
+
+  const state = hydrateModelMixState(document);
+  const entry = state.history[0];
+
+  assert.equal(entry.worker_a.text, 'PURE_A_CONTENT_SENTINEL');
+  assert.equal(entry.worker_b.text, 'PURE_B_CONTENT_SENTINEL');
+  assert.ok(!entry.worker_a.text.includes('PURE_B_CONTENT_SENTINEL'));
+  assert.ok(!entry.worker_a.text.includes('PURE_M_CONTENT_SENTINEL'));
+  assert.ok(!entry.worker_b.text.includes('PURE_A_CONTENT_SENTINEL'));
+  assert.equal(state.worker_a.text, 'A_1');
 });

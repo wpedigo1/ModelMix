@@ -23,6 +23,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 009 | Codex | **PASS (LOCAL)** | `009-seat-scoped-multi-turn-context.md` |
 | 010 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `010-seat-history-budget.md` |
 | 010.5 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `010.5-frontend-test-runner-interlock.md` |
+| 011 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `011-multi-turn-cockpit-display.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -93,6 +94,17 @@ adds a `test` block to the existing `vite.config.js`, and brings the three
 existing frontend test files to an observed **24/24 pass** through a real
 runner. It strengthens Punch Board item **2** (verification) and enables
 follow-on work for item **22** (UI to durable run/session state).
+
+## Mission 011 Result
+
+**Mission 011 is implemented and verified locally.**
+
+Mission 011 displays the full per-seat conversation across turns in the cockpit:
+`createModelMixState` gains `history: []`, `hydrateModelMixState` archives every
+prior run chronologically, `archiveCurrentRun` (pure) moves the outgoing run into
+history when it produced seat content, and each `TranscriptPane` renders its
+seat's prior turns above the live turn. It advances Punch Board item **22** and
+makes partial progress on item **29**.
 
 ## Evidence Rule
 

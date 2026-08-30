@@ -9,7 +9,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–010**, **010.5**.
+Completed and locally verified implementation missions: **001–011**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -37,6 +37,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 009 | **PASS (LOCAL)** | Bounded seat-scoped Worker/Moderator history, failure-partial reuse, hot-swap continuity, and leakage proof | `009-seat-scoped-multi-turn-context.md` |
 | 010 | **PASS (LOCAL)** | Seat history character budgets: 4k per message (`MAX_HISTORY_MESSAGE_CHARS`) and 24k per seat (`MAX_HISTORY_TOTAL_CHARS`) with deterministic middle truncation and whole-turn oldest-first eviction | `010-seat-history-budget.md` |
 | 010.5 | **PASS (LOCAL)** | Frontend test runner interlock: Vitest + jsdom devDeps, `npm test` non-watch run, existing three test files collected and observed 24/24 pass | `010.5-frontend-test-runner-interlock.md` |
+| 011 | **PASS (LOCAL)** | Multi-turn cockpit display: prior runs archived chronologically into per-seat `history`, pure `archiveCurrentRun`, prior turns rendered above the live turn in each panel | `011-multi-turn-cockpit-display.md` |
 
 ## Current Verified Product Slice
 
@@ -60,6 +61,7 @@ The accepted implementation through Mission 009 establishes:
 - worker model hot-swaps that preserve the seat's history and failed/cancelled seat partial output when non-empty.
 - a deterministic seat-history character budget: each historical message middle-truncated to 4,000 characters and each single-seat assembled history capped at 24,000 characters via whole-turn oldest-first eviction (never an orphan assistant message).
 - a runnable frontend test suite: `npm test` executes the existing reducer/API/hydration tests (and configured-model and font-size tests) through Vitest with an observed 24/24 pass; `npm audit` reports 0 vulnerabilities.
+- a multi-turn cockpit display: each panel renders its seat's prior turns (compact prompt header above that turn's output) above the live streaming turn, sourced from a `history` array archived from prior session runs.
 
 ## Mission 007.5 Verification Evidence
 
@@ -105,7 +107,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **9 — Run state machine:** core active/terminal outcomes exist; complete timeout/retry/state contract remains open.
 - **12 — Provider capability matrix:** streaming capability/fallback and configured discovery exist; the full capability matrix remains open.
 - **14 — Deterministic mock provider:** current tests use deterministic fakes/mocks, but the full locked failure/timeout/rate-limit fixture matrix remains open.
-- **29 — Finalized Mix multi-turn behavior:** seat histories, Moderator history, hot-swap continuity, and deterministic context bounding are implemented; retention/delete UX remains open.
+- **29 — Finalized Mix multi-turn behavior:** seat histories, Moderator history, hot-swap continuity, deterministic context bounding, and completed-turn cockpit display are implemented; retention/delete UX remains open.
 - **17 — Spend/runtime guardrails:** explicit Stop, the turn cap, and seat-history per-message/per-seat character budgets exist (Mission 010 partial progress on context/spend bounding); timeout/cost-token ceilings and output warning/hard-cap work remain open.
 - **26 — Provider/settings UX:** searchable configured selectors are complete; full alpha provider/settings flow remains open.
 
@@ -168,3 +170,15 @@ files were converted from the `node:test` API to purely an import-path change
 (`import { test } from 'vitest'`); no assertions or product code changed. The
 observed run: 24/24 pass, 3 files, exit clean. `npm audit`: 0 vulnerabilities.
 See `010.5-frontend-test-runner-interlock.md`.
+
+## Mission 011 Result
+
+Mission 011 adds a `history` array of completed prior runs to the frontend seat
+state. `hydrateModelMixState` archives every run before the latest one in
+chronological order (filtered per run by message `run_id`), the live slots keep
+exactly their prior behavior, and a new pure `archiveCurrentRun(state)` resets
+the live slots while preserving `sessionId` and appending the outgoing run when
+it produced seat content. `ModelMixObserver` archives when a new run starts, and
+`TranscriptPane` renders each seat's prior turns above the live turn with the
+prior prompt as a compact header. `applyModelMixEvent` is unchanged. See
+`011-multi-turn-cockpit-display.md`.

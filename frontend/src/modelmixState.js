@@ -4,6 +4,7 @@ export const createModelMixState = () => ({
   lastSeq: 0,
   overall: 'idle',
   message: 'Ready',
+  history: [],
   worker_a: { text: '', status: 'idle', error: null },
   moderator: {
     text: '',
@@ -108,6 +109,53 @@ export function applyModelMixEvent(state, event) {
   return next;
 }
 
+function buildHistoryEntry(run, messages) {
+  const entry = {
+    runId: run.run_id,
+    prompt: run.prompt,
+    models: run.models,
+    status: run.status,
+    worker_a: { text: '', status: 'idle', error: null },
+    moderator: { text: '', status: 'waiting', error: null, finishReason: null },
+    worker_b: { text: '', status: 'idle', error: null },
+  };
+  for (const message of messages) {
+    if (message.run_id !== run.run_id || !['worker_a', 'worker_b', 'moderator'].includes(message.seat)) continue;
+    entry[message.seat] = {
+      ...entry[message.seat],
+      text: String(message.content || ''),
+      status: message.status || entry[message.seat].status,
+      error: message.error || null,
+    };
+    if (message.seat === 'moderator') entry.moderator.finishReason = message.finish_reason || null;
+  }
+  return entry;
+}
+
+export function archiveCurrentRun(state) {
+  const outgoing = {
+    runId: state.runId,
+    prompt: state.prompt,
+    models: state.models,
+    status: state.overall,
+    worker_a: { text: state.worker_a.text, status: state.worker_a.status, error: state.worker_a.error },
+    moderator: {
+      text: state.moderator.text,
+      status: state.moderator.status,
+      error: state.moderator.error,
+      finishReason: state.moderator.finishReason ?? null,
+    },
+    worker_b: { text: state.worker_b.text, status: state.worker_b.status, error: state.worker_b.error },
+  };
+  const hasSeatContent = [outgoing.worker_a, outgoing.moderator, outgoing.worker_b].some((seat) => Boolean(seat.text));
+  const history = hasSeatContent ? [...state.history, outgoing] : [...state.history];
+  return {
+    ...createModelMixState(),
+    sessionId: state.sessionId,
+    history,
+  };
+}
+
 export function hydrateModelMixState(document) {
   if (document?.schema_version !== 1 || !document.session || !Array.isArray(document.session.runs)) {
     throw new Error('Unsupported or malformed ModelMix session');
@@ -123,6 +171,9 @@ export function hydrateModelMixState(document) {
     message: `Restored ${run.status} run`,
     models: run.models,
     prompt: run.prompt,
+    history: document.session.runs
+      .slice(0, -1)
+      .map((priorRun) => buildHistoryEntry(priorRun, document.session.messages || [])),
   };
   for (const message of document.session.messages || []) {
     if (message.run_id !== run.run_id || !['worker_a', 'worker_b', 'moderator'].includes(message.seat)) continue;

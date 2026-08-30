@@ -83,5 +83,8 @@
 .modelmix-worker header span[data-status="failed"],
 .modelmix-worker header span[data-status="cancelled"] { color: #fca5a5; }
 .modelmix-transcript { flex: 1; min-height: 0; overflow: auto; padding: 18px 20px 40px; }
+.modelmix-prior-turn { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed rgba(148, 163, 184, .18); }
+.modelmix-prior-prompt { margin: 0 0 8px; color: var(--text-muted); font-size: 11px; line-height: 1.4; font-family: var(--font-code); opacity: .8; overflow-wrap: anywhere; }
+.modelmix-prior-turn:last-child { border-bottom: none; }
 .modelmix-empty { color: var(--text-muted); }
 .modelmix-worker-error { padding: 10px 12px; color: #fecaca; background: rgba(127, 29, 29, .3); border-left: 3px solid #ef4444; }

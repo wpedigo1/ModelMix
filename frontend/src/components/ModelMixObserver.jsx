@@ -14,6 +14,7 @@ import {
 import {
   applyModelMixEvent,
   applyReplayError,
+  archiveCurrentRun,
   controlState,
   createModelMixState,
   isTerminalOverall,
@@ -169,8 +170,7 @@ export default function ModelMixObserver() {
     const controller = new AbortController();
     connectionRef.current = controller;
     const starting = {
-      ...createModelMixState(),
-      sessionId: observerRef.current.sessionId,
+      ...archiveCurrentRun(observerRef.current),
       overall: 'connecting',
       message: 'Connecting…',
     };
@@ -276,27 +276,38 @@ export default function ModelMixObserver() {
         <span>Run: {observer.runId || '—'}</span><span>Last sequence: {observer.lastSeq}</span>
       </div>
       <section className="modelmix-workers" aria-label="ModelMix cockpit">
-        <TranscriptPane title="Worker A" participant={observer.worker_a} emptyText="Waiting for visible output…" />
+        <TranscriptPane title="Worker A" seatKey="worker_a" participant={observer.worker_a} history={observer.history} emptyText="Waiting for visible output…" />
         <TranscriptPane
           title="Moderator"
+          seatKey="moderator"
           participant={observer.moderator}
+          history={observer.history}
           emptyText="Waiting for workers…"
           className="modelmix-moderator"
           statusOverride={observer.overall === 'reconnecting' ? 'reconnecting' : null}
         />
-        <TranscriptPane title="Worker B" participant={observer.worker_b} emptyText="Waiting for visible output…" />
+        <TranscriptPane title="Worker B" seatKey="worker_b" participant={observer.worker_b} history={observer.history} emptyText="Waiting for visible output…" />
       </section>
     </main>
   );
 }
 
-function TranscriptPane({ title, participant, emptyText, className = '', statusOverride = null }) {
+function TranscriptPane({ title, participant, history = [], seatKey, emptyText, className = '', statusOverride = null }) {
   const status = statusOverride || participant.status;
+  const priorTurns = history.filter((entry) => entry[seatKey]?.text);
   return (
     <article className={`modelmix-worker ${className}`.trim()}>
       <header><h2>{title}</h2><span data-status={status}>{status}</span></header>
       <div className="modelmix-transcript">
-        {participant.text ? <MarkdownContent>{participant.text}</MarkdownContent> : <p className="modelmix-empty">{emptyText}</p>}
+        {priorTurns.map((entry) => (
+          <div key={entry.runId} className="modelmix-prior-turn">
+            <p className="modelmix-prior-prompt">{entry.prompt || '—'}</p>
+            <MarkdownContent>{entry[seatKey].text}</MarkdownContent>
+            {entry[seatKey].error && <p className="modelmix-worker-error">{entry[seatKey].error}</p>}
+          </div>
+        ))}
+        {participant.text ? <MarkdownContent>{participant.text}</MarkdownContent>
+          : priorTurns.length === 0 ? <p className="modelmix-empty">{emptyText}</p> : null}
         {participant.error && <p className="modelmix-worker-error">{participant.error}</p>}
       </div>
     </article>
