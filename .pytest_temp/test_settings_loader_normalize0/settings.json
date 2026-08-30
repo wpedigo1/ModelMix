@@ -1,1 +1,0 @@
-{"advisor_presets": [{"id": "abc", "name": "Default Panel", "persona_ids": ["skeptic", "pragmatist"], "mode": "simple", "default_model": "openai:gpt-4.1", "is_default": true}]}

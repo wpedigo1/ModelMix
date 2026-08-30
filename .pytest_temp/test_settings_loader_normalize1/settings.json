@@ -1,1 +1,0 @@
-{"council_presets": [{"id": "abc", "name": "Daily Driver", "council_models": ["openai:gpt-4.1"], "chairman_model": "openai:gpt-4.1", "is_default": true}]}

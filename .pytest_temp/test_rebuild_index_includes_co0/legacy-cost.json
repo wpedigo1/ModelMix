@@ -1,1 +1,0 @@
-{"id": "legacy-cost", "created_at": "2026-06-02T00:00:00+00:00", "title": "Legacy Cost Thread", "messages": [{"role": "assistant", "stage1": [], "metadata": {"cost_report": {"currency": "USD", "total_cost": 0.005, "total_calls": 1, "has_unknown_costs": false, "has_estimates": true, "by_model": [{"name": "test", "total_cost": 0.005, "calls": 1}]}}}]}
