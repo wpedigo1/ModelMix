@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 017: 2026-08-30 CT
+Reconciled through Mission 018: 2026-08-30 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -32,6 +32,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 015 | **PASS (LOCAL)** | Telemetry truth layer: events carry wall-clock `ts`; `_apply_event` persists provider-reported `usage`/`finish_reason` (opaque, un-normalized) plus `started_at`/`completed_at`; the frontend truth layer and `describeUsage` capture them without rendering; and the last Mission 014 polling test (streaming route) now uses an isolated persistence |
 | 016 | **PASS (LOCAL)** | Compact top bar and panel view controls: one thin persistent top strip (brand, inert `Mode: Mix` label, session status, New Session moved from `.modelmix-actions`, Details-hidden run metadata, Back to Council), and CSS-driven per-panel Collapse/Maximize/Reset view controls that hide panels from layout without ever unmounting them — view state lives only in local component state, untouched by `modelmixState.js` |
 | 017 | **PASS (LOCAL)** | Settings shell: a gear entry in the top bar opens an in-app overlay (About renders the real package.json version plus MIT/copyright and text-only AI Counsel attribution; Providers is a read-only Connected/Not-connected list computed from the now-exported `configuredSources` with zero credential values; Defaults saves/clears `modelmix.defaultSeatModels` in localStorage and applies saved seat defaults at initial mount with the exact built-in fallbacks preserved) — frontend-only, no route, no new dependencies |
+| 018 | **PASS (LOCAL)** | Telemetry rendering: the cockpit surfaces Mission 015's captured truth as compact per-seat footers (usage labeled `authoritative (provider-reported)` via `describeUsage` with raw key names or honest `unavailable`, ModelMix-calculated elapsed timing labeled `(calculated)` from `started_at`/`completed_at`, Moderator-only `finish_reason`, raw wall-clock start/end range) rendered only for the live turn — prior-turn archives keep telemetry hidden (explicit follow-up) and cost/pricing wiring stays deliberately out of scope |
 
 **Mission 008 is present on `main` and its persistence tests pass.**
 
@@ -66,7 +67,7 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 - **5 — Lock chassis policy**
 - **6 — Create ModelMix-owned backend boundary**
 - **8 — Define context isolation policy**
-- **10 — Define ordered event contract** — every canonical event now carries a wall-clock `ts` in both constructors, additive alongside `seq`/`run_id`/`type` (Mission 015)
+- **10 — Define ordered event contract** — every canonical event now carries a wall-clock `ts` in both constructors, additive alongside `seq`/`run_id`/`type` (Mission 015); the cockpit surfaces that timing truth per seat (Mission 018)
 - **11 — Define persistence boundary**
 - **15 — Build NON-STREAMING Mix vertical slice first**
 - **16 — Prove failure + cancellation**
@@ -76,6 +77,7 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 - **21 — Build browser-first three-panel cockpit** — reachable from a production build (`GET /modelmix`) and from the Council sidebar (ModelMix nav link) as of **Mission 014**
 - **22 — Bind UI to durable run/session state**
 - **23 — Add Stop behavior**
+- **25 — Add minimal telemetry** — state, elapsed time, provider-reported tokens, labeled estimates, reliable per-call cost only (Mission 018 renders honest per-seat usage labels, Moderator finish reason, and calculated timing; cost/pricing wiring and per-historical-turn footers are deferred follow-ups)
 
 ### Partially satisfied — keep open
 
@@ -92,7 +94,6 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 - **4 — Lock license and provenance** — **PARTIAL — MISSION 017** (the cockpit About section now surfaces the MIT license, the copyright holder, the real version, the text-only AI Counsel attribution, and the repo URL; `OPEN_SOURCE_CREDITS.md`, inherited-module provenance, and the shipped dependency-license inventory remain open)
 - **13 — Define privacy/data-routing rules**
 - **24 — Build thin top controls** — **PARTIAL — MISSIONS 012/016/017** (Mission 012: separate New Session control; Mission 016: one compact persistent top strip — brand, inert `Mode: Mix` label, session status, moved New Session, Details-hidden debug line, Back to Council — and CSS-driven panel Collapse/Maximize/Reset; Mission 017: the Settings surface is now a real gear entry opening the Settings overlay; only an interactive Mode selector remains open)
-- **25 — Add minimal telemetry — first slice **PARTIAL — Mission 015** (honest telemetry truth layer: wall-clock `ts`, persisted provider-reported `usage`/`finish_reason`/timing, frontend truth capture, and the `describeUsage` provenance vocabulary all land without any rendering; the cockpit must then surface these labels honestly)
 - **27 — Add Solo**
 - **28 — Add Compare**
 - **30 — Verify credential storage in actual packaging model**
@@ -209,9 +210,11 @@ One visible Stop action; separate fixed Send and Stop controls; honest partial-s
 
 ModelMix, Mode, Models, Session, Settings, compact overflow as needed. No dead controls. Mission 012 delivered the separate New Session control (disabled while a run is active) and cleared the local session key on activation. Mission 016 delivered the compact persistent top strip (brand, inert `Mode: Mix` label, session status, New Session moved up out of the composer, `Run`/`Last sequence` behind a Details disclosure that is off by default, Back to Council) and CSS-driven per-panel Collapse/Maximize/Reset view controls that hide panels from layout without unmounting them. Mission 017 delivers the Settings surface as a gear entry opening an in-app overlay (About / Providers / Defaults). An interactive Mode selector (Solo/Compare depend on items 27/28) remains open.
 
-### 25. Add minimal telemetry — **OPEN**
+### 25. Add minimal telemetry — **SUBSTANTIALLY SATISFIED — MISSIONS 015/018**
 
 State, elapsed time, provider-reported tokens where available, labeled estimates, reliable per-call cost only. Confidence colors represent data quality, not danger.
+
+Mission 015 landed the truth layer: wall-clock `ts`, persisted provider-reported `usage`/`finish_reason`, and `started_at`/`completed_at` timing. Mission 018 renders it honestly in the cockpit: compact per-seat footers for the live turn only — usage labeled `authoritative (provider-reported)` (via the `describeUsage` vocabulary) with raw provider key names or honest `unavailable`, elapsed time labeled `(calculated)`, the Moderator-only `finish_reason`, and the raw start/end range. No fabricated estimates, no fake normalized percentages; each seat's provider-reported usage stays opaque and un-normalized. **Deferred, explicitly noted follow-ups:** per-historical-turn telemetry footers (archived turns currently render zero footers even though the data is captured) and reliable per-call cost/pricing wiring (deliberately out of scope here — cost fields are never guessed or displayed).
 
 ### 26. Add provider/settings UX sufficient for alpha — **PARTIAL**
 
@@ -353,11 +356,12 @@ Hard cap is **not post-alpha by default**. Wire it when settings/run-control rea
 
 Mission 015's telemetry truth layer (persisted provider-reported `usage`,
 `finish_reason`, and `started_at`/`completed_at`, plus the `describeUsage`
-provenance vocabulary) is still capture-only. The next rendering mission should
-surface those honest per-seat labels and timing in the cockpit (no telemetry
-dashboard), keeping each seat's provider-reported usage opaque and
-un-normalized, before the alpha acceptance run (item 33). Within item 24, only
-the interactive Mode selector (Solo/Compare depend on items 27/28) remains open;
-the Settings surface shipped as the Mission 017 gear entry. The guardrails
-(usage warning, output warning, hard cap) remain explicitly open and should be
-wired when the settings/run-control layer reaches them.
+provenance vocabulary) is now rendered by the cockpit as compact per-seat
+footers (Mission 018) with no telemetry dashboard, usage kept opaque and
+un-normalized, and no fabricated estimates. Two follow-ups remain explicitly
+deferred: per-historical-turn telemetry footers and reliable per-call cost
+wiring. Within item 24, only the interactive Mode selector (Solo/Compare depend
+on items 27/28) remains open; the Settings surface shipped as the Mission 017
+gear entry. The guardrails (usage warning, output warning, hard cap) remain
+explicitly open and should be wired when the settings/run-control layer reaches
+them.

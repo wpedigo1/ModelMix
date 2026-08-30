@@ -4,6 +4,7 @@ import { configuredSources, discoverConfiguredModels } from '../configuredModels
 import MarkdownContent from './MarkdownContent';
 import SearchableModelSelect from './SearchableModelSelect';
 import { DEFAULT_PANEL_VIEW, getPanelViewClasses, panelLayoutNeedsReset } from '../panelView';
+import { buildSeatTelemetry } from '../seatTelemetry';
 import {
   clearSavedSeatModels,
   FALLBACK_SEAT_MODELS,
@@ -407,6 +408,7 @@ function TranscriptPane({
   const priorTurns = history.filter((entry) => entry[seatKey]?.text);
   const collapseLabel = `${collapsed ? 'Expand' : 'Collapse'} ${title}`;
   const maximizeLabel = `${maximized ? 'Restore' : 'Maximize'} ${title}`;
+  const telemetry = buildSeatTelemetry(participant, seatKey);
   return (
     <article className={`modelmix-worker ${className}`.trim()}>
       <header>
@@ -430,6 +432,16 @@ function TranscriptPane({
         {participant.text ? <MarkdownContent>{participant.text}</MarkdownContent>
           : priorTurns.length === 0 ? <p className="modelmix-empty">{emptyText}</p> : null}
         {participant.error && <p className="modelmix-worker-error">{participant.error}</p>}
+        {telemetry.length > 0 && (
+          <footer className="modelmix-telemetry" aria-label="Seat telemetry">
+            {telemetry.map((item) => (
+              <span className="modelmix-telemetry-item" key={item.key}>
+                <span className="modelmix-telemetry-label">{item.label}</span>: {item.value}
+                {item.detail && <span className="modelmix-telemetry-detail"> · {item.detail}</span>}
+              </span>
+            ))}
+          </footer>
+        )}
       </div>
     </article>
   );

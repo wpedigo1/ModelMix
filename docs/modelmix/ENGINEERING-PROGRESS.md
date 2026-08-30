@@ -9,7 +9,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–017**.
+Completed and locally verified implementation missions: **001–018**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -44,6 +44,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 015 | **PASS (LOCAL)** | Telemetry truth layer: events carry wall-clock `ts`; persistence keeps provider `usage`/`finish_reason` (opaque) and `started_at`/`completed_at` on messages — fixing the moderator finish_reason reload bug; the frontend truth layer + `describeUsage` capture everything without rendering; the last polling test is isolated | `015-telemetry-truth-layer.md` |
 | 016 | **PASS (LOCAL)** | Compact top bar + panel view controls (frontend-only): one thin persistent top strip (brand, inert `Mode: Mix` label, session status, New Session moved from `.modelmix-actions`, Details-hidden run metadata, Back to Council; no Settings), and CSS-driven per-panel Collapse/Maximize/Reset controls that hide panels from layout without unmounting them, with view state confined to local component state + pure `panelView.js` helpers and `modelmixState.js`/backend untouched | `016-compact-top-bar-and-panel-controls.md` |
 | 017 | **PASS (LOCAL)** | Settings shell (frontend-only): a gear entry in the compact top bar opens a conditionally-rendered overlay — About (real `pkg.version` from an imported `../../package.json`, MIT/copyright, text-only AI Counsel attribution, repo URL), Providers (read-only Connected/Not-connected rows computed from the now-exported `configuredSources` with zero credential values and an honest unavailable state), Defaults (`modelmix.defaultSeatModels` localStorage trio saved/cleared and applied at initial mount, with frozen `FALLBACK_SEAT_MODELS` preserving the exact built-in defaults) | `017-settings-shell.md` |
+| 018 | **PASS (LOCAL)** | Telemetry rendering (frontend-only): `seatTelemetry.js` builds honest per-seat footers — usage labeled `authoritative (provider-reported)` via `describeUsage` with raw provider keys or `unavailable`, Moderator-only `finish_reason` (`stop`/`not reported`), ModelMix-calculated elapsed labeled `(calculated)` with the raw wall-clock `HH:MM:SS → HH:MM:SS` range (running seats show `Started:`), rendered only for the live turn | `018-telemetry-rendering.md` |
 
 ## Current Verified Product Slice
 
@@ -101,7 +102,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **5 — Lock chassis policy**
 - **6 — Create ModelMix-owned backend boundary**
 - **8 — Context isolation policy**
-- **10 — Define ordered event contract** — every canonical event now carries a wall-clock `ts` in both constructors, additive alongside `seq`/`run_id`/`type` (Mission 015)
+- **10 — Define ordered event contract** — every canonical event now carries a wall-clock `ts` in both constructors, additive alongside `seq`/`run_id`/`type` (Mission 015); the cockpit surfaces that timing truth per seat (Mission 018)
 - **11 — ModelMix persistence boundary**
 - **15 — Non-streaming Mix vertical slice**
 - **16 — Prove failure + cancellation**
@@ -111,6 +112,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **21 — Build browser-first three-panel cockpit** — reachable from a production build (`GET /modelmix`) and from the Council sidebar (ModelMix nav link) as of Mission 014
 - **22 — Bind UI to durable run/session state**
 - **23 — Add Stop behavior**
+- **25 — Minimal telemetry** — state, elapsed time, provider-reported tokens where available, labeled estimates, reliable per-call cost only; rendered honestly per seat since Mission 018 (usage provenance, calculated timing, Moderator finish reason; cost/pricing wiring and per-historical-turn footers are deferred follow-ups)
 
 ### Partially satisfied — keep open
 
@@ -119,7 +121,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **12 — Provider capability matrix:** streaming capability/fallback and configured discovery exist; the full capability matrix remains open.
 - **14 — Deterministic mock provider:** current tests use deterministic fakes/mocks, but the full locked failure/timeout/rate-limit fixture matrix remains open.
 - **29 — Finalized Mix multi-turn behavior:** seat histories, Moderator history, hot-swap continuity, deterministic context bounding, and completed-turn cockpit display are implemented; retention/delete UX remains open.
-- **17 — Spend/runtime guardrails:** explicit Stop, the turn cap, seat-history per-message/per-seat character budgets (Mission 010), and wall-clock run (600s) / seat-Moderator (300s) timeouts (Mission 013) exist, plus persisted `started_at`/`completed_at` timing truth (Mission 015); cost/token ceilings and output warning/hard-cap work remain open.
+- **17 — Spend/runtime guardrails:** explicit Stop, the turn cap, seat-history per-message/per-seat character budgets (Mission 010), wall-clock run (600s) / seat-Moderator (300s) timeouts (Mission 013), and persisted `started_at`/`completed_at` timing truth (Mission 015) now surfaced as calculated elapsed in the cockpit (Mission 018); cost/token ceilings and output warning/hard-cap work remain open.
 - **26 — Provider/settings UX:** searchable configured selectors are complete; the visible ModelMix sidebar navigation entry point exists (Mission 014); the cockpit Settings surface is now a real entry (Mission 017) with read-only provider status from the exported `configuredSources` and saved default seat models; full alpha provider/settings entry flow remains open.
 - **4 — License and provenance — PARTIAL — MISSION 017** (the cockpit About section surfaces the MIT license, the copyright holder, the real version, the text-only AI Counsel attribution, and the repo URL; the `OPEN_SOURCE_CREDITS.md`, inherited-module provenance, and dependency-license inventory remain open)
 - **24 — Thin top controls — PARTIAL — MISSIONS 012/016/017** (Mission 012: separate New Session control; Mission 016: compact persistent top strip — brand, inert `Mode: Mix` label, session status, moved New Session, Details-hidden debug line, Back to Council, no Settings — plus CSS-driven panel Collapse/Maximize/Reset; Mission 017: the Settings surface ships as a gear entry opening the Settings overlay; only an interactive Mode selector remains open)
@@ -127,7 +129,6 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 ### Not yet satisfied / upcoming
 
 - **13 — Privacy/data-routing rules**
-- **25 — Minimal telemetry — first slice **PARTIAL — Mission 015** (telemetry truth layer landed: wall-clock `ts`, persisted provider-reported `usage`/`finish_reason`/timing, frontend truth capture, `describeUsage`; nothing renders it yet)
 - **27 — Solo**
 - **28 — Compare**
 - **30 — Credential verification in actual packaging model**
@@ -343,3 +344,42 @@ wins-on-mount, save/clear round-trip, and the existing 51 unmodified tests pass)
 items **26** (Settings surface now real; entry flow remains), **4** (visible
 license/copyright/credit — first slice), **24** (Settings surface delivered;
 Mode selector remains open).
+
+## Mission 018 Result
+
+Mission 018 makes Mission 015's capture visibly honest — frontend-only, no
+backend or `modelmixState.js`/`modelmixApi.js` changes. New pure module
+`frontend/src/seatTelemetry.js` (with `formatTimestamp`/`formatElapsed`/
+`rawUsageKeys`/`buildSeatTelemetry`) imports the single `describeUsage`
+vocabulary and builds a footer item list per seat, gated on real activity:
+idle and waiting seats render nothing. Rendered items in
+`TranscriptPane`'s `.modelmix-telemetry` footer:
+
+- **Usage** — `authoritative (provider-reported)` with the raw provider key
+  names (bounded to 8, then `N fields`) when `usage` is a non-null object;
+  honest `unavailable` otherwise (no token drilling, no normalization, no fake
+  percentage).
+- **Finish** — Moderator only, from `finish_reason` (`stop`, `tool-calls`, …)
+  or `not reported` when absent.
+- **Elapsed** — `HH:MM:SS → HH:MM:SS` range plus a duration explicitly labeled
+  `(calculated)` because it is ModelMix-computed from persisted event
+  timestamps; a seat that started but did not finish shows only `Started: …`
+  (no fabricated duration); a seat with only `completedAt` shows `Completed: …`.
+
+The footer is rendered **only for the live turn** — prior-turn archives render
+zero telemetry even though Mission 015 captures the same fields into history
+(this is the explicitly deferred per-historical-turn footer follow-up), and
+cost/pricing wiring is deliberately out of scope (a cost field is never
+guessed or displayed). Coverage: 13 node tests `seatTelemetry.test.js`
+(timestamp/elapsed formatting, provenance labels, raw-key detail, fake-free
+running-seat behavior, finish-reason moderation, oversized-usage field count,
+no-fabrication rules) and 3 jsdom render tests `ModelMixTelemetry.test.jsx`
+(no session → zero footers; completed seats → authoritative/finish/calculated
+footers; prior-turn archives → zero `prior` footers while live turns render and
+`not reported` stays known-unknown), reusing the vi.hoisted mutable hydrate
+container pattern with the same `api`/`configuredModels` mocks. Validation:
+`npm test` **85 passed** (69 prior + 16 new), `npm run lint` clean, `npm run
+build` green (437 modules), backend **360 passed** unchanged. Closes Punch
+Board item **25** (SUBSTANTIALLY SATISFIED — MISSIONS 015/018 with the two
+deferrals noted) and verifies items **10** (order/timing contract) and **17**
+(timing guardrail input) as visible.

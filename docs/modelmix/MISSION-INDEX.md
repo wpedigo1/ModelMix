@@ -30,6 +30,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 015 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `015-telemetry-truth-layer.md` |
 | 016 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `016-compact-top-bar-and-panel-controls.md` |
 | 017 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `017-settings-shell.md` |
+| 018 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `018-telemetry-rendering.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -235,6 +236,38 @@ unchanged. It corresponds to Punch Board items **26** (advanced: real
 provider/settings surface), **4** (partial: visible license/copyright/credit),
 and **24** (advanced: Settings surface delivered; interactive Mode selector
 remains open).
+
+## Mission 018 Result
+
+**Mission 018 is implemented and verified locally.**
+
+Mission 018 makes Mission 015's captured telemetry visibly honest in the
+cockpit. A new pure module `frontend/src/seatTelemetry.js` builds a compact
+footer item list per seat via `buildSeatTelemetry(seat, seatKey)`, reusing the
+single `describeUsage` provenance vocabulary: usage renders as `authoritative
+(provider-reported)` with the raw provider key names (never normalized, never
+merged into a fake percentage) or honest `unavailable`; Moderator-only
+`finish_reason` renders as-is or `not reported`; elapsed timing from
+`started_at`/`completed_at` renders as `HH:MM:SS → HH:MM:SS` and is explicitly
+labeled `(calculated)` because it is ModelMix-computed, and a running seat
+shows `Started:` without fabricating a duration. `TranscriptPane` renders a
+`.modelmix-telemetry` footer **only for the live turn** when the seat has run —
+prior-turn archives keep their telemetry hidden (explicitly deferred
+follow-up), and cost/pricing wiring is deliberately out of scope (never
+guessed, never displayed). Rendering is gated on honest data presence; idle
+and waiting seats show no footer. Tests: 13 new node tests
+`seatTelemetry.test.js` (formatting, provenance labeling, timing, finish
+reason, oversized usage, no-fabrication rules) and 3 new jsdom render tests
+`ModelMixTelemetry.test.jsx` (no-session → zero footers; completed seats →
+authoritative/finish/calculated footers; prior-turn archives → zero `prior`
+footers while the live turn renders, with known-unknown `not reported`),
+reusing the `vi.hoisted` mutable hydrate container pattern — plus the existing
+**69 frontend tests pass unmodified**, for **85 passed**; `npm run lint`
+clean; `npm run build` green (437 modules); backend **360 passed** unchanged.
+Backend, `modelmixState.js`, and `modelmixApi.js` are untouched. It closes Punch
+Board item **25** (SUBSTANTIALLY SATISFIED — MISSIONS 015/018, with the two
+deferrals noted) and verifies items **10** (ordering/timing contract) and
+**17** (timing guardrail input) as visible.
 
 ## Evidence Rule
 
