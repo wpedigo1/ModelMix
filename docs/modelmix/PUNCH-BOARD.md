@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 012: 2026-08-29 CT
+Reconciled through Mission 013: 2026-08-29 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -27,6 +27,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 010.5 | **PASS (LOCAL)** | Frontend test runner interlock: Vitest runner wired in; existing frontend tests collected and passing (24/24) |
 | 011 | **PASS (LOCAL)** | Multi-turn cockpit display: prior runs archived into per-seat history and rendered above the live turn in each panel |
 | 012 | **PASS (LOCAL)** | Session control and prompt plumbing: archived turns carry real prompts/models; separate New Session control that clears local session key and resets the cockpit |
+| 013 | **PASS (LOCAL)** | Run and seat timeouts: ModelMix-owned 600s run / 300s seat-Moderator wall-clock bounds enforced with honest `reason: "timeout"` terminal outcomes and a proven no-late-writes guarantee |
 
 **Mission 008 is present on `main` and its persistence tests pass.**
 
@@ -75,10 +76,10 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 ### Partially satisfied — keep open
 
 - **7 — Define domain objects:** run/event/seat concepts exist; full locked domain/schema-version contract remains incomplete.
-- **9 — Define run state machine:** core active/terminal outcomes exist; complete timeout/retry/state contract remains open.
+- **9 — Define run state machine:** core active/terminal outcomes exist; complete timeout/retry/state contract remains open. Mission 013 adds honest wall-clock `reason: "timeout"` outcomes for runs, seats, and Moderator.
 - **12 — Define provider capability matrix:** streaming/fallback and configured discovery exist; full matrix remains open.
 - **14 — Build deterministic mock provider:** deterministic fakes/mocks support current tests; full failure/timeout/rate-limit fixture matrix remains open.
-- **17 — Add basic spend/runtime guardrails:** Stop, turn cap, and seat-history per-message/per-seat character budgets exist (Mission 010 partial progress on context/spend bounding); timeout/cost-token ceilings/output warning/hard cap remain open.
+- **17 — Add basic spend/runtime guardrails:** Stop, turn cap, and seat-history per-message/per-seat character budgets exist (Mission 010 partial progress on context/spend bounding); timeout/cost-token ceilings/output warning/hard cap remain open. Mission 013 adds the wall-clock run (600s) and seat/Moderator (300s) timeouts.
 - **29 — Finalize Mix multi-turn session behavior:** seat-scoped Worker/Moderator history, bounding, failure-partial reuse, hot-swap continuity, completed-turn cockpit display, and New Session reset are implemented; retention/delete UX remains open.
 - **26 — Add provider/settings UX sufficient for alpha:** searchable configured selectors are complete; full alpha provider/settings flow remains open.
 
@@ -140,7 +141,7 @@ Workers see only user/authorized shared context plus their own seat history. Mod
 
 ### 9. Define run state machine — **PARTIAL**
 
-Created, dispatching, workers_running, moderating, completed, partially_completed, cancelled, failed, timed_out; define partial Moderator policy, Stop, persistence, retries, and UI terminal states.
+Created, dispatching, workers_running, moderating, completed, partially_completed, cancelled, failed, timed_out; define partial Moderator policy, Stop, persistence, retries, and UI terminal states. **Mission 013** adds the wall-clock `timed_out` outcome: `run_failed` / `seat_failed` / `moderator_failed` with `reason: "timeout"` through the existing event seam; retries remain open.
 
 ### 10. Define ordered event contract — **SATISFIED**
 
@@ -172,11 +173,11 @@ Two isolated workers → complete bounded outputs → Moderator → persisted se
 
 ### 16. Prove failure + cancellation with the same loop — **SUBSTANTIALLY SATISFIED**
 
-One/both worker failure, Moderator failure, timeout/rate limit/cancellation/partial outcomes modeled honestly. Persisted restart case remains tied to item 11.
+One/both worker failure, Moderator failure, timeout/rate limit/cancellation/partial outcomes modeled honestly. **Mission 013** proves run/seat/Moderator timeouts share the same loop and cancellation machinery as failure and explicit cancel, with a no-late-writes guarantee verified in both the journal and durable session. Persisted restart case remains tied to item 11.
 
 ### 17. Add basic spend/runtime guardrails — **PARTIAL**
 
-Max workers, run timeout, Stop, seat-history character budgets (Mission 010 partial), optional cost/token ceiling, no automatic provider/model substitution without permission.
+Max workers, run timeout, Stop, seat-history character budgets (Mission 010 partial), optional cost/token ceiling, no automatic provider/model substitution without permission. **Mission 013** adds the ModelMix-owned wall-clock bounds: `RUN_TIMEOUT_SECONDS = 600` enforced by `RunRegistry`, `SEAT_TIMEOUT_SECONDS = 300` enforced per worker seat and for the Moderator phase, with honest `reason: "timeout"` terminal events; cost/token ceilings and output warning/hard cap remain open.
 
 ## PHASE 4 — Streaming
 
@@ -342,7 +343,8 @@ Hard cap is **not post-alpha by default**. Wire it when settings/run-control rea
 
 ## Immediate Next Engineering Gap
 
-Mission 012 delivers the first thin top control (New Session) and real prompt/model
-plumbing into archived turns. Remaining alpha gaps stay ordered by this Punch Board;
-Mission 012 does not add retention/delete UX, telemetry, guardrails, Solo, or
-Compare.
+Mission 013 delivers ModelMix-owned wall-clock run and seat timeouts with honest
+`reason: "timeout"` terminal outcomes and a verified no-late-writes guarantee.
+Remaining alpha gaps stay ordered by this Punch Board; Mission 013 does not add
+cost/token ceilings, output warning/hard-cap guardrails, telemetry, Solo,
+Compare, or retention/delete UX.

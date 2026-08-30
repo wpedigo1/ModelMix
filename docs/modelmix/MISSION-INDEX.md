@@ -25,6 +25,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 010.5 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `010.5-frontend-test-runner-interlock.md` |
 | 011 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `011-multi-turn-cockpit-display.md` |
 | 012 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `012-session-control-and-prompt-plumbing.md` |
+| 013 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `013-run-and-seat-timeouts.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -121,6 +122,23 @@ selections — without touching any backend endpoint. New Session is disabled
 while a run is active via the existing `modelSelectorsDisabled` predicate. It is
 the first slice of Punch Board item **24** and makes further partial progress on
 item **29**.
+
+## Mission 013 Result
+
+**Mission 013 is implemented and verified locally.**
+
+Mission 013 gives ModelMix its own wall-clock run and seat enforcement:
+`backend/modelmix/timeouts.py` owns `RUN_TIMEOUT_SECONDS = 600` and
+`SEAT_TIMEOUT_SECONDS = 300` plus one cumulative-deadline helper. `run_seat`
+bounds each worker seat, `run_moderator` bounds the Moderator phase, and
+`RunRegistry._run` bounds the whole run — all terminating through the existing
+`seat_failed` / `moderator_failed` / `run_failed` events with an explicit
+`reason: "timeout"`. A timed-out seat still routes through the one-failed-worker
+partial path so the Moderator runs with the surviving output; explicit cancel
+still yields `run_cancelled` and is never labeled a timeout; and no event is
+written to the journal or durable session after a run reaches terminal — proven
+for both timeout and cancel paths. It makes partial progress on Punch Board items
+**17** and **9** and strengthens item **16**.
 
 ## Evidence Rule
 

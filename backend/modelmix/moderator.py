@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from ..providers.base import LLMProvider
+from . import timeouts
 from .orchestrator import EventFactory
+from .timeouts import aiter_with_deadline
 
 MAX_VISIBLE_OUTPUT_CHARS = 100_000
 
@@ -77,11 +80,13 @@ async def run_moderator(
     moderator_input: ModeratorInput,
     create_event: EventFactory,
     output_limits: Optional[ModeratorOutputLimits] = None,
+    seat_timeout: Optional[float] = None,
 ) -> bool:
     """Stream or query one Moderator and publish through the canonical event factory."""
     limits = output_limits or ModeratorOutputLimits()
     if limits.hard_cap_tokens is not None:
         raise ValueError("Moderator hard output caps are not supported by the provider contract")
+    bound = timeouts.SEAT_TIMEOUT_SECONDS if seat_timeout is None else seat_timeout
 
     await create_event(
         "moderator_started",
@@ -94,7 +99,8 @@ async def run_moderator(
         if provider.supports_streaming:
             usage = None
             finish_reason = None
-            async for item in provider.stream_query(model_id, moderator_input.messages):
+            stream = provider.stream_query(model_id, moderator_input.messages)
+            async for item in aiter_with_deadline(stream, bound):
                 if item.type == "text_delta" and item.delta:
                     await create_event("moderator_delta", actor="moderator", delta=item.delta)
                 elif item.type == "completed":
@@ -103,7 +109,9 @@ async def run_moderator(
                 elif item.type == "error":
                     raise RuntimeError(item.error_message or "Moderator stream failed")
         else:
-            result = await provider.query(model_id, moderator_input.messages)
+            result = await asyncio.wait_for(
+                provider.query(model_id, moderator_input.messages), timeout=bound
+            )
             if result.get("error"):
                 raise RuntimeError(result.get("error_message") or "Moderator query failed")
             content = str(result.get("content") or "")
@@ -119,6 +127,16 @@ async def run_moderator(
             payload["finish_reason"] = finish_reason
         await create_event("moderator_completed", **payload)
         return True
+    except asyncio.CancelledError:
+        raise
+    except asyncio.TimeoutError:
+        await create_event(
+            "moderator_failed",
+            actor="moderator",
+            error=f"Moderator timed out after {bound:g} seconds",
+            reason="timeout",
+        )
+        return False
     except Exception as exc:
         await create_event("moderator_failed", actor="moderator", error=str(exc))
         return False

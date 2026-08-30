@@ -28,6 +28,7 @@ Historical engineering evidence through locally verified Mission 010.5:
 12. [`010.5-frontend-test-runner-interlock.md`](010.5-frontend-test-runner-interlock.md) — **PASS (LOCAL)**
 13. [`011-multi-turn-cockpit-display.md`](011-multi-turn-cockpit-display.md) — **PASS (LOCAL)**
 14. [`012-session-control-and-prompt-plumbing.md`](012-session-control-and-prompt-plumbing.md) — **PASS (LOCAL)**
+15. [`013-run-and-seat-timeouts.md`](013-run-and-seat-timeouts.md) — **PASS (LOCAL)**
 
 Mission reports preserve what was observed or delivered during that slice. They do not automatically override a later locked decision in the Punch Board.
 

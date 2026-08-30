@@ -7,7 +7,9 @@ import uuid
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 
 from ..providers.base import LLMProvider
+from . import timeouts
 from .events import EventSequencer
+from .timeouts import aiter_with_deadline
 
 ProviderResolver = Callable[[str], LLMProvider]
 DisconnectCheck = Callable[[], Awaitable[bool]]
@@ -22,9 +24,10 @@ async def multiplex_workers(
     provider_resolver: ProviderResolver,
     is_disconnected: Optional[DisconnectCheck] = None,
     run_id: Optional[str] = None,
-    event_factory: Optional[EventFactory] = None,
+event_factory: Optional[EventFactory] = None,
     emit_run_completed: bool = True,
     seat_histories: Optional[Dict[str, List[Dict[str, str]]]] = None,
+    seat_timeout: Optional[float] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
     """Run exactly two isolated model calls and multiplex their visible output."""
     run_id = run_id or str(uuid.uuid4())
@@ -46,12 +49,14 @@ async def multiplex_workers(
             *histories.get(seat_id, []),
             {"role": "user", "content": prompt},
         ]
+        bound = timeouts.SEAT_TIMEOUT_SECONDS if seat_timeout is None else seat_timeout
         try:
             provider = provider_resolver(model_id)
             if provider.supports_streaming:
                 usage = None
                 finish_reason = None
-                async for item in provider.stream_query(model_id, messages):
+                stream = provider.stream_query(model_id, messages)
+                async for item in aiter_with_deadline(stream, bound):
                     if item.type == "text_delta" and item.delta:
                         await queue.put((seat_id, "seat_delta", {"delta": item.delta}))
                     elif item.type == "completed":
@@ -66,7 +71,9 @@ async def multiplex_workers(
                     payload["finish_reason"] = finish_reason
                 await queue.put((seat_id, "seat_completed", payload))
             else:
-                result = await provider.query(model_id, messages)
+                result = await asyncio.wait_for(
+                    provider.query(model_id, messages), timeout=bound
+                )
                 if result.get("error"):
                     raise RuntimeError(result.get("error_message") or "Provider query failed")
                 content = str(result.get("content") or "")
@@ -79,6 +86,13 @@ async def multiplex_workers(
         except asyncio.CancelledError:
             await queue.put((seat_id, "seat_cancelled", {}))
             raise
+        except asyncio.TimeoutError:
+            await queue.put(
+                (seat_id, "seat_failed", {
+                    "error": f"Worker timed out after {bound:g} seconds",
+                    "reason": "timeout",
+                })
+            )
         except Exception as exc:
             await queue.put((seat_id, "seat_failed", {"error": str(exc)}))
 

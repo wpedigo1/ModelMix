@@ -9,7 +9,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–012**.
+Completed and locally verified implementation missions: **001–013**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -39,6 +39,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 010.5 | **PASS (LOCAL)** | Frontend test runner interlock: Vitest + jsdom devDeps, `npm test` non-watch run, existing three test files collected and observed 24/24 pass | `010.5-frontend-test-runner-interlock.md` |
 | 011 | **PASS (LOCAL)** | Multi-turn cockpit display: prior runs archived chronologically into per-seat `history`, pure `archiveCurrentRun`, prior turns rendered above the live turn in each panel | `011-multi-turn-cockpit-display.md` |
 | 012 | **PASS (LOCAL)** | Session control and prompt plumbing: starting state carries `prompt`/`models`, no placeholder for absent prompts, separate New Session control via `modelSelectorsDisabled` (clears local session key, resets cockpit, preserves models) | `012-session-control-and-prompt-plumbing.md` |
+| 013 | **PASS (LOCAL)** | Run and seat timeouts: ModelMix-owned 600s/300s wall-clock bounds (`timeouts.py`), `reason: "timeout"` terminal outcomes reusing `seat_failed`/`moderator_failed`/`run_failed`, honest partial Moderator path for a timed-out seat, and a verified no-late-writes guarantee | `013-run-and-seat-timeouts.md` |
 
 ## Current Verified Product Slice
 
@@ -64,6 +65,7 @@ The accepted implementation through Mission 009 establishes:
 - a runnable frontend test suite: `npm test` executes the existing reducer/API/hydration tests (and configured-model and font-size tests) through Vitest with an observed 24/24 pass; `npm audit` reports 0 vulnerabilities.
 - a multi-turn cockpit display: each panel renders its seat's prior turns (compact prompt header above that turn's output) above the live streaming turn, sourced from a `history` array archived from prior session runs.
 - honest prompt/model plumbing and a session reset: archived turns carry the real submitted prompt and selected model IDs, absent prompts render nothing (no placeholder), and a separate New Session control (disabled while a run is active) clears the local session key and resets the cockpit while preserving model selections.
+- ModelMix-owned wall-clock run and seat timeouts: `timeouts.py` owns `RUN_TIMEOUT_SECONDS = 600` and `SEAT_TIMEOUT_SECONDS = 300`; `run_seat` and `run_moderator` bound their phases and `RunRegistry._run` bounds the whole run, terminating through the existing event types with `reason: "timeout"`, preserving prior deltas, routing a timed-out seat through the honest partial Moderator path, distinguishing explicit cancel (`run_cancelled`) from timeout, and guaranteeing no journal/persistence writes after a run reaches terminal.
 
 ## Mission 007.5 Verification Evidence
 
@@ -106,11 +108,11 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 ### Partially satisfied — keep open
 
 - **7 — Domain objects:** run/event/seat concepts exist, but the full locked domain/schema-version contract is incomplete.
-- **9 — Run state machine:** core active/terminal outcomes exist; complete timeout/retry/state contract remains open.
+- **9 — Run state machine:** core active/terminal outcomes exist; complete timeout/retry/state contract remains open. Mission 013 adds honest wall-clock `reason: "timeout"` terminal outcomes for runs, seats, and Moderator.
 - **12 — Provider capability matrix:** streaming capability/fallback and configured discovery exist; the full capability matrix remains open.
 - **14 — Deterministic mock provider:** current tests use deterministic fakes/mocks, but the full locked failure/timeout/rate-limit fixture matrix remains open.
 - **29 — Finalized Mix multi-turn behavior:** seat histories, Moderator history, hot-swap continuity, deterministic context bounding, and completed-turn cockpit display are implemented; retention/delete UX remains open.
-- **17 — Spend/runtime guardrails:** explicit Stop, the turn cap, and seat-history per-message/per-seat character budgets exist (Mission 010 partial progress on context/spend bounding); timeout/cost-token ceilings and output warning/hard-cap work remain open.
+- **17 — Spend/runtime guardrails:** explicit Stop, the turn cap, seat-history per-message/per-seat character budgets (Mission 010), and wall-clock run (600s) / seat-Moderator (300s) timeouts (Mission 013) exist; cost/token ceilings and output warning/hard-cap work remain open.
 - **26 — Provider/settings UX:** searchable configured selectors are complete; full alpha provider/settings flow remains open.
 
 ### Not yet satisfied / upcoming
@@ -200,3 +202,25 @@ disabled only while a run is active via the existing `modelSelectorsDisabled`.
 Five tests were added; the existing 30 frontend tests pass unmodified.
 `applyModelMixEvent` is unchanged. See
 `012-session-control-and-prompt-plumbing.md`.
+
+## Mission 013 Result
+
+Mission 013 delivers ModelMix-owned wall-clock enforcement for runs, seats, and
+the Moderator. `backend/modelmix/timeouts.py` owns `SEAT_TIMEOUT_SECONDS = 300`,
+`RUN_TIMEOUT_SECONDS = 600`, and a single cumulative-deadline helper
+(`aiter_with_deadline`, Python 3.10 compatible). `run_seat` bounds each worker
+seat, `run_moderator` bounds the Moderator phase, and `RunRegistry._run` bounds
+the whole run — all terminating through the existing `seat_failed` /
+`moderator_failed` / `run_failed` events with an explicit `reason: "timeout"`.
+A timed-out seat routes through the existing one-failed-worker partial path so
+the Moderator still runs with the surviving output (its handoff never treats the
+timed-out seat's partial deltas as complete), and the persisted session records
+the timed-out seat's partial content with `status: "failed"` and an error naming
+the timeout. Explicit cancel is unchanged (`run_cancelled`, never a timeout
+label). Because seats only ever push to the local queue and the drain loop is
+the single journal writer, no event is written after a run reaches terminal —
+verified in both the in-memory journal and the durable document. Existing tests
+are untouched: the focused suites (49) and the full backend suite (341 prior
+tests, 352 with the 11 new timeout tests) pass, and the frontend trio
+(test/build/lint) stays green even though no frontend file changed. See
+`013-run-and-seat-timeouts.md`.

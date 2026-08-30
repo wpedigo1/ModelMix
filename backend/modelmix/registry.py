@@ -8,6 +8,7 @@ import uuid
 from contextlib import aclosing
 from typing import Dict, List, Optional
 
+from . import timeouts
 from .history import build_seat_history
 from .journal import (
     MAX_EVENTS_PER_RUN,
@@ -31,11 +32,15 @@ class RunRegistry:
         max_terminal_runs: int = MAX_RETAINED_TERMINAL_RUNS,
         terminal_ttl_seconds: float = TERMINAL_RUN_TTL_SECONDS,
         persistence: ModelMixPersistence = modelmix_persistence,
+        seat_timeout: Optional[float] = None,
+        run_timeout: Optional[float] = None,
     ) -> None:
         self.max_events_per_run = max_events_per_run
         self.max_terminal_runs = max_terminal_runs
         self.terminal_ttl_seconds = terminal_ttl_seconds
         self.persistence = persistence
+        self.seat_timeout = seat_timeout
+        self.run_timeout = run_timeout
         self._runs: Dict[str, RunEventJournal] = {}
         self._lock = asyncio.Lock()
 
@@ -152,82 +157,27 @@ class RunRegistry:
         seat_histories: Dict[str, List[Dict[str, str]]],
     ) -> None:
         await run.mark_status("active")
-        worker_outputs = {"worker_a": "", "worker_b": ""}
-        worker_failures: Dict[str, str] = {}
+        bound = timeouts.RUN_TIMEOUT_SECONDS if self.run_timeout is None else self.run_timeout
         try:
-            worker_stream = multiplex_workers(
-                prompt,
-                worker_a_model,
-                worker_b_model,
-                provider_resolver,
-                run_id=run.run_id,
-                event_factory=run.append,
-                emit_run_completed=moderator_model is None,
-                seat_histories={
-                    "worker_a": seat_histories["worker_a"],
-                    "worker_b": seat_histories["worker_b"],
-                },
-            )
-            async with aclosing(worker_stream):
-                async for source_event in worker_stream:
-                    seat_id = source_event.get("seat_id")
-                    if source_event["type"] == "seat_delta" and seat_id in worker_outputs:
-                        worker_outputs[seat_id] += str(source_event.get("delta") or "")
-                    elif source_event["type"] == "seat_failed" and seat_id:
-                        worker_failures[seat_id] = str(source_event.get("error") or "Worker failed")
-                    elif (
-                        source_event["type"] == "seat_completed"
-                        and seat_id in worker_outputs
-                        and not worker_outputs[seat_id]
-                    ):
-                        worker_failures[seat_id] = "Worker returned no visible output"
-                    if source_event["type"] == "run_completed":
-                        await run.mark_status(str(source_event.get("status") or "completed"))
-
-            if moderator_model is not None:
-                successful_outputs = {
-                    seat_id: output
-                    for seat_id, output in worker_outputs.items()
-                    if seat_id not in worker_failures
-                }
-                if not successful_outputs:
-                    await run.append(
-                        "moderator_failed",
-                        actor="moderator",
-                        error="Insufficient worker input: both workers failed",
-                        reason="insufficient_input",
-                    )
-                    await run.append("run_failed", error="Both workers failed")
-                    await run.mark_status("failed")
-                    return
-
-                moderator_input = assemble_moderator_input(
+            await asyncio.wait_for(
+                self._run_phase(
+                    run,
                     prompt,
-                    successful_outputs,
-                    worker_failures,
-                    history=seat_histories["moderator"],
-                )
-                try:
-                    moderator_provider = provider_resolver(moderator_model)
-                except Exception as exc:
-                    await run.append(
-                        "moderator_failed",
-                        actor="moderator",
-                        error=str(exc),
-                    )
-                    await run.append("run_failed", error="Moderator provider resolution failed")
-                    await run.mark_status("failed")
-                    return
-                moderator_ok = await run_moderator(
-                    moderator_model, moderator_provider, moderator_input, run.append
-                )
-                if not moderator_ok:
-                    await run.append("run_failed", error="Moderator failed")
-                    await run.mark_status("failed")
-                    return
-                final_status = "partial" if worker_failures else "completed"
-                await run.append("run_completed", status=final_status)
-                await run.mark_status(final_status)
+                    worker_a_model,
+                    worker_b_model,
+                    provider_resolver,
+                    moderator_model,
+                    seat_histories,
+                ),
+                timeout=bound,
+            )
+        except asyncio.TimeoutError:
+            await run.append(
+                "run_failed",
+                error=f"Run timed out after {bound:g} seconds",
+                reason="timeout",
+            )
+            await run.mark_status("failed")
         except asyncio.CancelledError:
             await run.append("run_cancelled")
             await run.mark_status("cancelled")
@@ -238,6 +188,97 @@ class RunRegistry:
             if run.status not in TERMINAL_STATUSES:
                 await run.mark_status("failed")
             await self._prune()
+
+    async def _run_phase(
+        self,
+        run: RunEventJournal,
+        prompt: str,
+        worker_a_model: str,
+        worker_b_model: str,
+        provider_resolver: ProviderResolver,
+        moderator_model: Optional[str],
+        seat_histories: Dict[str, List[Dict[str, str]]],
+    ) -> None:
+        worker_outputs = {"worker_a": "", "worker_b": ""}
+        worker_failures: Dict[str, str] = {}
+        worker_stream = multiplex_workers(
+            prompt,
+            worker_a_model,
+            worker_b_model,
+            provider_resolver,
+            run_id=run.run_id,
+            event_factory=run.append,
+            emit_run_completed=moderator_model is None,
+            seat_timeout=self.seat_timeout,
+            seat_histories={
+                "worker_a": seat_histories["worker_a"],
+                "worker_b": seat_histories["worker_b"],
+            },
+        )
+        async with aclosing(worker_stream):
+            async for source_event in worker_stream:
+                seat_id = source_event.get("seat_id")
+                if source_event["type"] == "seat_delta" and seat_id in worker_outputs:
+                    worker_outputs[seat_id] += str(source_event.get("delta") or "")
+                elif source_event["type"] == "seat_failed" and seat_id:
+                    worker_failures[seat_id] = str(source_event.get("error") or "Worker failed")
+                elif (
+                    source_event["type"] == "seat_completed"
+                    and seat_id in worker_outputs
+                    and not worker_outputs[seat_id]
+                ):
+                    worker_failures[seat_id] = "Worker returned no visible output"
+                if source_event["type"] == "run_completed":
+                    await run.mark_status(str(source_event.get("status") or "completed"))
+
+        if moderator_model is not None:
+            successful_outputs = {
+                seat_id: output
+                for seat_id, output in worker_outputs.items()
+                if seat_id not in worker_failures
+            }
+            if not successful_outputs:
+                await run.append(
+                    "moderator_failed",
+                    actor="moderator",
+                    error="Insufficient worker input: both workers failed",
+                    reason="insufficient_input",
+                )
+                await run.append("run_failed", error="Both workers failed")
+                await run.mark_status("failed")
+                return
+
+            moderator_input = assemble_moderator_input(
+                prompt,
+                successful_outputs,
+                worker_failures,
+                history=seat_histories["moderator"],
+            )
+            try:
+                moderator_provider = provider_resolver(moderator_model)
+            except Exception as exc:
+                await run.append(
+                    "moderator_failed",
+                    actor="moderator",
+                    error=str(exc),
+                )
+                await run.append("run_failed", error="Moderator provider resolution failed")
+                await run.mark_status("failed")
+                return
+            moderator_ok = await run_moderator(
+                moderator_model,
+                moderator_provider,
+                moderator_input,
+                run.append,
+                seat_timeout=self.seat_timeout,
+            )
+            if not moderator_ok:
+                await run.append("run_failed", error="Moderator failed")
+                await run.mark_status("failed")
+                return
+            final_status = "partial" if worker_failures else "completed"
+            await run.append("run_completed", status=final_status)
+            await run.mark_status(final_status)
 
     async def _prune(self) -> None:
         now = time.monotonic()
