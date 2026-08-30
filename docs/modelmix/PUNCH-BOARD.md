@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 015: 2026-08-30 CT
+Reconciled through Mission 016: 2026-08-30 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -30,6 +30,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 013 | **PASS (LOCAL)** | Run and seat timeouts: ModelMix-owned 600s run / 300s seat-Moderator wall-clock bounds enforced with honest `reason: "timeout"` terminal outcomes and a proven no-late-writes guarantee |
 | 014 | **PASS (LOCAL)** | Reachability + test hygiene: real `GET /modelmix` serves `index.html` from `FRONTEND_DIST_DIR` so a production build can reach the three-panel cockpit, a visible Council sidebar link navigates there, and every `RunRegistry()` construction in `backend/tests/` now writes to an isolated `tmp_path` store instead of the live `data/modelmix/sessions/` directory |
 | 015 | **PASS (LOCAL)** | Telemetry truth layer: events carry wall-clock `ts`; `_apply_event` persists provider-reported `usage`/`finish_reason` (opaque, un-normalized) plus `started_at`/`completed_at`; the frontend truth layer and `describeUsage` capture them without rendering; and the last Mission 014 polling test (streaming route) now uses an isolated persistence |
+| 016 | **PASS (LOCAL)** | Compact top bar and panel view controls: one thin persistent top strip (brand, inert `Mode: Mix` label, session status, New Session moved from `.modelmix-actions`, Details-hidden run metadata, Back to Council), and CSS-driven per-panel Collapse/Maximize/Reset view controls that hide panels from layout without ever unmounting them — view state lives only in local component state, untouched by `modelmixState.js` |
 
 **Mission 008 is present on `main` and its persistence tests pass.**
 
@@ -89,7 +90,7 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 
 - **4 — Lock license and provenance**
 - **13 — Define privacy/data-routing rules**
-- **24 — Build thin top controls** — first slice **PARTIAL — Mission 012** (separate New Session control; Mode/Models/Settings surface remains open)
+- **24 — Build thin top controls** — **PARTIAL — MISSIONS 012/016** (Mission 012: separate New Session control; Mission 016: one compact persistent top strip — brand, inert `Mode: Mix` label, session status, moved New Session, Details-hidden debug line, Back to Council — and CSS-driven panel Collapse/Maximize/Reset; an interactive Mode selector and the Settings surface remain open)
 - **25 — Add minimal telemetry — first slice **PARTIAL — Mission 015** (honest telemetry truth layer: wall-clock `ts`, persisted provider-reported `usage`/`finish_reason`/timing, frontend truth capture, and the `describeUsage` provenance vocabulary all land without any rendering; the cockpit must then surface these labels honestly)
 - **27 — Add Solo**
 - **28 — Add Compare**
@@ -203,9 +204,9 @@ Hydrate from persisted canonical messages, subscribe to existing events, replay 
 
 One visible Stop action; separate fixed Send and Stop controls; honest partial-state display.
 
-### 24. Build thin top controls — **PARTIAL — MISSION 012**
+### 24. Build thin top controls — **PARTIAL — MISSIONS 012/016**
 
-ModelMix, Mode, Models, Session, Settings, compact overflow as needed. No dead controls. Mission 012 delivered the separate New Session control (disabled while a run is active) and cleared the local session key on activation; Mode/Models/Settings surface remains open.
+ModelMix, Mode, Models, Session, Settings, compact overflow as needed. No dead controls. Mission 012 delivered the separate New Session control (disabled while a run is active) and cleared the local session key on activation. Mission 016 delivered the compact persistent top strip (brand, inert `Mode: Mix` label, session status, New Session moved up out of the composer, `Run`/`Last sequence` behind a Details disclosure that is off by default, Back to Council) and CSS-driven per-panel Collapse/Maximize/Reset view controls that hide panels from layout without unmounting them. An interactive Mode selector (Solo/Compare depend on items 27/28) and the Settings surface remain open.
 
 ### 25. Add minimal telemetry — **OPEN**
 
@@ -349,8 +350,11 @@ Hard cap is **not post-alpha by default**. Wire it when settings/run-control rea
 
 ## Immediate Next Engineering Gap
 
-Mission 015 is the state/truth layer only — nothing renders the new fields. The
-next mission renders them: surfacing honest `describeUsage` provenance labels
-and per-seat timing in the cockpit (no telemetry dashboard), keeping each
-seat's provider-reported usage opaque and un-normalized, before the alpha
-acceptance run (item 33).
+Mission 015's telemetry truth layer (persisted provider-reported `usage`,
+`finish_reason`, and `started_at`/`completed_at`, plus the `describeUsage`
+provenance vocabulary) is still capture-only. The next rendering mission should
+surface those honest per-seat labels and timing in the cockpit (no telemetry
+dashboard), keeping each seat's provider-reported usage opaque and
+un-normalized, before the alpha acceptance run (item 33). Within item 24, the
+interactive Mode selector and the Settings surface remain open (Mission 016
+deliberately shipped the inert `Mode: Mix` label and no Settings entry).

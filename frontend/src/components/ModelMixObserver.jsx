@@ -3,6 +3,7 @@ import { api } from '../api';
 import { discoverConfiguredModels } from '../configuredModels';
 import MarkdownContent from './MarkdownContent';
 import SearchableModelSelect from './SearchableModelSelect';
+import { DEFAULT_PANEL_VIEW, getPanelViewClasses, panelLayoutNeedsReset } from '../panelView';
 import {
   cancelModelMixRun,
   consumeModelMixSSE,
@@ -38,6 +39,8 @@ export default function ModelMixObserver() {
   const observerRef = useRef(observer);
   const connectionRef = useRef(null);
   const historicalModelsRef = useRef(new Set());
+  const [panelView, setPanelView] = useState(DEFAULT_PANEL_VIEW);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const updateObserver = useCallback((updater) => {
     setObserver((current) => {
@@ -46,6 +49,21 @@ export default function ModelMixObserver() {
       return next;
     });
   }, []);
+
+  const toggleCollapsed = useCallback((seatKey) => {
+    setPanelView((current) => ({
+      ...current,
+      collapsed: current.collapsed.includes(seatKey)
+        ? current.collapsed.filter((key) => key !== seatKey)
+        : [...current.collapsed, seatKey],
+    }));
+  }, []);
+
+  const toggleMaximize = useCallback((seatKey) => {
+    setPanelView((current) => ({ ...current, maximized: current.maximized === seatKey ? '' : seatKey }));
+  }, []);
+
+  const resetPanelLayout = useCallback(() => setPanelView(DEFAULT_PANEL_VIEW), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -226,13 +244,20 @@ export default function ModelMixObserver() {
     || !workerBModel;
   return (
     <main className="modelmix-observer">
-      <header className="modelmix-header">
-        <div>
-          <p className="modelmix-kicker">Experimental cockpit</p>
-          <h1>ModelMix</h1>
+      <header className="modelmix-topbar">
+        <h1>ModelMix</h1>
+        <span className="modelmix-mode">Mode: Mix</span>
+        <div className="modelmix-session">
+          <span className="modelmix-session-status" data-status={observer.overall}>{observer.overall}</span>
+          <button type="button" className="new-session" disabled={modelSelectorsDisabled(observer.overall)} onClick={newSession}>New Session</button>
         </div>
+        <button type="button" className="modelmix-details-toggle" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((open) => !open)}>Details</button>
         <a href="/">Back to Council</a>
       </header>
+
+      <div className="modelmix-run-meta" data-open={detailsOpen} aria-hidden={!detailsOpen}>
+        <span>Run: {observer.runId || '—'}</span><span>Last sequence: {observer.lastSeq}</span>
+      </div>
 
       <form className="modelmix-composer" onSubmit={send}>
         <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} aria-label="Prompt" rows="3" required />
@@ -281,37 +306,74 @@ export default function ModelMixObserver() {
         <div className="modelmix-actions">
           <button type="submit" disabled={sendDisabled}>Send</button>
           <button type="button" className="stop" disabled={controls.stopDisabled} onClick={stop}>Stop</button>
-          <button type="button" className="new-session" disabled={modelSelectorsDisabled(observer.overall)} onClick={newSession}>New Session</button>
           <span role="status">{observer.message}</span>
         </div>
       </form>
 
-      <div className="modelmix-run-meta">
-        <span>Run: {observer.runId || '—'}</span><span>Last sequence: {observer.lastSeq}</span>
-      </div>
-      <section className="modelmix-workers" aria-label="ModelMix cockpit">
-        <TranscriptPane title="Worker A" seatKey="worker_a" participant={observer.worker_a} history={observer.history} emptyText="Waiting for visible output…" />
-        <TranscriptPane
-          title="Moderator"
-          seatKey="moderator"
-          participant={observer.moderator}
-          history={observer.history}
-          emptyText="Waiting for workers…"
-          className="modelmix-moderator"
-          statusOverride={observer.overall === 'reconnecting' ? 'reconnecting' : null}
-        />
-        <TranscriptPane title="Worker B" seatKey="worker_b" participant={observer.worker_b} history={observer.history} emptyText="Waiting for visible output…" />
+      {panelLayoutNeedsReset(panelView.maximized, panelView.collapsed) && (
+        <div className="modelmix-panel-toolbar">
+          <button type="button" className="modelmix-reset-layout" onClick={resetPanelLayout}>Reset panel layout</button>
+        </div>
+      )}
+
+      <section
+        className={`modelmix-workers${panelView.maximized ? ' modelmix-workers--maximized' : ''}`}
+        aria-label="ModelMix cockpit"
+      >
+        {[
+          { seatKey: 'worker_a', title: 'Worker A', className: '', emptyText: 'Waiting for visible output…' },
+          { seatKey: 'moderator', title: 'Moderator', className: 'modelmix-moderator', emptyText: 'Waiting for workers…' },
+          { seatKey: 'worker_b', title: 'Worker B', className: '', emptyText: 'Waiting for visible output…' },
+        ].map(({ seatKey, title, className, emptyText }) => (
+          <TranscriptPane
+            key={seatKey}
+            title={title}
+            seatKey={seatKey}
+            participant={observer[seatKey]}
+            history={observer.history}
+            emptyText={emptyText}
+            className={`${className} ${getPanelViewClasses(seatKey, panelView.maximized, panelView.collapsed).join(' ')}`.trim()}
+            statusOverride={seatKey === 'moderator' && observer.overall === 'reconnecting' ? 'reconnecting' : null}
+            collapsed={panelView.collapsed.includes(seatKey)}
+            maximized={panelView.maximized === seatKey}
+            onToggleCollapse={() => toggleCollapsed(seatKey)}
+            onToggleMaximize={() => toggleMaximize(seatKey)}
+          />
+        ))}
       </section>
     </main>
   );
 }
 
-function TranscriptPane({ title, participant, history = [], seatKey, emptyText, className = '', statusOverride = null }) {
+function TranscriptPane({
+  title,
+  participant,
+  history = [],
+  seatKey,
+  emptyText,
+  className = '',
+  statusOverride = null,
+  collapsed = false,
+  maximized = false,
+  onToggleCollapse,
+  onToggleMaximize,
+}) {
   const status = statusOverride || participant.status;
   const priorTurns = history.filter((entry) => entry[seatKey]?.text);
+  const collapseLabel = `${collapsed ? 'Expand' : 'Collapse'} ${title}`;
+  const maximizeLabel = `${maximized ? 'Restore' : 'Maximize'} ${title}`;
   return (
     <article className={`modelmix-worker ${className}`.trim()}>
-      <header><h2>{title}</h2><span data-status={status}>{status}</span></header>
+      <header>
+        <h2>{title}</h2>
+        <div className="modelmix-panel-head">
+          <span data-status={status}>{status}</span>
+          <div className="modelmix-panel-controls">
+            <button type="button" className="modelmix-panel-control" aria-label={collapseLabel} aria-expanded={!collapsed} title={collapseLabel} onClick={onToggleCollapse}>{collapsed ? 'Expand' : 'Collapse'}</button>
+            <button type="button" className="modelmix-panel-control" aria-label={maximizeLabel} aria-pressed={maximized} title={maximizeLabel} onClick={onToggleMaximize}>{maximized ? 'Restore' : 'Maximize'}</button>
+          </div>
+        </div>
+      </header>
       <div className="modelmix-transcript">
         {priorTurns.map((entry) => (
           <div key={entry.runId} className="modelmix-prior-turn">

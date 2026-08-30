@@ -1,6 +1,6 @@
 # ModelMix Engineering Progress
 
-Updated: 2026-08-29 CT
+Updated: 2026-08-30 CT
 
 This is the current implementation-state overlay for the locked ModelMix Punch Board. It records observed implementation progress without silently reordering or deleting locked board items.
 
@@ -9,7 +9,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–015**.
+Completed and locally verified implementation missions: **001–016**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -42,6 +42,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 013 | **PASS (LOCAL)** | Run and seat timeouts: ModelMix-owned 600s/300s wall-clock bounds (`timeouts.py`), `reason: "timeout"` terminal outcomes reusing `seat_failed`/`moderator_failed`/`run_failed`, honest partial Moderator path for a timed-out seat, and a verified no-late-writes guarantee | `013-run-and-seat-timeouts.md` |
 | 014 | **PASS (LOCAL)** | Reachability + test hygiene: real `GET /modelmix` serves the built frontend and the Council sidebar gains a ModelMix nav link (cockpit reachable from a production build); every backend-test `RunRegistry()` writes to an isolated `tmp_path` store instead of the live session directory | `014-reachability-and-test-hygiene.md` |
 | 015 | **PASS (LOCAL)** | Telemetry truth layer: events carry wall-clock `ts`; persistence keeps provider `usage`/`finish_reason` (opaque) and `started_at`/`completed_at` on messages — fixing the moderator finish_reason reload bug; the frontend truth layer + `describeUsage` capture everything without rendering; the last polling test is isolated | `015-telemetry-truth-layer.md` |
+| 016 | **PASS (LOCAL)** | Compact top bar + panel view controls (frontend-only): one thin persistent top strip (brand, inert `Mode: Mix` label, session status, New Session moved from `.modelmix-actions`, Details-hidden run metadata, Back to Council; no Settings), and CSS-driven per-panel Collapse/Maximize/Reset controls that hide panels from layout without unmounting them, with view state confined to local component state + pure `panelView.js` helpers and `modelmixState.js`/backend untouched | `016-compact-top-bar-and-panel-controls.md` |
 
 ## Current Verified Product Slice
 
@@ -69,6 +70,7 @@ The accepted implementation through Mission 009 establishes:
 - honest prompt/model plumbing and a session reset: archived turns carry the real submitted prompt and selected model IDs, absent prompts render nothing (no placeholder), and a separate New Session control (disabled while a run is active) clears the local session key and resets the cockpit while preserving model selections.
 - ModelMix-owned wall-clock run and seat timeouts: `timeouts.py` owns `RUN_TIMEOUT_SECONDS = 600` and `SEAT_TIMEOUT_SECONDS = 300`; `run_seat` and `run_moderator` bound their phases and `RunRegistry._run` bounds the whole run, terminating through the existing event types with `reason: "timeout"`, preserving prior deltas, routing a timed-out seat through the honest partial Moderator path, distinguishing explicit cancel (`run_cancelled`) from timeout, and guaranteeing no journal/persistence writes after a run reaches terminal.
 - production-build reachability and test hygiene: `GET /modelmix` serves `index.html` from `FRONTEND_DIST_DIR` (404 with a clear message when not built) and the Council sidebar has one visible ModelMix nav link, so the three-panel cockpit is reachable from a built app; every `RunRegistry()` in `backend/tests/` writes to an isolated `tmp_path` store — proven by an unchanged real-data file count (229 before = 229 after) across every previously-polluting test file.
+- a compact persistent top strip and CSS-driven panel view controls: one `header.modelmix-topbar` replaces the separate header and always-visible run metadata — brand, inert `Mode: Mix` label, session status from the existing `observer.overall` vocabulary, the New Session control (moved, same handler/disabled binding, no behavior change), a Details disclosure (off by default) holding the `Run: <id>` / `Last sequence: <n>` debug line, and the unchanged Back to Council link, with no Settings entry; each `TranscriptPane` header gains Collapse (body only, header stays) and Maximize (one panel full width, the other two hidden from layout), plus one Reset visible whenever any panel is collapsed or maximized — all layout via CSS classes so all three panels stay mounted, with view state in `panelView.js` helpers and `ModelMixObserver` local state only (`modelmixState.js`/backend untouched; reload resets the view).
 
 ## Mission 007.5 Verification Evidence
 
@@ -122,7 +124,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 
 - **4 — License and provenance distribution work**
 - **13 — Privacy/data-routing rules**
-- **24 — Thin top controls**
+- **24 — Thin top controls — PARTIAL — MISSIONS 012/016** (Mission 012: separate New Session control; Mission 016: compact persistent top strip — brand, inert `Mode: Mix` label, session status, moved New Session, Details-hidden debug line, Back to Council, no Settings — plus CSS-driven panel Collapse/Maximize/Reset; an interactive Mode selector and the Settings surface remain open)
 - **25 — Minimal telemetry — first slice **PARTIAL — Mission 015** (telemetry truth layer landed: wall-clock `ts`, persisted provider-reported `usage`/`finish_reason`/timing, frontend truth capture, `describeUsage`; nothing renders it yet)
 - **27 — Solo**
 - **28 — Compare**
@@ -271,3 +273,36 @@ streaming route test monkeypatches `routes.run_registry` to an isolated
 frontend **41 passed** (35 prior + 6 new, two existing archive assertions
 extended with the new null fields); build green; lint clean; ruff clean. See
 `015-telemetry-truth-layer.md`.
+
+## Mission 016 Result
+
+Mission 016 is frontend-only: `ModelMixObserver.jsx`, `ModelMixObserver.css`,
+and two new files (`panelView.js` view helpers and their tests). The
+old `.modelmix-header` (kicker + title + Back to Council) and the always-visible
+`.modelmix-run-meta` are gone, replaced by one `header.modelmix-topbar`: the
+ModelMix brand; an inert `Mode: Mix` `<span>` (no dropdown — Solo/Compare are
+items 27/28); the session status reusing `observer.overall` verbatim with the
+same data-status color vocabulary as the panels; the New Session button moved up
+from `.modelmix-actions` (same handler, same `modelSelectorsDisabled` binding,
+behavior unchanged); a Details disclosure, off by default, that CSS-hides the
+`Run: <id>` / `Last sequence: <n>` debug line (element stays mounted); and the
+unchanged Back to Council link. No Settings entry/link/route was added. The
+composer and its model selectors are functionally identical (only the container
+was re-tightened and New Session removed from the actions row); Send/Stop
+adjacency and all disabled logic are unchanged. Each `TranscriptPane` header now
+has Collapse/expand (hides only its `.modelmix-transcript` via
+`.modelmix-panel-collapsed`; header stays) and Maximize/Restore (one panel full
+width via `.modelmix-workers--maximized`, other two `.modelmix-panel-hidden`;
+all three nodes stay mounted), with one Reset control shown whenever any panel
+is collapsed or maximized. View state lives only in new local
+`panelView`/`detailsOpen` state and the pure helpers in `frontend/src/panelView.js`;
+`modelmixState.js`, `modelmixApi.js`, and all backend code are untouched, so the
+41 prior frontend tests pass unmodified. New coverage: 4 `panelView.test.js`
+unit tests (class matrix, reset predicate, default view, and a proof that view
+keys never leak into `createModelMixState`/`applyModelMixEvent`) and 6 jsdom
+render tests of the real component with mocked API/configuredModels/modelmixApi
+modules (top-strip structure, collapse-mounts, maximize-mounts, reset-from-any-
+combination, New Session behavior, Details disclosure). Validation
+(mission-specified): `npm test` **51 passed** (41 prior + 10 new), `npm run
+build` green, `npm run lint` clean, `uv run pytest backend/tests -q` **360
+passed** unchanged. See `016-compact-top-bar-and-panel-controls.md`.

@@ -28,6 +28,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 013 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `013-run-and-seat-timeouts.md` |
 | 014 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `014-reachability-and-test-hygiene.md` |
 | 015 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `015-telemetry-truth-layer.md` |
+| 016 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `016-compact-top-bar-and-panel-controls.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -173,6 +174,31 @@ Mission 014 leftover: the streaming route test now uses an isolated
 persistence, proven by an empty `data/modelmix/sessions/` after the full suite.
 It corresponds to Punch Board items **25** (partial slice), **10** (fix), and
 **17** (partial).
+
+## Mission 016 Result
+
+**Mission 016 is implemented and verified locally.**
+
+Mission 016 converts the cockpit's top area into one thin persistent strip and
+adds CSS-driven panel view controls. `ModelMixObserver` now renders a single
+`header.modelmix-topbar` (brand, inert `Mode: Mix` label, session status from
+the existing `observer.overall` vocabulary, New Session moved out of
+`.modelmix-actions` with its handler/disabled binding unchanged, a Details
+disclosure that stays off by default and hides the `Run: <id>` /
+`Last sequence: <n>` debug line, and the unchanged Back to Council link — with
+no Settings entry). Each `TranscriptPane` header gains Collapse/expand (hides
+only the transcript body; header stays) and Maximize (one panel full width,
+others CSS-hidden, all three nodes still mounted), plus one Reset control that
+appears whenever any panel is collapsed or maximized. Layout state lives only in
+new local `panelView`/`detailsOpen` state in `ModelMixObserver`; the pure view
+helpers live in `frontend/src/panelView.js` (`getPanelViewClasses`,
+`panelLayoutNeedsReset`, `DEFAULT_PANEL_VIEW`, `PANEL_SEATS`);
+`modelmixState.js` and `modelmixApi.js` are byte-identical to Mission 015, and
+no backend file changed. Tests: 4 new pure unit tests + 6 new jsdom render tests
+of the real component (mocked API layer, completed-session hydration,
+deterministic per-test DOM cleanup). It corresponds to Punch Board item **24**
+(further advanced: Mission 012's New Session control now sits in the compact
+strip); an interactive Mode selector and the Settings surface remain open.
 
 ## Evidence Rule
 
