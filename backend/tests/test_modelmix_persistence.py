@@ -92,6 +92,25 @@ def test_build_seat_history_is_empty_for_fresh_session():
     assert build_seat_history(document, "worker_a", exclude_run_id="new-run") == []
 
 
+def _snapshot():
+    return {
+        "run_id": "run-1",
+        "prompt": "question",
+        "models": {"worker_a": "p:a", "moderator": "p:m", "worker_b": "p:b"},
+        "status": "created",
+        "latest_seq": 0,
+        "events": [],
+    }
+
+
+async def _play(store, session_id, events):
+    await store.create_session(session_id)
+    await store.create_run(session_id, _snapshot())
+    for event in events:
+        await store.append_event(session_id, "run-1", event, "active")
+    return await store.load_session(session_id)
+
+
 async def persisted_run(store, session_id="session-1", status="completed"):
     await store.create_session(session_id)
     snapshot = {
@@ -104,21 +123,21 @@ async def persisted_run(store, session_id="session-1", status="completed"):
     }
     await store.create_run(session_id, snapshot)
     events = [
-        {"run_id": "run-1", "seq": 1, "type": "run_started", "seats": ["worker_a", "worker_b"]},
-        {"run_id": "run-1", "seq": 2, "type": "seat_started", "seat_id": "worker_a", "model": "p:a"},
-        {"run_id": "run-1", "seq": 3, "type": "seat_delta", "seat_id": "worker_a", "delta": "A"},
-        {"run_id": "run-1", "seq": 4, "type": "seat_completed", "seat_id": "worker_a"},
-        {"run_id": "run-1", "seq": 5, "type": "seat_started", "seat_id": "worker_b", "model": "p:b"},
-        {"run_id": "run-1", "seq": 6, "type": "seat_delta", "seat_id": "worker_b", "delta": "B"},
-        {"run_id": "run-1", "seq": 7, "type": "seat_completed", "seat_id": "worker_b"},
-        {"run_id": "run-1", "seq": 8, "type": "moderator_started", "actor": "moderator", "model": "p:m"},
-        {"run_id": "run-1", "seq": 9, "type": "moderator_delta", "actor": "moderator", "delta": "M"},
-        {"run_id": "run-1", "seq": 10, "type": "moderator_completed", "actor": "moderator"},
+        {"run_id": "run-1", "seq": 1, "type": "run_started", "ts": 101.0, "seats": ["worker_a", "worker_b"]},
+        {"run_id": "run-1", "seq": 2, "type": "seat_started", "ts": 102.0, "seat_id": "worker_a", "model": "p:a"},
+        {"run_id": "run-1", "seq": 3, "type": "seat_delta", "ts": 103.0, "seat_id": "worker_a", "delta": "A"},
+        {"run_id": "run-1", "seq": 4, "type": "seat_completed", "ts": 104.0, "seat_id": "worker_a"},
+        {"run_id": "run-1", "seq": 5, "type": "seat_started", "ts": 105.0, "seat_id": "worker_b", "model": "p:b"},
+        {"run_id": "run-1", "seq": 6, "type": "seat_delta", "ts": 106.0, "seat_id": "worker_b", "delta": "B"},
+        {"run_id": "run-1", "seq": 7, "type": "seat_completed", "ts": 107.0, "seat_id": "worker_b"},
+        {"run_id": "run-1", "seq": 8, "type": "moderator_started", "ts": 108.0, "actor": "moderator", "model": "p:m"},
+        {"run_id": "run-1", "seq": 9, "type": "moderator_delta", "ts": 109.0, "actor": "moderator", "delta": "M"},
+        {"run_id": "run-1", "seq": 10, "type": "moderator_completed", "ts": 110.0, "actor": "moderator"},
     ]
     terminal = (
-        {"run_id": "run-1", "seq": 11, "type": "run_completed", "status": status}
+        {"run_id": "run-1", "seq": 11, "type": "run_completed", "ts": 111.0, "status": status}
         if status in {"completed", "partial"}
-        else {"run_id": "run-1", "seq": 11, "type": f"run_{status}"}
+        else {"run_id": "run-1", "seq": 11, "type": f"run_{status}", "ts": 111.0}
     )
     for event in [*events, terminal]:
         await store.append_event(session_id, "run-1", event, "active")
@@ -211,6 +230,73 @@ async def test_malformed_and_unsupported_state_fail_safely(tmp_path):
     (tmp_path / "broken.json").write_text('{', encoding="utf-8")
     with pytest.raises(PersistenceError, match="Unable to read"):
         await AtomicJsonModelMixPersistence(tmp_path).load_session("broken")
+
+
+async def test_persisted_usage_matches_event_exactly_and_absent_usage_stays_none(tmp_path):
+    store = AtomicJsonModelMixPersistence(tmp_path)
+    usage = {
+        "total_tokens": 12,
+        "prompt_tokens": 5,
+        "completion_tokens": 7,
+        "detail": {"x": [1, 2], "flag": True},
+    }
+    document = await _play(store, "session-1", [
+        {"run_id": "run-1", "seq": 1, "type": "seat_started", "ts": 1.0, "seat_id": "worker_a"},
+        {"run_id": "run-1", "seq": 2, "type": "seat_completed", "ts": 2.0, "seat_id": "worker_a", "usage": usage},
+        {"run_id": "run-1", "seq": 3, "type": "seat_started", "ts": 3.0, "seat_id": "worker_b"},
+        {"run_id": "run-1", "seq": 4, "type": "seat_completed", "ts": 4.0, "seat_id": "worker_b"},
+    ])
+    reloaded = await AtomicJsonModelMixPersistence(tmp_path).load_session("session-1")
+    messages = {message["seat"]: message for message in reloaded["session"]["messages"]}
+    assert messages["worker_a"]["usage"] == usage
+    assert messages["worker_b"]["usage"] is None
+    assert document["session"]["messages"][1]["usage"] == usage
+
+
+async def test_moderator_finish_reason_and_usage_survive_persistence_reload(tmp_path):
+    store = AtomicJsonModelMixPersistence(tmp_path)
+    await _play(store, "session-1", [
+        {"run_id": "run-1", "seq": 1, "type": "seat_started", "ts": 1.0, "seat_id": "worker_a", "model": "p:a"},
+        {"run_id": "run-1", "seq": 2, "type": "seat_completed", "ts": 2.0, "seat_id": "worker_a"},
+        {"run_id": "run-1", "seq": 3, "type": "seat_started", "ts": 3.0, "seat_id": "worker_b", "model": "p:b"},
+        {"run_id": "run-1", "seq": 4, "type": "seat_completed", "ts": 4.0, "seat_id": "worker_b"},
+        {"run_id": "run-1", "seq": 5, "type": "moderator_started", "ts": 5.0, "actor": "moderator"},
+        {
+            "run_id": "run-1", "seq": 6, "type": "moderator_completed", "ts": 6.0, "actor": "moderator",
+            "finish_reason": "stop", "usage": {"usageMetadata": {"totalTokenCount": 5}},
+        },
+    ])
+    reloaded = await AtomicJsonModelMixPersistence(tmp_path).load_session("session-1")
+    message = next(message for message in reloaded["session"]["messages"] if message["seat"] == "moderator")
+    assert message["finish_reason"] == "stop"
+    assert message["usage"] == {"usageMetadata": {"totalTokenCount": 5}}
+
+
+async def test_completed_message_records_start_and_end_timestamps(tmp_path):
+    store = AtomicJsonModelMixPersistence(tmp_path)
+    await _play(store, "session-1", [
+        {"run_id": "run-1", "seq": 1, "type": "seat_started", "ts": 10.0, "seat_id": "worker_a"},
+        {"run_id": "run-1", "seq": 2, "type": "seat_delta", "ts": 15.0, "seat_id": "worker_a", "delta": "A"},
+        {"run_id": "run-1", "seq": 3, "type": "seat_completed", "ts": 20.5, "seat_id": "worker_a"},
+    ])
+    reloaded = await AtomicJsonModelMixPersistence(tmp_path).load_session("session-1")
+    message = next(message for message in reloaded["session"]["messages"] if message["seat"] == "worker_a")
+    assert message["started_at"] == 10.0
+    assert message["completed_at"] == 20.5
+    assert message["completed_at"] >= message["started_at"]
+
+
+async def test_failed_message_gets_completed_at_but_no_usage(tmp_path):
+    store = AtomicJsonModelMixPersistence(tmp_path)
+    await _play(store, "session-1", [
+        {"run_id": "run-1", "seq": 1, "type": "seat_started", "ts": 30.0, "seat_id": "worker_a"},
+        {"run_id": "run-1", "seq": 2, "type": "seat_failed", "ts": 31.0, "seat_id": "worker_a", "error": "broken", "reason": "timeout"},
+    ])
+    reloaded = await AtomicJsonModelMixPersistence(tmp_path).load_session("session-1")
+    message = next(message for message in reloaded["session"]["messages"] if message["seat"] == "worker_a")
+    assert message["completed_at"] == 31.0
+    assert message["usage"] is None
+    assert message["started_at"] == 30.0
 
 
 async def test_failed_atomic_replace_leaves_previous_canonical_file_readable(tmp_path, monkeypatch):

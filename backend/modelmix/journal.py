@@ -42,6 +42,7 @@ class RunEventJournal:
                 "run_id": self.run_id,
                 "seq": self._next_seq,
                 "type": event_type,
+                "ts": time.time(),
                 **payload,
             }
             self._next_seq += 1

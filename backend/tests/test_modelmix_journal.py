@@ -7,6 +7,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from backend.modelmix.events import EventSequencer
 from backend.modelmix.journal import ReplayUnavailableError, RunEventJournal
 from backend.modelmix.persistence import AtomicJsonModelMixPersistence
 from backend.modelmix.registry import RunRegistry
@@ -105,6 +106,30 @@ async def test_concurrent_appends_have_unique_monotonic_sequences():
     )
     assert [event["seq"] for event in events] == list(range(1, 101))
     assert len({event["seq"] for event in events}) == 100
+
+
+async def test_events_carry_float_non_decreasing_wall_clock_timestamps(monkeypatch):
+    clock = iter([1000.0, 1000.25, 1000.5, 1000.75, 1001.0])
+    monkeypatch.setattr("backend.modelmix.journal.time.time", lambda: next(clock))
+    journal = RunEventJournal("ts-run")
+    events = [await journal.append(event_type) for event_type in [
+        "run_started",
+        "seat_started",
+        "seat_delta",
+        "seat_completed",
+        "run_completed",
+    ]]
+    assert all(isinstance(event["ts"], float) for event in events)
+    assert [event["ts"] for event in events] == [1000.0, 1000.25, 1000.5, 1000.75, 1001.0]
+
+
+def test_event_sequencer_create_carries_wall_clock_timestamp():
+    sequencer = EventSequencer("seq-run")
+    event = sequencer.create("seat_delta", seat_id="worker_a", delta="x")
+    assert event["ts"] is not None
+    assert isinstance(event["ts"], float)
+    assert event["seq"] == 1
+    assert event["run_id"] == "seq-run"
 
 
 async def test_registry_replay_survives_subscriber_disconnect_and_completes(tmp_path):

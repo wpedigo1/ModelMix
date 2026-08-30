@@ -8,6 +8,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.modelmix.orchestrator import multiplex_workers
+from backend.modelmix.persistence import AtomicJsonModelMixPersistence
+from backend.modelmix.registry import RunRegistry
 from backend.modelmix.routes import router
 from backend.providers.base import LLMProvider, ProviderStreamEvent
 from backend.providers.openai_oauth import OpenAIOauthProvider
@@ -217,7 +219,7 @@ def test_provider_query_contract_remains_abstract_but_streaming_optional():
     assert getattr(FallbackProvider(), "supports_streaming") is False
 
 
-def test_modelmix_route_resolves_both_models_without_ranking(monkeypatch):
+def test_modelmix_route_resolves_both_models_without_ranking(monkeypatch, tmp_path):
     providers = {"model-a": FallbackProvider(), "model-b": FallbackProvider()}
     resolved = []
 
@@ -226,6 +228,10 @@ def test_modelmix_route_resolves_both_models_without_ranking(monkeypatch):
         return providers[model_id]
 
     monkeypatch.setattr("backend.modelmix.routes.get_provider_for_model", resolve)
+    monkeypatch.setattr(
+        "backend.modelmix.routes.run_registry",
+        RunRegistry(persistence=AtomicJsonModelMixPersistence(tmp_path)),
+    )
     monkeypatch.setattr(
         "backend.council.stage2_collect_rankings",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("ranking must not run")),

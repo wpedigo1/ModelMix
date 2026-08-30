@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 014: 2026-08-30 CT
+Reconciled through Mission 015: 2026-08-30 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -29,6 +29,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 012 | **PASS (LOCAL)** | Session control and prompt plumbing: archived turns carry real prompts/models; separate New Session control that clears local session key and resets the cockpit |
 | 013 | **PASS (LOCAL)** | Run and seat timeouts: ModelMix-owned 600s run / 300s seat-Moderator wall-clock bounds enforced with honest `reason: "timeout"` terminal outcomes and a proven no-late-writes guarantee |
 | 014 | **PASS (LOCAL)** | Reachability + test hygiene: real `GET /modelmix` serves `index.html` from `FRONTEND_DIST_DIR` so a production build can reach the three-panel cockpit, a visible Council sidebar link navigates there, and every `RunRegistry()` construction in `backend/tests/` now writes to an isolated `tmp_path` store instead of the live `data/modelmix/sessions/` directory |
+| 015 | **PASS (LOCAL)** | Telemetry truth layer: events carry wall-clock `ts`; `_apply_event` persists provider-reported `usage`/`finish_reason` (opaque, un-normalized) plus `started_at`/`completed_at`; the frontend truth layer and `describeUsage` capture them without rendering; and the last Mission 014 polling test (streaming route) now uses an isolated persistence |
 
 **Mission 008 is present on `main` and its persistence tests pass.**
 
@@ -63,7 +64,7 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 - **5 — Lock chassis policy**
 - **6 — Create ModelMix-owned backend boundary**
 - **8 — Define context isolation policy**
-- **10 — Define ordered event contract**
+- **10 — Define ordered event contract** — every canonical event now carries a wall-clock `ts` in both constructors, additive alongside `seq`/`run_id`/`type` (Mission 015)
 - **11 — Define persistence boundary**
 - **15 — Build NON-STREAMING Mix vertical slice first**
 - **16 — Prove failure + cancellation**
@@ -80,7 +81,7 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 - **9 — Define run state machine:** core active/terminal outcomes exist; complete timeout/retry/state contract remains open. Mission 013 adds honest wall-clock `reason: "timeout"` outcomes for runs, seats, and Moderator.
 - **12 — Define provider capability matrix:** streaming/fallback and configured discovery exist; full matrix remains open.
 - **14 — Build deterministic mock provider:** deterministic fakes/mocks support current tests; full failure/timeout/rate-limit fixture matrix remains open.
-- **17 — Add basic spend/runtime guardrails:** Stop, turn cap, and seat-history per-message/per-seat character budgets exist (Mission 010 partial progress on context/spend bounding); timeout/cost-token ceilings/output warning/hard cap remain open. Mission 013 adds the wall-clock run (600s) and seat/Moderator (300s) timeouts.
+- **17 — Add basic spend/runtime guardrails:** Stop, turn cap, and seat-history per-message/per-seat character budgets exist (Mission 010 partial progress on context/spend bounding); timeout/cost-token ceilings/output warning/hard cap remain open. Mission 013 adds the wall-clock run (600s) and seat/Moderator (300s) timeouts. Mission 015 adds persisted `started_at`/`completed_at` timing truth (a future guardrail input).
 - **29 — Finalize Mix multi-turn session behavior:** seat-scoped Worker/Moderator history, bounding, failure-partial reuse, hot-swap continuity, completed-turn cockpit display, and New Session reset are implemented; retention/delete UX remains open.
 - **26 — Add provider/settings UX sufficient for alpha:** searchable configured selectors are complete; the visible ModelMix navigation entry point in the Council sidebar exists (Mission 014); full alpha provider/settings flow remains open.
 
@@ -89,7 +90,7 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 - **4 — Lock license and provenance**
 - **13 — Define privacy/data-routing rules**
 - **24 — Build thin top controls** — first slice **PARTIAL — Mission 012** (separate New Session control; Mode/Models/Settings surface remains open)
-- **25 — Add minimal telemetry**
+- **25 — Add minimal telemetry — first slice **PARTIAL — Mission 015** (honest telemetry truth layer: wall-clock `ts`, persisted provider-reported `usage`/`finish_reason`/timing, frontend truth capture, and the `describeUsage` provenance vocabulary all land without any rendering; the cockpit must then surface these labels honestly)
 - **27 — Add Solo**
 - **28 — Add Compare**
 - **30 — Verify credential storage in actual packaging model**
@@ -348,11 +349,8 @@ Hard cap is **not post-alpha by default**. Wire it when settings/run-control rea
 
 ## Immediate Next Engineering Gap
 
-Mission 014 removes the last hygiene/reachability blockers in the test and
-production-build path: the cockpit is now reachable from a built app at
-`/modelmix` (with a Council sidebar nav link), and backend tests no longer
-write fake sessions into the live session store. The next mission per the
-locked board is the thin top controls / settings-and-telemetry surface (items
-**24/25/26**), or the first provider / settings UX slice. The alpha acceptance
-run (item 33) can now actually start from a production build rather than
-requiring a Vite dev server.
+Mission 015 is the state/truth layer only — nothing renders the new fields. The
+next mission renders them: surfacing honest `describeUsage` provenance labels
+and per-seat timing in the cockpit (no telemetry dashboard), keeping each
+seat's provider-reported usage opaque and un-normalized, before the alpha
+acceptance run (item 33).

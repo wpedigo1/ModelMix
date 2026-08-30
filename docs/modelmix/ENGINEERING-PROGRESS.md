@@ -9,7 +9,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–014**.
+Completed and locally verified implementation missions: **001–015**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -41,6 +41,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 012 | **PASS (LOCAL)** | Session control and prompt plumbing: starting state carries `prompt`/`models`, no placeholder for absent prompts, separate New Session control via `modelSelectorsDisabled` (clears local session key, resets cockpit, preserves models) | `012-session-control-and-prompt-plumbing.md` |
 | 013 | **PASS (LOCAL)** | Run and seat timeouts: ModelMix-owned 600s/300s wall-clock bounds (`timeouts.py`), `reason: "timeout"` terminal outcomes reusing `seat_failed`/`moderator_failed`/`run_failed`, honest partial Moderator path for a timed-out seat, and a verified no-late-writes guarantee | `013-run-and-seat-timeouts.md` |
 | 014 | **PASS (LOCAL)** | Reachability + test hygiene: real `GET /modelmix` serves the built frontend and the Council sidebar gains a ModelMix nav link (cockpit reachable from a production build); every backend-test `RunRegistry()` writes to an isolated `tmp_path` store instead of the live session directory | `014-reachability-and-test-hygiene.md` |
+| 015 | **PASS (LOCAL)** | Telemetry truth layer: events carry wall-clock `ts`; persistence keeps provider `usage`/`finish_reason` (opaque) and `started_at`/`completed_at` on messages — fixing the moderator finish_reason reload bug; the frontend truth layer + `describeUsage` capture everything without rendering; the last polling test is isolated | `015-telemetry-truth-layer.md` |
 
 ## Current Verified Product Slice
 
@@ -96,7 +97,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **5 — Lock chassis policy**
 - **6 — Create ModelMix-owned backend boundary**
 - **8 — Context isolation policy**
-- **10 — Define ordered event contract**
+- **10 — Define ordered event contract** — every canonical event now carries a wall-clock `ts` in both constructors, additive alongside `seq`/`run_id`/`type` (Mission 015)
 - **11 — ModelMix persistence boundary**
 - **15 — Non-streaming Mix vertical slice**
 - **16 — Prove failure + cancellation**
@@ -114,7 +115,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **12 — Provider capability matrix:** streaming capability/fallback and configured discovery exist; the full capability matrix remains open.
 - **14 — Deterministic mock provider:** current tests use deterministic fakes/mocks, but the full locked failure/timeout/rate-limit fixture matrix remains open.
 - **29 — Finalized Mix multi-turn behavior:** seat histories, Moderator history, hot-swap continuity, deterministic context bounding, and completed-turn cockpit display are implemented; retention/delete UX remains open.
-- **17 — Spend/runtime guardrails:** explicit Stop, the turn cap, seat-history per-message/per-seat character budgets (Mission 010), and wall-clock run (600s) / seat-Moderator (300s) timeouts (Mission 013) exist; cost/token ceilings and output warning/hard-cap work remain open.
+- **17 — Spend/runtime guardrails:** explicit Stop, the turn cap, seat-history per-message/per-seat character budgets (Mission 010), and wall-clock run (600s) / seat-Moderator (300s) timeouts (Mission 013) exist, plus persisted `started_at`/`completed_at` timing truth (Mission 015); cost/token ceilings and output warning/hard-cap work remain open.
 - **26 — Provider/settings UX:** searchable configured selectors are complete; the visible ModelMix sidebar navigation entry point exists (Mission 014); full alpha provider/settings flow remains open.
 
 ### Not yet satisfied / upcoming
@@ -122,7 +123,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **4 — License and provenance distribution work**
 - **13 — Privacy/data-routing rules**
 - **24 — Thin top controls**
-- **25 — Minimal telemetry**
+- **25 — Minimal telemetry — first slice **PARTIAL — Mission 015** (telemetry truth layer landed: wall-clock `ts`, persisted provider-reported `usage`/`finish_reason`/timing, frontend truth capture, `describeUsage`; nothing renders it yet)
 - **27 — Solo**
 - **28 — Compare**
 - **30 — Credential verification in actual packaging model**
@@ -246,3 +247,27 @@ its signature indentation, and `history.py` regained its trailing newline.
 Validation: full backend suite **354 passed** (352 prior + 2 new route tests),
 ruff clean, frontend **35 passed** / build green / lint clean. See
 `014-reachability-and-test-hygiene.md`.
+
+## Mission 015 Result
+
+Mission 015 is the telemetry truth layer — capture only, no rendering. Both
+canonical event constructors now stamp every event with a wall-clock float `ts`
+(`journal.append`, the production path, and `events.EventSequencer.create`, the
+fallback path). `persistence._apply_event` initializes four new nullable message
+fields and fills them: `usage` and `finish_reason` on `seat_completed` /
+`moderator_completed` (opaque, un-normalized, only-when-present so a real value
+is never clobbered with null); `started_at` from `seat_started` /
+`moderator_started`; `completed_at` on every completion, failure, and cancel.
+That fixes the confirmed pre-existing bug: a Moderator finish reason used to
+vanish on reload because persistence never wrote it. The frontend captures
+`usage` / `startedAt` / `completedAt` per seat through the live stream,
+hydrated live slots, archived history entries, and `buildHistoryEntry`, and
+exports the single provenance vocabulary `describeUsage` (`'authoritative'` /
+`'unavailable'`). Mission 015 also fixed the last Mission 014 leftover: the
+streaming route test monkeypatches `routes.run_registry` to an isolated
+`tmp_path` store. Validation (mission-specified): cleared
+`data/modelmix/sessions/*.json`, full backend suite **360 passed** (354 prior +
+6 new), and the directory was **empty** afterward — hard proof of no pollution;
+frontend **41 passed** (35 prior + 6 new, two existing archive assertions
+extended with the new null fields); build green; lint clean; ruff clean. See
+`015-telemetry-truth-layer.md`.

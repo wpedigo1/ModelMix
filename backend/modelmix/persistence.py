@@ -184,19 +184,31 @@ class AtomicJsonModelMixPersistence(ModelMixPersistence):
                 "content": "",
                 "status": "waiting",
                 "error": None,
+                "usage": None,
+                "finish_reason": None,
+                "started_at": None,
+                "completed_at": None,
             }
             messages.append(message)
         if event_type in {"seat_started", "moderator_started"}:
             message["status"] = "running"
+            message["started_at"] = event["ts"]
         elif event_type in {"seat_delta", "moderator_delta"}:
             message["content"] += str(event.get("delta") or "")
         elif event_type in {"seat_completed", "moderator_completed"}:
             message["status"] = "completed"
+            message["completed_at"] = event["ts"]
+            if event.get("usage") is not None:
+                message["usage"] = event["usage"]
+            if event.get("finish_reason") is not None:
+                message["finish_reason"] = event["finish_reason"]
         elif event_type in {"seat_failed", "moderator_failed"}:
             message["status"] = "failed"
             message["error"] = str(event.get("error") or "Participant failed")
+            message["completed_at"] = event["ts"]
         elif event_type == "seat_cancelled":
             message["status"] = "cancelled"
+            message["completed_at"] = event["ts"]
 
     def _read(self, path: Path, *, missing_ok: bool = False) -> Optional[Dict[str, Any]]:
         try:

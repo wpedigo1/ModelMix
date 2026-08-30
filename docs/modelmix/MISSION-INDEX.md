@@ -27,6 +27,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 012 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `012-session-control-and-prompt-plumbing.md` |
 | 013 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `013-run-and-seat-timeouts.md` |
 | 014 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `014-reachability-and-test-hygiene.md` |
+| 015 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `015-telemetry-truth-layer.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -154,6 +155,24 @@ live `data/modelmix/sessions/` directory. The grep that found all sites is
 reported in the canonical mission report. It corresponds to Punch Board items
 **21** (fix: production-build reachability), **26** (partial: visible navigation
 entry), and **33** (enabler: acceptance run can now start from a built app).
+
+## Mission 015 Result
+
+**Mission 015 is implemented and verified locally.**
+
+Mission 015 is the telemetry truth layer. Events now carry a real wall-clock
+`ts` (both `RunEventJournal.append` and `EventSequencer.create`). Persistence
+keeps provider-reported `usage` and `finish_reason` (opaque, un-normalized,
+never clobbered with null) plus `started_at`/`completed_at` on each message,
+fixing the confirmed pre-existing bug where a Moderator's finish reason
+silently disappeared on every reload. The frontend truth layer captures
+`usage`/`startedAt`/`completedAt` per seat through the live stream, history
+entries, hydration, and archiving, and adds the single `describeUsage`
+provenance vocabulary — nothing renders yet. Mission 015 also fixes the last
+Mission 014 leftover: the streaming route test now uses an isolated
+persistence, proven by an empty `data/modelmix/sessions/` after the full suite.
+It corresponds to Punch Board items **25** (partial slice), **10** (fix), and
+**17** (partial).
 
 ## Evidence Rule
 

@@ -5,15 +5,18 @@ export const createModelMixState = () => ({
   overall: 'idle',
   message: 'Ready',
   history: [],
-  worker_a: { text: '', status: 'idle', error: null },
+  worker_a: { text: '', status: 'idle', error: null, usage: null, startedAt: null, completedAt: null },
   moderator: {
     text: '',
     status: 'waiting',
     error: null,
     started: false,
     finishReason: null,
+    usage: null,
+    startedAt: null,
+    completedAt: null,
   },
-  worker_b: { text: '', status: 'idle', error: null },
+  worker_b: { text: '', status: 'idle', error: null, usage: null, startedAt: null, completedAt: null },
 });
 
 const terminalOverall = new Set(['completed', 'partial', 'failed', 'cancelled', 'replay_gap', 'expired']);
@@ -51,14 +54,25 @@ export function applyModelMixEvent(state, event) {
 
   if (seatId === 'worker_a' || seatId === 'worker_b') {
     const seat = { ...state[seatId] };
-    if (event.type === 'seat_started') seat.status = 'running';
+    if (event.type === 'seat_started') {
+      seat.status = 'running';
+      seat.startedAt = event.ts ?? null;
+    }
     if (event.type === 'seat_delta') seat.text += String(event.delta || '');
-    if (event.type === 'seat_completed') seat.status = 'completed';
+    if (event.type === 'seat_completed') {
+      seat.status = 'completed';
+      seat.usage = event.usage ?? seat.usage;
+      seat.completedAt = event.ts ?? null;
+    }
     if (event.type === 'seat_failed') {
       seat.status = 'failed';
       seat.error = event.error || 'Worker failed';
+      seat.completedAt = event.ts ?? null;
     }
-    if (event.type === 'seat_cancelled') seat.status = 'cancelled';
+    if (event.type === 'seat_cancelled') {
+      seat.status = 'cancelled';
+      seat.completedAt = event.ts ?? null;
+    }
     next[seatId] = seat;
   }
 
@@ -68,15 +82,19 @@ export function applyModelMixEvent(state, event) {
       moderator.started = true;
       moderator.status = 'running';
       moderator.error = null;
+      moderator.startedAt = event.ts ?? null;
     } else if (event.type === 'moderator_delta') {
       moderator.text += String(event.delta || '');
     } else if (event.type === 'moderator_completed') {
       moderator.started = true;
       moderator.status = 'completed';
       moderator.finishReason = event.finish_reason || null;
+      moderator.usage = event.usage ?? moderator.usage;
+      moderator.completedAt = event.ts ?? null;
     } else if (event.type === 'moderator_failed') {
       moderator.status = 'failed';
       moderator.error = event.error || 'Moderator failed';
+      moderator.completedAt = event.ts ?? null;
     }
     next.moderator = moderator;
   }
@@ -109,15 +127,27 @@ export function applyModelMixEvent(state, event) {
   return next;
 }
 
+export function describeUsage(usage) {
+  return usage !== null && typeof usage === 'object' ? 'authoritative' : 'unavailable';
+}
+
 function buildHistoryEntry(run, messages) {
   const entry = {
     runId: run.run_id,
     prompt: run.prompt,
     models: run.models,
     status: run.status,
-    worker_a: { text: '', status: 'idle', error: null },
-    moderator: { text: '', status: 'waiting', error: null, finishReason: null },
-    worker_b: { text: '', status: 'idle', error: null },
+    worker_a: { text: '', status: 'idle', error: null, usage: null, startedAt: null, completedAt: null },
+    moderator: {
+      text: '',
+      status: 'waiting',
+      error: null,
+      finishReason: null,
+      usage: null,
+      startedAt: null,
+      completedAt: null,
+    },
+    worker_b: { text: '', status: 'idle', error: null, usage: null, startedAt: null, completedAt: null },
   };
   for (const message of messages) {
     if (message.run_id !== run.run_id || !['worker_a', 'worker_b', 'moderator'].includes(message.seat)) continue;
@@ -126,6 +156,9 @@ function buildHistoryEntry(run, messages) {
       text: String(message.content || ''),
       status: message.status || entry[message.seat].status,
       error: message.error || null,
+      usage: message.usage ?? null,
+      startedAt: message.started_at ?? null,
+      completedAt: message.completed_at ?? null,
     };
     if (message.seat === 'moderator') entry.moderator.finishReason = message.finish_reason || null;
   }
@@ -138,14 +171,31 @@ export function archiveCurrentRun(state) {
     prompt: state.prompt,
     models: state.models,
     status: state.overall,
-    worker_a: { text: state.worker_a.text, status: state.worker_a.status, error: state.worker_a.error },
+    worker_a: {
+      text: state.worker_a.text,
+      status: state.worker_a.status,
+      error: state.worker_a.error,
+      usage: state.worker_a.usage ?? null,
+      startedAt: state.worker_a.startedAt ?? null,
+      completedAt: state.worker_a.completedAt ?? null,
+    },
     moderator: {
       text: state.moderator.text,
       status: state.moderator.status,
       error: state.moderator.error,
       finishReason: state.moderator.finishReason ?? null,
+      usage: state.moderator.usage ?? null,
+      startedAt: state.moderator.startedAt ?? null,
+      completedAt: state.moderator.completedAt ?? null,
     },
-    worker_b: { text: state.worker_b.text, status: state.worker_b.status, error: state.worker_b.error },
+    worker_b: {
+      text: state.worker_b.text,
+      status: state.worker_b.status,
+      error: state.worker_b.error,
+      usage: state.worker_b.usage ?? null,
+      startedAt: state.worker_b.startedAt ?? null,
+      completedAt: state.worker_b.completedAt ?? null,
+    },
   };
   const hasSeatContent = [outgoing.worker_a, outgoing.moderator, outgoing.worker_b].some((seat) => Boolean(seat.text));
   const history = hasSeatContent ? [...state.history, outgoing] : [...state.history];
@@ -189,8 +239,14 @@ export function hydrateModelMixState(document) {
       text: String(message.content || ''),
       status: message.status || state[message.seat].status,
       error: message.error || null,
+      usage: message.usage ?? null,
+      startedAt: message.started_at ?? null,
+      completedAt: message.completed_at ?? null,
     };
-    if (message.seat === 'moderator') state.moderator.started = message.status !== 'waiting';
+    if (message.seat === 'moderator') {
+      state.moderator.started = message.status !== 'waiting';
+      state.moderator.finishReason = message.finish_reason ?? null;
+    }
   }
   if (run.status === 'partial' && state.moderator.status === 'completed') state.moderator.status = 'partial';
   return state;

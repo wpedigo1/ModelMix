@@ -13,6 +13,7 @@ import {
   archiveCurrentRun,
   controlState,
   createModelMixState,
+  describeUsage,
   hydrateModelMixState,
   modelSelectorsDisabled,
   startNewSession,
@@ -365,9 +366,31 @@ test('archiveCurrentRun appends the outgoing run, resets live slots, and keeps s
   assert.equal(archived.history[0].runId, 'run-9');
   assert.equal(archived.history[0].prompt, 'Outgoing question');
   assert.equal(archived.history[0].status, 'completed');
-  assert.deepEqual(archived.history[0].worker_a, { text: 'A evidence', status: 'completed', error: null });
-  assert.deepEqual(archived.history[0].moderator, { text: 'M synthesis', status: 'completed', error: null, finishReason: 'stop' });
-  assert.deepEqual(archived.history[0].worker_b, { text: 'B evidence', status: 'completed', error: null });
+  assert.deepEqual(archived.history[0].worker_a, {
+    text: 'A evidence',
+    status: 'completed',
+    error: null,
+    usage: null,
+    startedAt: null,
+    completedAt: null,
+  });
+  assert.deepEqual(archived.history[0].moderator, {
+    text: 'M synthesis',
+    status: 'completed',
+    error: null,
+    finishReason: 'stop',
+    usage: null,
+    startedAt: null,
+    completedAt: null,
+  });
+  assert.deepEqual(archived.history[0].worker_b, {
+    text: 'B evidence',
+    status: 'completed',
+    error: null,
+    usage: null,
+    startedAt: null,
+    completedAt: null,
+  });
   assert.equal(archived.runId, null);
   assert.equal(archived.lastSeq, 0);
   assert.equal(archived.overall, 'idle');
@@ -487,4 +510,138 @@ test('New Session gating matches the frozen-selector predicate for every lifecyc
   for (const status of ['idle', 'completed', 'partial', 'failed', 'cancelled', 'replay_gap', 'expired']) {
     assert.equal(modelSelectorsDisabled(status), false, `${status} must enable New Session`);
   }
+});
+
+test('seat_completed usage is stored unchanged and never clobbered by an empty event', () => {
+  const usage = { total_tokens: 42, completion_tokens: 17, custom: { nested: [1, 2, 3] } };
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 1, type: 'seat_completed', seat_id: 'worker_a', usage, ts: 101 });
+  assert.deepEqual(state.worker_a.usage, usage);
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 2, type: 'seat_completed', seat_id: 'worker_a', ts: 102,
+  });
+  assert.deepEqual(state.worker_a.usage, usage);
+});
+
+test('startedAt and completedAt populate from event ts for both workers and moderator', () => {
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 1, type: 'seat_started', seat_id: 'worker_b', ts: 101 });
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 2, type: 'seat_completed', seat_id: 'worker_b', ts: 202 });
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 3, type: 'moderator_started', ts: 303 });
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 4, type: 'moderator_completed', ts: 404, finish_reason: 'stop' });
+  assert.equal(state.worker_b.startedAt, 101);
+  assert.equal(state.worker_b.completedAt, 202);
+  assert.equal(state.moderator.startedAt, 303);
+  assert.equal(state.moderator.completedAt, 404);
+  assert.equal(state.worker_b.usage, null);
+  assert.equal(state.moderator.usage, null);
+});
+
+test('failure and cancellation record a completedAt but never invent usage', () => {
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 1, type: 'seat_failed', seat_id: 'worker_a', error: 'boom', ts: 55 });
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 2, type: 'seat_cancelled', seat_id: 'worker_b', ts: 56 });
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 3, type: 'moderator_failed', error: 'splat', ts: 57 });
+  assert.equal(state.worker_a.completedAt, 55);
+  assert.equal(state.worker_a.usage, null);
+  assert.equal(state.worker_b.completedAt, 56);
+  assert.equal(state.moderator.completedAt, 57);
+});
+
+test('hydration reads usage, startedAt, completedAt, and moderator finish reason off persisted messages', () => {
+  const document = {
+    schema_version: 1,
+    session: {
+      session_id: 'session-1',
+      runs: [
+        {
+          run_id: 'run-old', latest_seq: 4, status: 'completed',
+          prompt: 'Prior question',
+          models: { worker_a: 'p:a', moderator: 'p:m', worker_b: 'p:b' },
+        },
+        {
+          run_id: 'run-live', latest_seq: 4, status: 'completed',
+          prompt: 'Live question',
+          models: { worker_a: 'p:a', moderator: 'p:m', worker_b: 'p:b' },
+        },
+      ],
+      messages: [
+        {
+          run_id: 'run-old', seat: 'worker_a', content: 'old A', status: 'completed',
+          usage: { total_tokens: 7 }, started_at: 100, completed_at: 101, finish_reason: 'stop',
+        },
+        {
+          run_id: 'run-live', seat: 'worker_a', content: 'live A', status: 'completed',
+          usage: { total_tokens: 11 }, started_at: 200, completed_at: 201, finish_reason: 'stop',
+        },
+        {
+          run_id: 'run-live', seat: 'moderator', content: 'live M', status: 'completed',
+          usage: { usageMetadata: { totalTokenCount: 5 } }, started_at: 300, completed_at: 301,
+          finish_reason: 'tool-calls',
+        },
+        {
+          run_id: 'run-live', seat: 'worker_b', content: 'live B', status: 'completed',
+          usage: { total_tokens: 9 }, started_at: 400, completed_at: 401,
+        },
+      ],
+    },
+  };
+  const state = hydrateModelMixState(document);
+  assert.deepEqual(state.worker_a.usage, { total_tokens: 11 });
+  assert.equal(state.worker_a.startedAt, 200);
+  assert.equal(state.worker_a.completedAt, 201);
+  assert.deepEqual(state.moderator.usage, { usageMetadata: { totalTokenCount: 5 } });
+  assert.equal(state.moderator.startedAt, 300);
+  assert.equal(state.moderator.completedAt, 301);
+  assert.equal(state.moderator.finishReason, 'tool-calls');
+  assert.deepEqual(state.worker_b.usage, { total_tokens: 9 });
+  assert.equal(state.worker_b.startedAt, 400);
+  assert.equal(state.worker_b.completedAt, 401);
+
+  const entry = state.history[0];
+  assert.deepEqual(entry.worker_a.usage, { total_tokens: 7 });
+  assert.equal(entry.worker_a.startedAt, 100);
+  assert.equal(entry.worker_a.completedAt, 101);
+});
+
+test('archiveCurrentRun carries usage, startedAt, and completedAt into the history entry', () => {
+  const state = {
+    ...createModelMixState(),
+    sessionId: 'session-9',
+    runId: 'run-9',
+    prompt: 'Outgoing question',
+    models: { worker_a: 'p:a', moderator: 'p:m', worker_b: 'p:b' },
+    overall: 'completed',
+    lastSeq: 42,
+  };
+  state.worker_a = {
+    text: 'A evidence', status: 'completed', error: null,
+    usage: { total_tokens: 3 }, startedAt: 10, completedAt: 11,
+  };
+  state.moderator = {
+    text: 'M synthesis', status: 'completed', error: null, started: true, finishReason: 'stop',
+    usage: { total_tokens: 4 }, startedAt: 12, completedAt: 13,
+  };
+  state.worker_b = {
+    text: 'B evidence', status: 'failed', error: 'stopped',
+    usage: null, startedAt: 14, completedAt: 15,
+  };
+
+  const archived = archiveCurrentRun(state);
+  assert.deepEqual(archived.history[0].worker_a, {
+    text: 'A evidence', status: 'completed', error: null, usage: { total_tokens: 3 }, startedAt: 10, completedAt: 11,
+  });
+  assert.deepEqual(archived.history[0].moderator, {
+    text: 'M synthesis', status: 'completed', error: null, finishReason: 'stop',
+    usage: { total_tokens: 4 }, startedAt: 12, completedAt: 13,
+  });
+  assert.deepEqual(archived.history[0].worker_b, {
+    text: 'B evidence', status: 'failed', error: 'stopped', usage: null, startedAt: 14, completedAt: 15,
+  });
+});
+
+test('describeUsage returns authoritative only for a non-null object', () => {
+  assert.equal(describeUsage({ total_tokens: 5 }), 'authoritative');
+  assert.equal(describeUsage(null), 'unavailable');
+  assert.equal(describeUsage(undefined), 'unavailable');
 });

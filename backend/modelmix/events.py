@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any, Dict
 
@@ -15,4 +16,10 @@ class EventSequencer:
 
     def create(self, event_type: str, **payload: Any) -> Dict[str, Any]:
         self.seq += 1
-        return {"run_id": self.run_id, "seq": self.seq, "type": event_type, **payload}
+        return {
+            "run_id": self.run_id,
+            "seq": self.seq,
+            "type": event_type,
+            "ts": time.time(),
+            **payload,
+        }
