@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 010: 2026-08-29 CT
+Reconciled through Mission 010.5: 2026-08-29 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -24,6 +24,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 008 | **PASS** | Versioned atomic JSON persistence, restart reconstruction, and cockpit hydration on `main` |
 | 009 | **PASS (LOCAL)** | Seat-scoped bounded multi-turn Worker/Moderator history with hot-swap continuity and leakage tests |
 | 010 | **PASS (LOCAL)** | Seat history owned character budgets: per-message 4k and per-seat 24k deterministic bounding with whole-turn oldest-first eviction |
+| 010.5 | **PASS (LOCAL)** | Frontend test runner interlock: Vitest runner wired in; existing frontend tests collected and passing (24/24) |
 
 **Mission 008 is present on `main` and its persistence tests pass.**
 
@@ -105,7 +106,7 @@ Record ModelMix baseline commit, AI Counsel upstream revision, dependency lockfi
 
 ### 2. Run inherited verification — **SUBSTANTIALLY SATISFIED**
 
-Run/document backend tests, frontend tests/build, existing lint/type checks, practical dependency/security scan, and inherited app launch.
+Run/document backend tests, frontend tests/build, existing lint/type checks, practical dependency/security scan, and inherited app launch. Mission 010.5 wired a Vitest runner and brought the existing frontend test files to a real 24/24 observed pass; `npm audit` reports 0 vulnerabilities.
 
 ### 3. Spike the four unknowns — **SATISFIED**
 
@@ -339,4 +340,6 @@ Hard cap is **not post-alpha by default**. Wire it when settings/run-control rea
 
 ## Immediate Next Engineering Gap
 
-Mission 010 gives seat history its own bounded character budget. Remaining alpha gaps stay ordered by this Punch Board; Mission 010 does not add retention/delete UX, telemetry, guardrails, Solo, or Compare.
+Mission 010.5 makes the existing frontend tests runnable through a real Vitest
+runner. Remaining alpha gaps stay ordered by this Punch Board; Mission 010.5 does
+not add retention/delete UX, telemetry, guardrails, Solo, or Compare.

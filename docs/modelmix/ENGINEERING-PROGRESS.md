@@ -9,7 +9,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–010**.
+Completed and locally verified implementation missions: **001–010**, **010.5**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -36,6 +36,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 008 | **PASS** | Versioned atomic JSON session/run persistence, restart replay reconstruction, and cockpit hydration/deduplication | `008-durable-persistence-cockpit-hydration.md` |
 | 009 | **PASS (LOCAL)** | Bounded seat-scoped Worker/Moderator history, failure-partial reuse, hot-swap continuity, and leakage proof | `009-seat-scoped-multi-turn-context.md` |
 | 010 | **PASS (LOCAL)** | Seat history character budgets: 4k per message (`MAX_HISTORY_MESSAGE_CHARS`) and 24k per seat (`MAX_HISTORY_TOTAL_CHARS`) with deterministic middle truncation and whole-turn oldest-first eviction | `010-seat-history-budget.md` |
+| 010.5 | **PASS (LOCAL)** | Frontend test runner interlock: Vitest + jsdom devDeps, `npm test` non-watch run, existing three test files collected and observed 24/24 pass | `010.5-frontend-test-runner-interlock.md` |
 
 ## Current Verified Product Slice
 
@@ -58,6 +59,7 @@ The accepted implementation through Mission 009 establishes:
 - bounded multi-turn history keyed only by seat identity, including a Moderator history that excludes prior-turn worker output;
 - worker model hot-swaps that preserve the seat's history and failed/cancelled seat partial output when non-empty.
 - a deterministic seat-history character budget: each historical message middle-truncated to 4,000 characters and each single-seat assembled history capped at 24,000 characters via whole-turn oldest-first eviction (never an orphan assistant message).
+- a runnable frontend test suite: `npm test` executes the existing reducer/API/hydration tests (and configured-model and font-size tests) through Vitest with an observed 24/24 pass; `npm audit` reports 0 vulnerabilities.
 
 ## Mission 007.5 Verification Evidence
 
@@ -156,3 +158,13 @@ with a ModelMix-owned per-message budget of 4,000 characters and adds a
 eviction. `history.py` no longer imports a private symbol from `moderator.py`;
 current-turn Moderator bounding and the `build_seat_history` contract are
 unchanged. See `010-seat-history-budget.md` for the observed validation output.
+
+## Mission 010.5 Result
+
+Mission 010.5 adds Vitest (`^4.1.11`, Vite 7-compatible) and jsdom (`^26.1.0`)
+as frontend devDependencies, a non-watch `npm test` (`vitest run`) script, and a
+minimal `test` block in the existing `vite.config.js`. The three existing test
+files were converted from the `node:test` API to purely an import-path change
+(`import { test } from 'vitest'`); no assertions or product code changed. The
+observed run: 24/24 pass, 3 files, exit clean. `npm audit`: 0 vulnerabilities.
+See `010.5-frontend-test-runner-interlock.md`.

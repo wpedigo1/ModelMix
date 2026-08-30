@@ -22,6 +22,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 008 | Codex isolated checkout | **PASS** | `008-durable-persistence-cockpit-hydration.md`; accepted on `main` |
 | 009 | Codex | **PASS (LOCAL)** | `009-seat-scoped-multi-turn-context.md` |
 | 010 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `010-seat-history-budget.md` |
+| 010.5 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `010.5-frontend-test-runner-interlock.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -82,6 +83,16 @@ assembled single-seat history is capped at 24,000 characters with whole-turn
 oldest-first eviction. It makes partial progress on Punch Board item **17**
 (context/spend bounding) while leaving `moderator.py`, `registry.py`, and
 `orchestrator.py` untouched.
+
+## Mission 010.5 Result
+
+**Mission 010.5 is implemented and verified locally.**
+
+Mission 010.5 wires Vitest (`npm test` non-watch) and jsdom into the frontend,
+adds a `test` block to the existing `vite.config.js`, and brings the three
+existing frontend test files to an observed **24/24 pass** through a real
+runner. It strengthens Punch Board item **2** (verification) and enables
+follow-on work for item **22** (UI to durable run/session state).
 
 ## Evidence Rule
 

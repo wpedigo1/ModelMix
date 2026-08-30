@@ -12,7 +12,7 @@ This directory is the repository home for ModelMix implementation state, mission
 
 ## Mission Reports
 
-Historical engineering evidence through locally verified Mission 010:
+Historical engineering evidence through locally verified Mission 010.5:
 
 1. [`001-baseline-architecture-spike.md`](001-baseline-architecture-spike.md)
 2. [`002-first-streaming-slice.md`](002-first-streaming-slice.md)
@@ -25,6 +25,7 @@ Historical engineering evidence through locally verified Mission 010:
 9. [`008-durable-persistence-cockpit-hydration.md`](008-durable-persistence-cockpit-hydration.md) — **PASS**
 10. [`009-seat-scoped-multi-turn-context.md`](009-seat-scoped-multi-turn-context.md) — **PASS (LOCAL)**
 11. [`010-seat-history-budget.md`](010-seat-history-budget.md) — **PASS (LOCAL)**
+12. [`010.5-frontend-test-runner-interlock.md`](010.5-frontend-test-runner-interlock.md) — **PASS (LOCAL)**
 
 Mission reports preserve what was observed or delivered during that slice. They do not automatically override a later locked decision in the Punch Board.
 
@@ -44,13 +45,14 @@ Do not silently promote an older proposal into a current architecture decision.
 
 As of 2026-08-29 15:00 CT:
 
-- Missions **001–010** are recorded as implemented; Mission 008 is present on current `main`.
+- Missions **001–010.5** are recorded as implemented; Mission 008 is present on current `main`.
 - Mission **007.5** closed the MCP 2.x security/compatibility interlock.
 - Accepted Mission 007.5 implementation commit: `e018ed06807beda2c11531f065b2d4181c346ca8`.
 - MCP remains at **2.1.1**; Python and frontend dependency audits were recorded clean.
 - Mission **008** adds durable ModelMix session/run persistence and cockpit hydration.
 - Mission **009** adds bounded seat-scoped Worker/Moderator history with hot-swap continuity and explicit cross-seat leakage tests.
 - Mission **010** gives seat history owned character budgets: 4,000 per message and 24,000 per seat with whole-turn oldest-first eviction.
+- Mission **010.5** wires a Vitest runner (`npm test`) so the existing frontend suite executes with an observed 24/24 pass.
 - Schema-v1 session files live under `data/modelmix/sessions/` by default and are written atomically behind the ModelMix persistence interface.
 - Alpha persistence remains **versioned atomic JSON behind a ModelMix-owned interface**.
 - **SQLite migration is not part of the alpha plan.**
