@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 011: 2026-08-29 CT
+Reconciled through Mission 012: 2026-08-29 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -26,6 +26,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 010 | **PASS (LOCAL)** | Seat history owned character budgets: per-message 4k and per-seat 24k deterministic bounding with whole-turn oldest-first eviction |
 | 010.5 | **PASS (LOCAL)** | Frontend test runner interlock: Vitest runner wired in; existing frontend tests collected and passing (24/24) |
 | 011 | **PASS (LOCAL)** | Multi-turn cockpit display: prior runs archived into per-seat history and rendered above the live turn in each panel |
+| 012 | **PASS (LOCAL)** | Session control and prompt plumbing: archived turns carry real prompts/models; separate New Session control that clears local session key and resets the cockpit |
 
 **Mission 008 is present on `main` and its persistence tests pass.**
 
@@ -78,14 +79,14 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 - **12 — Define provider capability matrix:** streaming/fallback and configured discovery exist; full matrix remains open.
 - **14 — Build deterministic mock provider:** deterministic fakes/mocks support current tests; full failure/timeout/rate-limit fixture matrix remains open.
 - **17 — Add basic spend/runtime guardrails:** Stop, turn cap, and seat-history per-message/per-seat character budgets exist (Mission 010 partial progress on context/spend bounding); timeout/cost-token ceilings/output warning/hard cap remain open.
-- **29 — Finalize Mix multi-turn session behavior:** seat-scoped Worker/Moderator history, bounding, failure-partial reuse, hot-swap continuity, and completed-turn cockpit display are implemented; retention/delete UX remains open.
+- **29 — Finalize Mix multi-turn session behavior:** seat-scoped Worker/Moderator history, bounding, failure-partial reuse, hot-swap continuity, completed-turn cockpit display, and New Session reset are implemented; retention/delete UX remains open.
 - **26 — Add provider/settings UX sufficient for alpha:** searchable configured selectors are complete; full alpha provider/settings flow remains open.
 
 ### Open / upcoming
 
 - **4 — Lock license and provenance**
 - **13 — Define privacy/data-routing rules**
-- **24 — Build thin top controls**
+- **24 — Build thin top controls** — first slice **PARTIAL — Mission 012** (separate New Session control; Mode/Models/Settings surface remains open)
 - **25 — Add minimal telemetry**
 - **27 — Add Solo**
 - **28 — Add Compare**
@@ -199,9 +200,9 @@ Hydrate from persisted canonical messages, subscribe to existing events, replay 
 
 One visible Stop action; separate fixed Send and Stop controls; honest partial-state display.
 
-### 24. Build thin top controls — **OPEN**
+### 24. Build thin top controls — **PARTIAL — MISSION 012**
 
-ModelMix, Mode, Models, Session, Settings, compact overflow as needed. No dead controls.
+ModelMix, Mode, Models, Session, Settings, compact overflow as needed. No dead controls. Mission 012 delivered the separate New Session control (disabled while a run is active) and cleared the local session key on activation; Mode/Models/Settings surface remains open.
 
 ### 25. Add minimal telemetry — **OPEN**
 
@@ -217,9 +218,9 @@ Mission 007 completed searchable configured selectors. Provider credential/endpo
 
 ### 28. Add Compare — **OPEN**
 
-### 29. Finalize Mix multi-turn session behavior — **PARTIAL — MISSIONS 009/011**
+### 29. Finalize Mix multi-turn session behavior — **PARTIAL — MISSIONS 009/011/012**
 
-Independent bounded seat histories, Moderator history, hot-swap continuity, and context without cross-seat leakage are implemented. Mission 011 displays completed prior turns above the live turn in each cockpit panel. Retention/delete basics remain open.
+Independent bounded seat histories, Moderator history, hot-swap continuity, and context without cross-seat leakage are implemented. Mission 011 displays completed prior turns above the live turn in each cockpit panel; Mission 012 makes archived turns carry their real prompt/models and adds the New Session reset control. Retention/delete basics remain open.
 
 ## PHASE 7 — Security Hardening for Alpha
 
@@ -341,6 +342,7 @@ Hard cap is **not post-alpha by default**. Wire it when settings/run-control rea
 
 ## Immediate Next Engineering Gap
 
-Mission 011 displays the full per-seat conversation across turns in the cockpit.
-Remaining alpha gaps stay ordered by this Punch Board; Mission 011 does not add
-retention/delete UX, telemetry, guardrails, Solo, or Compare.
+Mission 012 delivers the first thin top control (New Session) and real prompt/model
+plumbing into archived turns. Remaining alpha gaps stay ordered by this Punch Board;
+Mission 012 does not add retention/delete UX, telemetry, guardrails, Solo, or
+Compare.

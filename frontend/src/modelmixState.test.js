@@ -15,6 +15,7 @@ import {
   createModelMixState,
   hydrateModelMixState,
   modelSelectorsDisabled,
+  startNewSession,
 } from './modelmixState.js';
 
 globalThis.window = { location: { hostname: 'localhost' } };
@@ -409,4 +410,81 @@ test('archived history preserves per-seat isolation with distinctive sentinels',
   assert.ok(!entry.worker_a.text.includes('PURE_M_CONTENT_SENTINEL'));
   assert.ok(!entry.worker_b.text.includes('PURE_A_CONTENT_SENTINEL'));
   assert.equal(state.worker_a.text, 'A_1');
+});
+
+test('archiveCurrentRun preserves prompt and models into the history entry', () => {
+  const state = {
+    ...createModelMixState(),
+    sessionId: 'session-12',
+    runId: 'run-12',
+    prompt: 'Why do witnesses differ?',
+    models: { worker_a: 'prov:a', moderator: 'prov:m', worker_b: 'prov:b' },
+    overall: 'completed',
+    lastSeq: 7,
+  };
+  state.worker_a = { text: 'A evidence', status: 'completed', error: null };
+  state.moderator = { text: 'M synthesis', status: 'completed', error: null, started: true, finishReason: 'stop' };
+  state.worker_b = { text: 'B evidence', status: 'completed', error: null };
+
+  const archived = archiveCurrentRun(state);
+
+  assert.equal(archived.history.length, 1);
+  assert.equal(archived.history[0].runId, 'run-12');
+  assert.equal(archived.history[0].prompt, 'Why do witnesses differ?');
+  assert.deepEqual(archived.history[0].models, { worker_a: 'prov:a', moderator: 'prov:m', worker_b: 'prov:b' });
+  assert.equal(archived.history[0].status, 'completed');
+});
+
+test('archiveCurrentRun with no prompt archives an entry whose prompt is undefined', () => {
+  const state = {
+    ...createModelMixState(),
+    sessionId: 'session-12',
+    runId: 'run-12',
+    overall: 'completed',
+  };
+  state.worker_a = { text: 'A evidence', status: 'completed', error: null };
+
+  const archived = archiveCurrentRun(state);
+
+  assert.equal(archived.history.length, 1);
+  assert.equal(archived.history[0].prompt, undefined);
+});
+
+test('startNewSession resets cockpit state while preserving model selections', () => {
+  const state = {
+    ...createModelMixState(),
+    sessionId: 'session-12',
+    runId: 'run-12',
+    overall: 'completed',
+    models: { worker_a: 'prov:a', moderator: 'prov:m', worker_b: 'prov:b' },
+  };
+  state.worker_a = { text: 'A evidence', status: 'completed', error: null };
+
+  const fresh = startNewSession(state);
+
+  assert.deepEqual(fresh, {
+    ...createModelMixState(),
+    models: { worker_a: 'prov:a', moderator: 'prov:m', worker_b: 'prov:b' },
+  });
+  assert.equal(fresh.sessionId, null);
+  assert.equal(fresh.runId, null);
+  assert.equal(fresh.lastSeq, 0);
+  assert.equal(fresh.overall, 'idle');
+  assert.deepEqual(fresh.history, []);
+  assert.equal(fresh.worker_a.text, '');
+  assert.equal(state.sessionId, 'session-12');
+  assert.equal(state.worker_a.text, 'A evidence');
+});
+
+test('startNewSession of a default cockpit exactly equals createModelMixState', () => {
+  assert.deepEqual(startNewSession(createModelMixState()), createModelMixState());
+});
+
+test('New Session gating matches the frozen-selector predicate for every lifecycle state', () => {
+  for (const status of ['connecting', 'running', 'reconnecting', 'cancelling']) {
+    assert.equal(modelSelectorsDisabled(status), true, `${status} must disable New Session`);
+  }
+  for (const status of ['idle', 'completed', 'partial', 'failed', 'cancelled', 'replay_gap', 'expired']) {
+    assert.equal(modelSelectorsDisabled(status), false, `${status} must enable New Session`);
+  }
 });

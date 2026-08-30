@@ -156,6 +156,13 @@ export function archiveCurrentRun(state) {
   };
 }
 
+export function startNewSession(state) {
+  return {
+    ...createModelMixState(),
+    ...(state.models ? { models: { ...state.models } } : {}),
+  };
+}
+
 export function hydrateModelMixState(document) {
   if (document?.schema_version !== 1 || !document.session || !Array.isArray(document.session.runs)) {
     throw new Error('Unsupported or malformed ModelMix session');

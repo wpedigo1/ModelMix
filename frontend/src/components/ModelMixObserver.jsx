@@ -20,6 +20,7 @@ import {
   isTerminalOverall,
   hydrateModelMixState,
   modelSelectorsDisabled,
+  startNewSession,
 } from '../modelmixState';
 import './ModelMixObserver.css';
 
@@ -173,6 +174,12 @@ export default function ModelMixObserver() {
       ...archiveCurrentRun(observerRef.current),
       overall: 'connecting',
       message: 'Connecting…',
+      prompt: prompt.trim(),
+      models: {
+        worker_a: workerAModel.trim(),
+        moderator: moderatorModel.trim(),
+        worker_b: workerBModel.trim(),
+      },
     };
     updateObserver(starting);
     try {
@@ -201,6 +208,12 @@ export default function ModelMixObserver() {
     } catch (error) {
       showConnectionError(error);
     }
+  };
+
+  const newSession = () => {
+    if (modelSelectorsDisabled(observerRef.current.overall)) return;
+    window.localStorage?.removeItem('modelmix.sessionId');
+    updateObserver((current) => startNewSession(current));
   };
 
   const controls = controlState(observer.overall);
@@ -268,6 +281,7 @@ export default function ModelMixObserver() {
         <div className="modelmix-actions">
           <button type="submit" disabled={sendDisabled}>Send</button>
           <button type="button" className="stop" disabled={controls.stopDisabled} onClick={stop}>Stop</button>
+          <button type="button" className="new-session" disabled={modelSelectorsDisabled(observer.overall)} onClick={newSession}>New Session</button>
           <span role="status">{observer.message}</span>
         </div>
       </form>
@@ -301,7 +315,7 @@ function TranscriptPane({ title, participant, history = [], seatKey, emptyText, 
       <div className="modelmix-transcript">
         {priorTurns.map((entry) => (
           <div key={entry.runId} className="modelmix-prior-turn">
-            <p className="modelmix-prior-prompt">{entry.prompt || '—'}</p>
+            {entry.prompt ? <p className="modelmix-prior-prompt">{entry.prompt}</p> : null}
             <MarkdownContent>{entry[seatKey].text}</MarkdownContent>
             {entry[seatKey].error && <p className="modelmix-worker-error">{entry[seatKey].error}</p>}
           </div>

@@ -9,7 +9,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–011**.
+Completed and locally verified implementation missions: **001–012**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -38,6 +38,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 010 | **PASS (LOCAL)** | Seat history character budgets: 4k per message (`MAX_HISTORY_MESSAGE_CHARS`) and 24k per seat (`MAX_HISTORY_TOTAL_CHARS`) with deterministic middle truncation and whole-turn oldest-first eviction | `010-seat-history-budget.md` |
 | 010.5 | **PASS (LOCAL)** | Frontend test runner interlock: Vitest + jsdom devDeps, `npm test` non-watch run, existing three test files collected and observed 24/24 pass | `010.5-frontend-test-runner-interlock.md` |
 | 011 | **PASS (LOCAL)** | Multi-turn cockpit display: prior runs archived chronologically into per-seat `history`, pure `archiveCurrentRun`, prior turns rendered above the live turn in each panel | `011-multi-turn-cockpit-display.md` |
+| 012 | **PASS (LOCAL)** | Session control and prompt plumbing: starting state carries `prompt`/`models`, no placeholder for absent prompts, separate New Session control via `modelSelectorsDisabled` (clears local session key, resets cockpit, preserves models) | `012-session-control-and-prompt-plumbing.md` |
 
 ## Current Verified Product Slice
 
@@ -62,6 +63,7 @@ The accepted implementation through Mission 009 establishes:
 - a deterministic seat-history character budget: each historical message middle-truncated to 4,000 characters and each single-seat assembled history capped at 24,000 characters via whole-turn oldest-first eviction (never an orphan assistant message).
 - a runnable frontend test suite: `npm test` executes the existing reducer/API/hydration tests (and configured-model and font-size tests) through Vitest with an observed 24/24 pass; `npm audit` reports 0 vulnerabilities.
 - a multi-turn cockpit display: each panel renders its seat's prior turns (compact prompt header above that turn's output) above the live streaming turn, sourced from a `history` array archived from prior session runs.
+- honest prompt/model plumbing and a session reset: archived turns carry the real submitted prompt and selected model IDs, absent prompts render nothing (no placeholder), and a separate New Session control (disabled while a run is active) clears the local session key and resets the cockpit while preserving model selections.
 
 ## Mission 007.5 Verification Evidence
 
@@ -182,3 +184,19 @@ it produced seat content. `ModelMixObserver` archives when a new run starts, and
 `TranscriptPane` renders each seat's prior turns above the live turn with the
 prior prompt as a compact header. `applyModelMixEvent` is unchanged. See
 `011-multi-turn-cockpit-display.md`.
+
+## Mission 012 Result
+
+Mission 012 ensures archived turns show their real prompt during a live session
+and adds a session reset control. `send()` stamps the `starting` state with the
+submitted `prompt` and the three trimmed selected model IDs so the next
+`archiveCurrentRun` captures them. `TranscriptPane` renders the prior-turn prompt
+only when present — no `—` placeholder for missing data. A new pure
+`startNewSession(state)` returns a fresh cockpit (`createModelMixState()`, empty
+`history`) carrying the current model selections forward; `ModelMixObserver`
+calls it after removing `modelmix.sessionId` from localStorage. No backend
+endpoint is called. The New Session button is a separate fixed control,
+disabled only while a run is active via the existing `modelSelectorsDisabled`.
+Five tests were added; the existing 30 frontend tests pass unmodified.
+`applyModelMixEvent` is unchanged. See
+`012-session-control-and-prompt-plumbing.md`.

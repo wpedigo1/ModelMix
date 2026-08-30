@@ -58,6 +58,7 @@
 }
 
 .modelmix-actions button.stop { background: #b91c1c; }
+.modelmix-actions button.new-session { background: #1e3a8a; }
 .modelmix-actions button:disabled { color: #64748b; background: #1e293b; cursor: not-allowed; opacity: .65; }
 .modelmix-run-meta { gap: 22px; color: var(--text-muted); font-family: var(--font-code); font-size: 11px; }
 

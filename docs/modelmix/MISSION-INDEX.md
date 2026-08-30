@@ -24,6 +24,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 010 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `010-seat-history-budget.md` |
 | 010.5 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `010.5-frontend-test-runner-interlock.md` |
 | 011 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `011-multi-turn-cockpit-display.md` |
+| 012 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `012-session-control-and-prompt-plumbing.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -105,6 +106,21 @@ prior run chronologically, `archiveCurrentRun` (pure) moves the outgoing run int
 history when it produced seat content, and each `TranscriptPane` renders its
 seat's prior turns above the live turn. It advances Punch Board item **22** and
 makes partial progress on item **29**.
+
+## Mission 012 Result
+
+**Mission 012 is implemented and verified locally.**
+
+Mission 012 makes archived turns honest and gives the cockpit a session reset
+control: the state produced when starting a run carries the submitted `prompt`
+and the three selected model IDs so the next archive captures them; the prior
+prompt renderer no longer substitutes a `—` placeholder for a missing prompt; and
+a separate New Session control clears the `modelmix.sessionId` local key, resets
+the cockpit to `createModelMixState()` (empty `history`), and preserves model
+selections — without touching any backend endpoint. New Session is disabled
+while a run is active via the existing `modelSelectorsDisabled` predicate. It is
+the first slice of Punch Board item **24** and makes further partial progress on
+item **29**.
 
 ## Evidence Rule
 
