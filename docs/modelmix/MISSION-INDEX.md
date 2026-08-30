@@ -29,6 +29,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 014 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `014-reachability-and-test-hygiene.md` |
 | 015 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `015-telemetry-truth-layer.md` |
 | 016 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `016-compact-top-bar-and-panel-controls.md` |
+| 017 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `017-settings-shell.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -199,6 +200,41 @@ of the real component (mocked API layer, completed-session hydration,
 deterministic per-test DOM cleanup). It corresponds to Punch Board item **24**
 (further advanced: Mission 012's New Session control now sits in the compact
 strip); an interactive Mode selector and the Settings surface remain open.
+
+## Mission 017 Result
+
+**Mission 017 is implemented and verified locally.**
+
+Mission 017 is the Settings shell. `configuredModels.js` exports
+`configuredSources` (implementation unchanged). `ModelMixObserver` gains a gear
+entry in the top bar (`aria-label="Settings"`, `aria-expanded`) that opens a
+conditionally-rendered modal overlay — so the default cockpit still contains no
+"Settings" text, preserving the existing render test — with three sections:
+**About** renders the real `pkg.version` from an imported `../../package.json`
+(no duplicated literal), the MIT/copyright line, text-only AI Counsel
+attribution, and the repo URL; **Providers** lists OpenRouter / Ollama /
+Direct / Custom / OAuth as Connected or Not connected, computed at render from
+the exported `configuredSources` against the settings snapshot `loadModels`
+already fetches, with zero credential values and an honest "unavailable" state
+when the snapshot is null; **Defaults** saves/clears the
+`modelmix.defaultSeatModels` localStorage trio (`worker_a`/`moderator`/`worker_b`)
+and the three seat selectors initialize from the saved value, falling back to
+the frozen `FALLBACK_SEAT_MODELS` that exactly preserves the previous built-in
+literals — so criterion "no saved defaults → the exact hardcoded selections"
+is a direct regression test. New state is local-only (`settingsOpen`,
+`settingsSection`, `settingsSnapshot`, `defaultsRevision`); `modelmixState.js`,
+`modelmixApi.js`, and all backend files are unchanged; `Settings.jsx`/`App.jsx`
+(separate Council root) are untouched; no new dependencies. Tests: 5 new
+`configuredSources.test.js`, 5 new `defaultSeatModels.test.js`, 8 new jsdom
+render tests `ModelMixSettings.test.jsx` (mocked API with a mutable
+`vi.hoisted` settings container, discovery mocked while the real
+`configuredSources` runs via `importOriginal`, per-test deterministic cleanup) —
+plus the existing **51 frontend tests pass unmodified** (criterion), for **69
+passed**; `npm run lint` clean; `npm run build` green; backend **360 passed**
+unchanged. It corresponds to Punch Board items **26** (advanced: real
+provider/settings surface), **4** (partial: visible license/copyright/credit),
+and **24** (advanced: Settings surface delivered; interactive Mode selector
+remains open).
 
 ## Evidence Rule
 

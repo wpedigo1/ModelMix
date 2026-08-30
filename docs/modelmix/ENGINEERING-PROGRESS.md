@@ -9,7 +9,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–016**.
+Completed and locally verified implementation missions: **001–017**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -43,6 +43,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 014 | **PASS (LOCAL)** | Reachability + test hygiene: real `GET /modelmix` serves the built frontend and the Council sidebar gains a ModelMix nav link (cockpit reachable from a production build); every backend-test `RunRegistry()` writes to an isolated `tmp_path` store instead of the live session directory | `014-reachability-and-test-hygiene.md` |
 | 015 | **PASS (LOCAL)** | Telemetry truth layer: events carry wall-clock `ts`; persistence keeps provider `usage`/`finish_reason` (opaque) and `started_at`/`completed_at` on messages — fixing the moderator finish_reason reload bug; the frontend truth layer + `describeUsage` capture everything without rendering; the last polling test is isolated | `015-telemetry-truth-layer.md` |
 | 016 | **PASS (LOCAL)** | Compact top bar + panel view controls (frontend-only): one thin persistent top strip (brand, inert `Mode: Mix` label, session status, New Session moved from `.modelmix-actions`, Details-hidden run metadata, Back to Council; no Settings), and CSS-driven per-panel Collapse/Maximize/Reset controls that hide panels from layout without unmounting them, with view state confined to local component state + pure `panelView.js` helpers and `modelmixState.js`/backend untouched | `016-compact-top-bar-and-panel-controls.md` |
+| 017 | **PASS (LOCAL)** | Settings shell (frontend-only): a gear entry in the compact top bar opens a conditionally-rendered overlay — About (real `pkg.version` from an imported `../../package.json`, MIT/copyright, text-only AI Counsel attribution, repo URL), Providers (read-only Connected/Not-connected rows computed from the now-exported `configuredSources` with zero credential values and an honest unavailable state), Defaults (`modelmix.defaultSeatModels` localStorage trio saved/cleared and applied at initial mount, with frozen `FALLBACK_SEAT_MODELS` preserving the exact built-in defaults) | `017-settings-shell.md` |
 
 ## Current Verified Product Slice
 
@@ -71,6 +72,7 @@ The accepted implementation through Mission 009 establishes:
 - ModelMix-owned wall-clock run and seat timeouts: `timeouts.py` owns `RUN_TIMEOUT_SECONDS = 600` and `SEAT_TIMEOUT_SECONDS = 300`; `run_seat` and `run_moderator` bound their phases and `RunRegistry._run` bounds the whole run, terminating through the existing event types with `reason: "timeout"`, preserving prior deltas, routing a timed-out seat through the honest partial Moderator path, distinguishing explicit cancel (`run_cancelled`) from timeout, and guaranteeing no journal/persistence writes after a run reaches terminal.
 - production-build reachability and test hygiene: `GET /modelmix` serves `index.html` from `FRONTEND_DIST_DIR` (404 with a clear message when not built) and the Council sidebar has one visible ModelMix nav link, so the three-panel cockpit is reachable from a built app; every `RunRegistry()` in `backend/tests/` writes to an isolated `tmp_path` store — proven by an unchanged real-data file count (229 before = 229 after) across every previously-polluting test file.
 - a compact persistent top strip and CSS-driven panel view controls: one `header.modelmix-topbar` replaces the separate header and always-visible run metadata — brand, inert `Mode: Mix` label, session status from the existing `observer.overall` vocabulary, the New Session control (moved, same handler/disabled binding, no behavior change), a Details disclosure (off by default) holding the `Run: <id>` / `Last sequence: <n>` debug line, and the unchanged Back to Council link, with no Settings entry; each `TranscriptPane` header gains Collapse (body only, header stays) and Maximize (one panel full width, the other two hidden from layout), plus one Reset visible whenever any panel is collapsed or maximized — all layout via CSS classes so all three panels stay mounted, with view state in `panelView.js` helpers and `ModelMixObserver` local state only (`modelmixState.js`/backend untouched; reload resets the view).
+- a Settings shell in the cockpit: a gear entry in the compact strip (`aria-label="Settings"`, `aria-expanded`) opens a conditionally-rendered modal overlay (no route, no new window) with three sections — About (real `pkg.version` imported from `../../package.json` with no duplicated literal, the MIT/copyright line, text-only AI Counsel attribution, and the repo URL), Providers (read-only OpenRouter/Ollama/Direct/Custom/OAuth Connected-or-Not-connected rows computed from the exported `configuredSources` against the settings `loadModels` already fetches, zero credential values, honest "unavailable" when the snapshot is null), and Defaults (Save/Clear the `modelmix.defaultSeatModels` localStorage trio; the three seat selectors initialize from the saved value at mount, falling back to frozen `FALLBACK_SEAT_MODELS` that exactly match the previous built-in selections — so "no saved defaults ⇒ exact hardcoded defaults" is a direct regression test).
 
 ## Mission 007.5 Verification Evidence
 
@@ -118,13 +120,13 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **14 — Deterministic mock provider:** current tests use deterministic fakes/mocks, but the full locked failure/timeout/rate-limit fixture matrix remains open.
 - **29 — Finalized Mix multi-turn behavior:** seat histories, Moderator history, hot-swap continuity, deterministic context bounding, and completed-turn cockpit display are implemented; retention/delete UX remains open.
 - **17 — Spend/runtime guardrails:** explicit Stop, the turn cap, seat-history per-message/per-seat character budgets (Mission 010), and wall-clock run (600s) / seat-Moderator (300s) timeouts (Mission 013) exist, plus persisted `started_at`/`completed_at` timing truth (Mission 015); cost/token ceilings and output warning/hard-cap work remain open.
-- **26 — Provider/settings UX:** searchable configured selectors are complete; the visible ModelMix sidebar navigation entry point exists (Mission 014); full alpha provider/settings flow remains open.
+- **26 — Provider/settings UX:** searchable configured selectors are complete; the visible ModelMix sidebar navigation entry point exists (Mission 014); the cockpit Settings surface is now a real entry (Mission 017) with read-only provider status from the exported `configuredSources` and saved default seat models; full alpha provider/settings entry flow remains open.
+- **4 — License and provenance — PARTIAL — MISSION 017** (the cockpit About section surfaces the MIT license, the copyright holder, the real version, the text-only AI Counsel attribution, and the repo URL; the `OPEN_SOURCE_CREDITS.md`, inherited-module provenance, and dependency-license inventory remain open)
+- **24 — Thin top controls — PARTIAL — MISSIONS 012/016/017** (Mission 012: separate New Session control; Mission 016: compact persistent top strip — brand, inert `Mode: Mix` label, session status, moved New Session, Details-hidden debug line, Back to Council, no Settings — plus CSS-driven panel Collapse/Maximize/Reset; Mission 017: the Settings surface ships as a gear entry opening the Settings overlay; only an interactive Mode selector remains open)
 
 ### Not yet satisfied / upcoming
 
-- **4 — License and provenance distribution work**
 - **13 — Privacy/data-routing rules**
-- **24 — Thin top controls — PARTIAL — MISSIONS 012/016** (Mission 012: separate New Session control; Mission 016: compact persistent top strip — brand, inert `Mode: Mix` label, session status, moved New Session, Details-hidden debug line, Back to Council, no Settings — plus CSS-driven panel Collapse/Maximize/Reset; an interactive Mode selector and the Settings surface remain open)
 - **25 — Minimal telemetry — first slice **PARTIAL — Mission 015** (telemetry truth layer landed: wall-clock `ts`, persisted provider-reported `usage`/`finish_reason`/timing, frontend truth capture, `describeUsage`; nothing renders it yet)
 - **27 — Solo**
 - **28 — Compare**
@@ -306,3 +308,38 @@ combination, New Session behavior, Details disclosure). Validation
 (mission-specified): `npm test` **51 passed** (41 prior + 10 new), `npm run
 build` green, `npm run lint` clean, `uv run pytest backend/tests -q` **360
 passed** unchanged. See `016-compact-top-bar-and-panel-controls.md`.
+
+## Mission 017 Result
+
+Mission 017 is the Settings shell — frontend-only, no new route. One line in
+`configuredModels.js` exports `configuredSources` (implementation unchanged).
+`ModelMixObserver` adds `button.modelmix-settings-toggle` (gear, `aria-label`/
+`title` "Settings", `aria-expanded`) to the compact strip; the Settings overlay
+is **conditionally rendered only while open**, a modal (`role="dialog"`,
+`aria-modal="true"`) with backdrop-click and close-control dismissal, so the
+default cockpit's `textContent` still contains no "Settings" (the existing
+`ModelMixObserver.test.jsx` line-99 assertion passes unmodified). Three
+sections: **About** imports `pkg` from `../../package.json` and renders the real
+`pkg.version` (no literal), "MIT — Copyright (c) 2025 Jacob Ben David" (from the
+repo `LICENSE`), the text-only "ModelMix began as a fork/evolution of The AI
+Counsel…" attribution, and the repo URL already in `README.md`; **Providers**
+computes `configuredSources` against the `settingsSnapshot` captured inside the
+existing `loadModels` effect and lists five read-only Connected / Not-connected
+rows with `data-connected` — never rendering credential values or endpoint/based
+URLs, with an honest "unavailable" state when the snapshot is null; **Defaults**
+saves/clears `modelmix.defaultSeatModels` in `localStorage` and the three seat
+selectors initialize from the saved trio at mount, falling back to a frozen
+`FALLBACK_SEAT_MODELS` in the new pure `frontend/src/defaultSeatModels.js` that
+exactly preserves the previous built-in literals. New local-only state:
+`settingsOpen`/`settingsSection`/`settingsSnapshot`/`defaultsRevision`;
+`modelmixState.js`, `modelmixApi.js`, `Settings.jsx`, `App.jsx`, `main.jsx`,
+and all backend files are untouched; no dependencies added. Coverage: 5
+`configuredSources.test.js` + 5 `defaultSeatModels.test.js` (node) and 8 jsdom
+render tests in `ModelMixSettings.test.jsx` (vi.hoisted mutable settings mock,
+real `configuredSources` via `importOriginal`, corrupt-value fallback, saved-
+wins-on-mount, save/clear round-trip, and the existing 51 unmodified tests pass)
+= **69 passed**; `npm run lint` clean; `npm run build` green (436 modules);
+`uv run pytest backend/tests -q` **360 passed** unchanged. Maps to Punch Board
+items **26** (Settings surface now real; entry flow remains), **4** (visible
+license/copyright/credit — first slice), **24** (Settings surface delivered;
+Mode selector remains open).

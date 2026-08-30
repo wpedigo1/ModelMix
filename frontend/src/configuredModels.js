@@ -16,7 +16,7 @@ function providerKey(model) {
   return (model.provider || '').toLowerCase().trim().replace(/\s+/g, '-');
 }
 
-function configuredSources(settings) {
+export function configuredSources(settings) {
   const enabled = settings.enabled_providers || {};
   const hasDirect = Object.values(DIRECT_PROVIDER_KEY_FLAGS)
     .some((flag) => settings[flag]);

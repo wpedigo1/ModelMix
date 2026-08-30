@@ -12,7 +12,7 @@ This directory is the repository home for ModelMix implementation state, mission
 
 ## Mission Reports
 
-Historical engineering evidence through locally verified Mission 016:
+Historical engineering evidence through locally verified Mission 017:
 
 1. [`001-baseline-architecture-spike.md`](001-baseline-architecture-spike.md)
 2. [`002-first-streaming-slice.md`](002-first-streaming-slice.md)
@@ -32,6 +32,7 @@ Historical engineering evidence through locally verified Mission 016:
 16. [`014-reachability-and-test-hygiene.md`](014-reachability-and-test-hygiene.md) — **PASS (LOCAL)**
 17. [`015-telemetry-truth-layer.md`](015-telemetry-truth-layer.md) — **PASS (LOCAL)**
 18. [`016-compact-top-bar-and-panel-controls.md`](016-compact-top-bar-and-panel-controls.md) — **PASS (LOCAL)**
+19. [`017-settings-shell.md`](017-settings-shell.md) — **PASS (LOCAL)**
 
 Mission reports preserve what was observed or delivered during that slice. They do not automatically override a later locked decision in the Punch Board.
 
@@ -51,7 +52,7 @@ Do not silently promote an older proposal into a current architecture decision.
 
 As of 2026-08-30 CT:
 
-- Missions **001–016** are recorded as implemented (007.5 interlock included); Mission 008 is present on current `main`.
+- Missions **001–017** are recorded as implemented (007.5 interlock included); Mission 008 is present on current `main`.
 - Mission **007.5** closed the MCP 2.x security/compatibility interlock.
 - Accepted Mission 007.5 implementation commit: `e018ed06807beda2c11531f065b2d4181c346ca8`.
 - MCP remains at **2.1.1**; Python and frontend dependency audits were recorded clean.
@@ -59,6 +60,7 @@ As of 2026-08-30 CT:
 - Mission **009** adds bounded seat-scoped Worker/Moderator history with hot-swap continuity and explicit cross-seat leakage tests.
 - Mission **010** gives seat history owned character budgets: 4,000 per message and 24,000 per seat with whole-turn oldest-first eviction.
 - Mission **010.5** wires a Vitest runner (`npm test`) so the existing frontend suite executes with an observed 24/24 pass.
+- Mission **017** adds the Settings shell: a gear entry in the top bar opens an in-app overlay — About surfaces the real version, MIT license, and text-only AI Counsel attribution; Providers is a read-only Connected/Not-connected list computed from the now-exported `configuredSources`; Defaults saves/clears the `modelmix.defaultSeatModels` localStorage trio and applies saved seat defaults at initial mount with the exact built-in fallbacks preserved.
 - Schema-v1 session files live under `data/modelmix/sessions/` by default and are written atomically behind the ModelMix persistence interface.
 - Alpha persistence remains **versioned atomic JSON behind a ModelMix-owned interface**.
 - **SQLite migration is not part of the alpha plan.**

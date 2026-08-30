@@ -1,9 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
-import { discoverConfiguredModels } from '../configuredModels';
+import { configuredSources, discoverConfiguredModels } from '../configuredModels';
 import MarkdownContent from './MarkdownContent';
 import SearchableModelSelect from './SearchableModelSelect';
 import { DEFAULT_PANEL_VIEW, getPanelViewClasses, panelLayoutNeedsReset } from '../panelView';
+import {
+  clearSavedSeatModels,
+  FALLBACK_SEAT_MODELS,
+  loadSavedSeatModels,
+  saveSeatModels,
+} from '../defaultSeatModels';
+import pkg from '../../package.json';
 import {
   cancelModelMixRun,
   consumeModelMixSSE,
@@ -29,9 +36,10 @@ const reconnectDelay = () => new Promise((resolve) => setTimeout(resolve, 500));
 
 export default function ModelMixObserver() {
   const [prompt, setPrompt] = useState('Explain why independent answers can improve reliability.');
-  const [workerAModel, setWorkerAModel] = useState('openai-oauth:gpt-5');
-  const [moderatorModel, setModeratorModel] = useState('');
-  const [workerBModel, setWorkerBModel] = useState('ollama:llama3');
+  const savedSeatModels = useMemo(() => loadSavedSeatModels(window.localStorage), []);
+  const [workerAModel, setWorkerAModel] = useState(savedSeatModels?.worker_a ?? FALLBACK_SEAT_MODELS.worker_a);
+  const [moderatorModel, setModeratorModel] = useState(savedSeatModels?.moderator ?? FALLBACK_SEAT_MODELS.moderator);
+  const [workerBModel, setWorkerBModel] = useState(savedSeatModels?.worker_b ?? FALLBACK_SEAT_MODELS.worker_b);
   const [models, setModels] = useState([]);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState('');
@@ -41,6 +49,10 @@ export default function ModelMixObserver() {
   const historicalModelsRef = useRef(new Set());
   const [panelView, setPanelView] = useState(DEFAULT_PANEL_VIEW);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState('about');
+  const [settingsSnapshot, setSettingsSnapshot] = useState(null);
+  const [defaultsRevision, setDefaultsRevision] = useState(0);
 
   const updateObserver = useCallback((updater) => {
     setObserver((current) => {
@@ -70,6 +82,7 @@ export default function ModelMixObserver() {
     const loadModels = async () => {
       try {
         const settings = await api.getSettings();
+        if (!cancelled) setSettingsSnapshot(settings);
         const discovered = await discoverConfiguredModels(api, settings);
         if (cancelled) return;
         const historical = Array.from(historicalModelsRef.current)
@@ -234,6 +247,20 @@ export default function ModelMixObserver() {
     updateObserver((current) => startNewSession(current));
   };
 
+  const saveDefaults = () => {
+    saveSeatModels(window.localStorage, {
+      worker_a: workerAModel,
+      moderator: moderatorModel,
+      worker_b: workerBModel,
+    });
+    setDefaultsRevision((revision) => revision + 1);
+  };
+
+  const clearDefaults = () => {
+    clearSavedSeatModels(window.localStorage);
+    setDefaultsRevision((revision) => revision + 1);
+  };
+
   const controls = controlState(observer.overall);
   const selectorsDisabled = modelsLoading || modelSelectorsDisabled(observer.overall);
   const sendDisabled = controls.sendDisabled
@@ -253,11 +280,29 @@ export default function ModelMixObserver() {
         </div>
         <button type="button" className="modelmix-details-toggle" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((open) => !open)}>Details</button>
         <a href="/">Back to Council</a>
+        <button type="button" className="modelmix-settings-toggle" aria-label="Settings" title="Settings" aria-expanded={settingsOpen} onClick={() => setSettingsOpen((open) => !open)}>⚙</button>
       </header>
 
       <div className="modelmix-run-meta" data-open={detailsOpen} aria-hidden={!detailsOpen}>
         <span>Run: {observer.runId || '—'}</span><span>Last sequence: {observer.lastSeq}</span>
       </div>
+
+      {settingsOpen && (
+        <ModelMixSettings
+          section={settingsSection}
+          onSectionChange={setSettingsSection}
+          onClose={() => setSettingsOpen(false)}
+          settings={settingsSnapshot}
+          currentModels={{
+            worker_a: workerAModel,
+            moderator: moderatorModel,
+            worker_b: workerBModel,
+          }}
+          defaultsRevision={defaultsRevision}
+          onSaveDefaults={saveDefaults}
+          onClearDefaults={clearDefaults}
+        />
+      )}
 
       <form className="modelmix-composer" onSubmit={send}>
         <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} aria-label="Prompt" rows="3" required />
@@ -387,5 +432,151 @@ function TranscriptPane({
         {participant.error && <p className="modelmix-worker-error">{participant.error}</p>}
       </div>
     </article>
+  );
+}
+
+const SETTINGS_SECTIONS = [
+  { id: 'about', label: 'About' },
+  { id: 'providers', label: 'Providers' },
+  { id: 'defaults', label: 'Defaults' },
+];
+
+function ModelMixSettings({
+  section,
+  onSectionChange,
+  onClose,
+  settings,
+  currentModels,
+  defaultsRevision,
+  onSaveDefaults,
+  onClearDefaults,
+}) {
+  return (
+    <div className="modelmix-settings-backdrop" onClick={onClose}>
+      <section
+        className="modelmix-settings"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Settings"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="modelmix-settings-head">
+          <h2>Settings</h2>
+          <button type="button" className="modelmix-settings-close" aria-label="Close Settings" onClick={onClose}>✕</button>
+        </header>
+        <nav className="modelmix-settings-nav" aria-label="Settings sections">
+          {SETTINGS_SECTIONS.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              className={section === id ? 'modelmix-settings-nav-item is-active' : 'modelmix-settings-nav-item'}
+              aria-pressed={section === id}
+              onClick={() => onSectionChange(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+        <div className="modelmix-settings-body">
+          {section === 'about' && <AboutSection version={pkg.version} />}
+          {section === 'providers' && <ProvidersSection settings={settings} />}
+          {section === 'defaults' && (
+            <DefaultsSection
+              currentModels={currentModels}
+              revision={defaultsRevision}
+              onSave={onSaveDefaults}
+              onClear={onClearDefaults}
+            />
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function AboutSection({ version }) {
+  return (
+    <div className="modelmix-settings-section">
+      <p className="modelmix-settings-line">
+        <strong>ModelMix</strong> — a local-first multi-model app to reduce single-model bias and unsupported conclusions.
+      </p>
+      <p className="modelmix-settings-line"><strong>Version</strong> {version}</p>
+      <p className="modelmix-settings-line"><strong>License</strong> MIT — Copyright (c) 2025 Jacob Ben David.</p>
+      <p className="modelmix-settings-line">
+        Origin: ModelMix began as a fork/evolution of The AI Counsel, an open-source multi-model AI project.
+      </p>
+      <p className="modelmix-settings-line"><a href="https://github.com/wpedigo1/ModelMix">github.com/wpedigo1/ModelMix</a></p>
+    </div>
+  );
+}
+
+const PROVIDER_ROWS = [
+  ['OpenRouter', (sources) => sources.openrouter],
+  ['Ollama (local)', (sources) => sources.ollama],
+  ['Direct API keys', (sources) => sources.direct],
+  ['Custom endpoint', (sources) => sources.custom],
+  ['OAuth accounts', (sources) => sources.oauth],
+];
+
+function ProvidersSection({ settings }) {
+  if (!settings) {
+    return (
+      <div className="modelmix-settings-section">
+        <p className="modelmix-settings-line">Provider status is unavailable right now.</p>
+      </div>
+    );
+  }
+  const sources = configuredSources(settings);
+  return (
+    <div className="modelmix-settings-section">
+      <ul className="modelmix-provider-list">
+        {PROVIDER_ROWS.map(([name, status]) => {
+          const connected = status(sources);
+          return (
+            <li key={name}>
+              <span className="modelmix-provider-name">{name}</span>
+              <span className="modelmix-provider-status" data-connected={connected}>
+                {connected ? 'Connected' : 'Not connected'}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="modelmix-settings-line">Credentials stay in secure storage and never appear here.</p>
+      <p className="modelmix-settings-line"><a href="/">Manage providers in council settings</a></p>
+    </div>
+  );
+}
+
+function DefaultsSection({ currentModels, onSave, onClear }) {
+  const saved = loadSavedSeatModels(window.localStorage);
+  const rows = [
+    ['Worker A', currentModels.worker_a],
+    ['Moderator', currentModels.moderator],
+    ['Worker B', currentModels.worker_b],
+  ];
+  return (
+    <div className="modelmix-settings-section">
+      <p className="modelmix-settings-line">
+        When no defaults are saved, ModelMix starts each session with its built-in default seats.
+      </p>
+      <ul className="modelmix-provider-list">
+        {rows.map(([seat, model]) => (
+          <li key={seat}>
+            <span className="modelmix-provider-name">{seat}</span>
+            <span>{model || 'None'}</span>
+          </li>
+        ))}
+      </ul>
+      {saved ? (
+        <p className="modelmix-settings-line">Saved defaults will be applied on the next load.</p>
+      ) : (
+        <p className="modelmix-settings-line">No saved defaults — built-in defaults apply.</p>
+      )}
+      <div className="modelmix-settings-actions">
+        <button type="button" className="modelmix-settings-save" onClick={onSave}>Save current selections as defaults</button>
+        <button type="button" className="modelmix-settings-clear" disabled={!saved} onClick={onClear}>Clear saved defaults</button>
+      </div>
+    </div>
   );
 }

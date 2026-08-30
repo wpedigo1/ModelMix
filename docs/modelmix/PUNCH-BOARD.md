@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 016: 2026-08-30 CT
+Reconciled through Mission 017: 2026-08-30 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -31,6 +31,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 014 | **PASS (LOCAL)** | Reachability + test hygiene: real `GET /modelmix` serves `index.html` from `FRONTEND_DIST_DIR` so a production build can reach the three-panel cockpit, a visible Council sidebar link navigates there, and every `RunRegistry()` construction in `backend/tests/` now writes to an isolated `tmp_path` store instead of the live `data/modelmix/sessions/` directory |
 | 015 | **PASS (LOCAL)** | Telemetry truth layer: events carry wall-clock `ts`; `_apply_event` persists provider-reported `usage`/`finish_reason` (opaque, un-normalized) plus `started_at`/`completed_at`; the frontend truth layer and `describeUsage` capture them without rendering; and the last Mission 014 polling test (streaming route) now uses an isolated persistence |
 | 016 | **PASS (LOCAL)** | Compact top bar and panel view controls: one thin persistent top strip (brand, inert `Mode: Mix` label, session status, New Session moved from `.modelmix-actions`, Details-hidden run metadata, Back to Council), and CSS-driven per-panel Collapse/Maximize/Reset view controls that hide panels from layout without ever unmounting them — view state lives only in local component state, untouched by `modelmixState.js` |
+| 017 | **PASS (LOCAL)** | Settings shell: a gear entry in the top bar opens an in-app overlay (About renders the real package.json version plus MIT/copyright and text-only AI Counsel attribution; Providers is a read-only Connected/Not-connected list computed from the now-exported `configuredSources` with zero credential values; Defaults saves/clears `modelmix.defaultSeatModels` in localStorage and applies saved seat defaults at initial mount with the exact built-in fallbacks preserved) — frontend-only, no route, no new dependencies |
 
 **Mission 008 is present on `main` and its persistence tests pass.**
 
@@ -84,13 +85,13 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 - **14 — Build deterministic mock provider:** deterministic fakes/mocks support current tests; full failure/timeout/rate-limit fixture matrix remains open.
 - **17 — Add basic spend/runtime guardrails:** Stop, turn cap, and seat-history per-message/per-seat character budgets exist (Mission 010 partial progress on context/spend bounding); timeout/cost-token ceilings/output warning/hard cap remain open. Mission 013 adds the wall-clock run (600s) and seat/Moderator (300s) timeouts. Mission 015 adds persisted `started_at`/`completed_at` timing truth (a future guardrail input).
 - **29 — Finalize Mix multi-turn session behavior:** seat-scoped Worker/Moderator history, bounding, failure-partial reuse, hot-swap continuity, completed-turn cockpit display, and New Session reset are implemented; retention/delete UX remains open.
-- **26 — Add provider/settings UX sufficient for alpha:** searchable configured selectors are complete; the visible ModelMix navigation entry point in the Council sidebar exists (Mission 014); full alpha provider/settings flow remains open.
+- **26 — Add provider/settings UX sufficient for alpha:** searchable configured selectors are complete; the visible ModelMix navigation entry point in the Council sidebar exists (Mission 014); the cockpit Settings surface is now a real entry (Mission 017) with read-only provider status from the exported `configuredSources`; full alpha provider/settings flow remains open.
 
 ### Open / upcoming
 
-- **4 — Lock license and provenance**
+- **4 — Lock license and provenance** — **PARTIAL — MISSION 017** (the cockpit About section now surfaces the MIT license, the copyright holder, the real version, the text-only AI Counsel attribution, and the repo URL; `OPEN_SOURCE_CREDITS.md`, inherited-module provenance, and the shipped dependency-license inventory remain open)
 - **13 — Define privacy/data-routing rules**
-- **24 — Build thin top controls** — **PARTIAL — MISSIONS 012/016** (Mission 012: separate New Session control; Mission 016: one compact persistent top strip — brand, inert `Mode: Mix` label, session status, moved New Session, Details-hidden debug line, Back to Council — and CSS-driven panel Collapse/Maximize/Reset; an interactive Mode selector and the Settings surface remain open)
+- **24 — Build thin top controls** — **PARTIAL — MISSIONS 012/016/017** (Mission 012: separate New Session control; Mission 016: one compact persistent top strip — brand, inert `Mode: Mix` label, session status, moved New Session, Details-hidden debug line, Back to Council — and CSS-driven panel Collapse/Maximize/Reset; Mission 017: the Settings surface is now a real gear entry opening the Settings overlay; only an interactive Mode selector remains open)
 - **25 — Add minimal telemetry — first slice **PARTIAL — Mission 015** (honest telemetry truth layer: wall-clock `ts`, persisted provider-reported `usage`/`finish_reason`/timing, frontend truth capture, and the `describeUsage` provenance vocabulary all land without any rendering; the cockpit must then surface these labels honestly)
 - **27 — Add Solo**
 - **28 — Add Compare**
@@ -120,9 +121,9 @@ Verify provider streaming, SSE/reconnect, process-local run state, and credentia
 
 ## PHASE 1 — Own the Product Boundary
 
-### 4. Lock license and provenance — **OPEN**
+### 4. Lock license and provenance — **PARTIAL — MISSION 017**
 
-Preserve MIT/copyright, add `OPEN_SOURCE_CREDITS.md`, visible credit, inherited-module provenance, and shipped dependency-license inventory.
+Preserve MIT/copyright, add `OPEN_SOURCE_CREDITS.md`, visible credit, inherited-module provenance, and shipped dependency-license inventory. Mission 017 adds the visible credit and copyright/license surface in the cockpit About section; the remaining provenance/inventory artifacts stay open.
 
 ### 5. Lock chassis policy — **SUBSTANTIALLY SATISFIED**
 
@@ -204,9 +205,9 @@ Hydrate from persisted canonical messages, subscribe to existing events, replay 
 
 One visible Stop action; separate fixed Send and Stop controls; honest partial-state display.
 
-### 24. Build thin top controls — **PARTIAL — MISSIONS 012/016**
+### 24. Build thin top controls — **PARTIAL — MISSIONS 012/016/017**
 
-ModelMix, Mode, Models, Session, Settings, compact overflow as needed. No dead controls. Mission 012 delivered the separate New Session control (disabled while a run is active) and cleared the local session key on activation. Mission 016 delivered the compact persistent top strip (brand, inert `Mode: Mix` label, session status, New Session moved up out of the composer, `Run`/`Last sequence` behind a Details disclosure that is off by default, Back to Council) and CSS-driven per-panel Collapse/Maximize/Reset view controls that hide panels from layout without unmounting them. An interactive Mode selector (Solo/Compare depend on items 27/28) and the Settings surface remain open.
+ModelMix, Mode, Models, Session, Settings, compact overflow as needed. No dead controls. Mission 012 delivered the separate New Session control (disabled while a run is active) and cleared the local session key on activation. Mission 016 delivered the compact persistent top strip (brand, inert `Mode: Mix` label, session status, New Session moved up out of the composer, `Run`/`Last sequence` behind a Details disclosure that is off by default, Back to Council) and CSS-driven per-panel Collapse/Maximize/Reset view controls that hide panels from layout without unmounting them. Mission 017 delivers the Settings surface as a gear entry opening an in-app overlay (About / Providers / Defaults). An interactive Mode selector (Solo/Compare depend on items 27/28) remains open.
 
 ### 25. Add minimal telemetry — **OPEN**
 
@@ -214,7 +215,7 @@ State, elapsed time, provider-reported tokens where available, labeled estimates
 
 ### 26. Add provider/settings UX sufficient for alpha — **PARTIAL**
 
-Mission 007 completed searchable configured selectors. Provider credential/endpoint/settings flow remains open.
+Mission 007 completed searchable configured selectors. Mission 017 adds the cockpit Settings overlay with read-only provider status (derived from the now-exported `configuredSources`) and saved default seat models. Credential/endpoint/settings entry flow remains in the Council route and remains open.
 
 ## PHASE 6 — Conversation Modes and Persistence UX
 
@@ -355,6 +356,8 @@ Mission 015's telemetry truth layer (persisted provider-reported `usage`,
 provenance vocabulary) is still capture-only. The next rendering mission should
 surface those honest per-seat labels and timing in the cockpit (no telemetry
 dashboard), keeping each seat's provider-reported usage opaque and
-un-normalized, before the alpha acceptance run (item 33). Within item 24, the
-interactive Mode selector and the Settings surface remain open (Mission 016
-deliberately shipped the inert `Mode: Mix` label and no Settings entry).
+un-normalized, before the alpha acceptance run (item 33). Within item 24, only
+the interactive Mode selector (Solo/Compare depend on items 27/28) remains open;
+the Settings surface shipped as the Mission 017 gear entry. The guardrails
+(usage warning, output warning, hard cap) remain explicitly open and should be
+wired when the settings/run-control layer reaches them.
