@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 013: 2026-08-29 CT
+Reconciled through Mission 014: 2026-08-30 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -28,6 +28,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 011 | **PASS (LOCAL)** | Multi-turn cockpit display: prior runs archived into per-seat history and rendered above the live turn in each panel |
 | 012 | **PASS (LOCAL)** | Session control and prompt plumbing: archived turns carry real prompts/models; separate New Session control that clears local session key and resets the cockpit |
 | 013 | **PASS (LOCAL)** | Run and seat timeouts: ModelMix-owned 600s run / 300s seat-Moderator wall-clock bounds enforced with honest `reason: "timeout"` terminal outcomes and a proven no-late-writes guarantee |
+| 014 | **PASS (LOCAL)** | Reachability + test hygiene: real `GET /modelmix` serves `index.html` from `FRONTEND_DIST_DIR` so a production build can reach the three-panel cockpit, a visible Council sidebar link navigates there, and every `RunRegistry()` construction in `backend/tests/` now writes to an isolated `tmp_path` store instead of the live `data/modelmix/sessions/` directory |
 
 **Mission 008 is present on `main` and its persistence tests pass.**
 
@@ -69,7 +70,7 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 - **18 — Add normalized provider streaming interface**
 - **19 — Multiplex streams into one ordered SSE run feed**
 - **20 — Stream Moderator**
-- **21 — Build browser-first three-panel cockpit**
+- **21 — Build browser-first three-panel cockpit** — reachable from a production build (`GET /modelmix`) and from the Council sidebar (ModelMix nav link) as of **Mission 014**
 - **22 — Bind UI to durable run/session state**
 - **23 — Add Stop behavior**
 
@@ -81,7 +82,7 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 - **14 — Build deterministic mock provider:** deterministic fakes/mocks support current tests; full failure/timeout/rate-limit fixture matrix remains open.
 - **17 — Add basic spend/runtime guardrails:** Stop, turn cap, and seat-history per-message/per-seat character budgets exist (Mission 010 partial progress on context/spend bounding); timeout/cost-token ceilings/output warning/hard cap remain open. Mission 013 adds the wall-clock run (600s) and seat/Moderator (300s) timeouts.
 - **29 — Finalize Mix multi-turn session behavior:** seat-scoped Worker/Moderator history, bounding, failure-partial reuse, hot-swap continuity, completed-turn cockpit display, and New Session reset are implemented; retention/delete UX remains open.
-- **26 — Add provider/settings UX sufficient for alpha:** searchable configured selectors are complete; full alpha provider/settings flow remains open.
+- **26 — Add provider/settings UX sufficient for alpha:** searchable configured selectors are complete; the visible ModelMix navigation entry point in the Council sidebar exists (Mission 014); full alpha provider/settings flow remains open.
 
 ### Open / upcoming
 
@@ -233,9 +234,13 @@ Independent bounded seat histories, Moderator history, hot-swap continuity, and 
 
 ## ALPHA GATE
 
-### 33. Alpha acceptance test — **OPEN**
+### 33. Alpha acceptance test — **ENABLER — MISSION 014**
 
 Launch; three panels; configure A/B/Moderator; stream both workers; stream Moderator; cancel; survive worker failure; reopen session; multi-turn isolation; honest telemetry; no credential leak.
+
+Mission 014 removed the reachability blocker: a production build now serves the
+cockpit at `/modelmix` and offers a visible Council sidebar link, so the alpha
+acceptance launch can actually begin from a built app rather than a dev server.
 
 **Nothing below this line may delay the alpha gate.**
 
@@ -343,8 +348,11 @@ Hard cap is **not post-alpha by default**. Wire it when settings/run-control rea
 
 ## Immediate Next Engineering Gap
 
-Mission 013 delivers ModelMix-owned wall-clock run and seat timeouts with honest
-`reason: "timeout"` terminal outcomes and a verified no-late-writes guarantee.
-Remaining alpha gaps stay ordered by this Punch Board; Mission 013 does not add
-cost/token ceilings, output warning/hard-cap guardrails, telemetry, Solo,
-Compare, or retention/delete UX.
+Mission 014 removes the last hygiene/reachability blockers in the test and
+production-build path: the cockpit is now reachable from a built app at
+`/modelmix` (with a Council sidebar nav link), and backend tests no longer
+write fake sessions into the live session store. The next mission per the
+locked board is the thin top controls / settings-and-telemetry surface (items
+**24/25/26**), or the first provider / settings UX slice. The alpha acceptance
+run (item 33) can now actually start from a production build rather than
+requiring a Vite dev server.

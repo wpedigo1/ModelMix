@@ -224,11 +224,15 @@ async def test_timed_out_seat_reaches_moderator_with_survivor_and_persists_parti
     assert messages["worker_b"]["status"] == "completed"
 
 
-async def test_run_timeout_cancels_seats_and_emits_run_failed_with_reason_timeout():
+async def test_run_timeout_cancels_seats_and_emits_run_failed_with_reason_timeout(tmp_path):
     hung_a = HangingProvider()
     hung_b = HangingProvider()
     providers = {"a": hung_a, "b": hung_b}
-    registry = RunRegistry(seat_timeout=3.0, run_timeout=0.5)
+    registry = RunRegistry(
+        persistence=AtomicJsonModelMixPersistence(tmp_path),
+        seat_timeout=3.0,
+        run_timeout=0.5,
+    )
     run = await registry.start("timeout run", "a", "b", providers.__getitem__)
     await run.task
 
@@ -246,12 +250,15 @@ async def test_run_timeout_cancels_seats_and_emits_run_failed_with_reason_timeou
     assert hung_a.cancelled and hung_b.cancelled
 
 
-async def test_run_timeout_defaults_to_live_module_constant(monkeypatch):
+async def test_run_timeout_defaults_to_live_module_constant(monkeypatch, tmp_path):
     monkeypatch.setattr("backend.modelmix.timeouts.RUN_TIMEOUT_SECONDS", 0.1)
     hung_a = HangingProvider()
     hung_b = HangingProvider()
     providers = {"a": hung_a, "b": hung_b}
-    registry = RunRegistry(seat_timeout=3.0)
+    registry = RunRegistry(
+        persistence=AtomicJsonModelMixPersistence(tmp_path),
+        seat_timeout=3.0,
+    )
     run = await registry.start("default run timeout", "a", "b", providers.__getitem__)
     await run.task
 
@@ -286,12 +293,16 @@ async def test_no_events_append_after_run_reaches_terminal(tmp_path):
     assert snapshot["latest_seq"] == len(snapshot["events"])
 
 
-async def test_explicit_cancel_is_run_cancelled_and_never_labeled_timeout():
+async def test_explicit_cancel_is_run_cancelled_and_never_labeled_timeout(tmp_path):
     gate = asyncio.Event()
     hung_a = HangingProvider(gate)
     hung_b = HangingProvider(gate)
     providers = {"a": hung_a, "b": hung_b}
-    registry = RunRegistry(seat_timeout=3.0, run_timeout=60)
+    registry = RunRegistry(
+        persistence=AtomicJsonModelMixPersistence(tmp_path),
+        seat_timeout=3.0,
+        run_timeout=60,
+    )
     run = await registry.start("cancel me", "a", "b", providers.__getitem__)
     await wait_for(lambda: len(run._events) >= 3)
 
@@ -306,12 +317,12 @@ async def test_explicit_cancel_is_run_cancelled_and_never_labeled_timeout():
     assert run.status == "cancelled"
 
 
-async def test_normal_run_emits_unmodified_canonical_sequence():
+async def test_normal_run_emits_unmodified_canonical_sequence(tmp_path):
     done_a = DoneProvider("alpha")
     done_b = DoneProvider("beta")
     moderator = RecordingModerator("synthesis")
     providers = {"a": done_a, "b": done_b, "m": moderator}
-    registry = RunRegistry()
+    registry = RunRegistry(persistence=AtomicJsonModelMixPersistence(tmp_path))
     run = await registry.start("normal", "a", "b", providers.__getitem__, "m")
     await run.task
 

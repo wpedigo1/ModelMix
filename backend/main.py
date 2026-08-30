@@ -654,6 +654,15 @@ async def root():
     return {"status": "ok", "service": "The AI Counsel API"}
 
 
+@app.get("/modelmix")
+async def modelmix():
+    """Serve the ModelMix cockpit from the built frontend, nothing else."""
+    index_path = os.path.join(FRONTEND_DIST_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    raise HTTPException(status_code=404, detail="ModelMix requires a built frontend")
+
+
 @app.get("/api/conversations", response_model=List[ConversationMetadata])
 async def list_conversations():
     """List all conversations (metadata only)."""

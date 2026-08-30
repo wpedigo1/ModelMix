@@ -108,6 +108,10 @@ export default function Sidebar({
             <span className="btn-text">New Advisors</span>
           </button>
         </div>
+        <a className="sidebar-action-btn sidebar-action-btn--modelmix" href="/modelmix">
+          <span className="btn-icon">◈</span>
+          <span className="btn-text">ModelMix</span>
+        </a>
       </div>
 
       {/* Search Input */}

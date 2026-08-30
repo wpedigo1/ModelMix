@@ -8,6 +8,7 @@ import pytest
 from fastapi import FastAPI
 
 from backend.modelmix.journal import ReplayUnavailableError, RunEventJournal
+from backend.modelmix.persistence import AtomicJsonModelMixPersistence
 from backend.modelmix.registry import RunRegistry
 from backend.modelmix.routes import router
 from backend.providers.base import LLMProvider, ProviderStreamEvent
@@ -106,10 +107,10 @@ async def test_concurrent_appends_have_unique_monotonic_sequences():
     assert len({event["seq"] for event in events}) == 100
 
 
-async def test_registry_replay_survives_subscriber_disconnect_and_completes():
+async def test_registry_replay_survives_subscriber_disconnect_and_completes(tmp_path):
     gate = asyncio.Event()
     providers = {"a": ControlledProvider(gate, "A"), "b": ControlledProvider(gate, "B")}
-    registry = RunRegistry()
+    registry = RunRegistry(persistence=AtomicJsonModelMixPersistence(tmp_path))
     run = await registry.start("same prompt", "a", "b", providers.__getitem__)
     await wait_for(lambda: len(run._events) >= 3)
 
@@ -130,10 +131,10 @@ async def test_registry_replay_survives_subscriber_disconnect_and_completes():
     ]
 
 
-async def test_explicit_cancel_is_idempotent_and_replayable():
+async def test_explicit_cancel_is_idempotent_and_replayable(tmp_path):
     gate = asyncio.Event()
     providers = {"a": ControlledProvider(gate), "b": ControlledProvider(gate)}
-    registry = RunRegistry()
+    registry = RunRegistry(persistence=AtomicJsonModelMixPersistence(tmp_path))
     run = await registry.start("prompt", "a", "b", providers.__getitem__)
     await wait_for(lambda: len(run._events) >= 3)
 
@@ -149,8 +150,12 @@ async def test_explicit_cancel_is_idempotent_and_replayable():
     assert all(provider.cancelled for provider in providers.values())
 
 
-async def test_completed_run_retention_count_and_ttl_are_bounded():
-    registry = RunRegistry(max_terminal_runs=1, terminal_ttl_seconds=60)
+async def test_completed_run_retention_count_and_ttl_are_bounded(tmp_path):
+    registry = RunRegistry(
+        persistence=AtomicJsonModelMixPersistence(tmp_path),
+        max_terminal_runs=1,
+        terminal_ttl_seconds=60,
+    )
     now = time.monotonic()
     first = RunEventJournal("first", status="completed", terminal_at=now - 2)
     second = RunEventJournal("second", status="completed", terminal_at=now - 1)
@@ -158,14 +163,18 @@ async def test_completed_run_retention_count_and_ttl_are_bounded():
     assert await registry.get("first") is None
     assert await registry.get("second") is second
 
-    expiring = RunRegistry(max_terminal_runs=2, terminal_ttl_seconds=0)
+    expiring = RunRegistry(
+        persistence=AtomicJsonModelMixPersistence(tmp_path),
+        max_terminal_runs=2,
+        terminal_ttl_seconds=0,
+    )
     expired = RunEventJournal("expired", status="completed", terminal_at=1)
     expiring._runs[expired.run_id] = expired
     assert await expiring.get("expired") is None
 
 
-async def test_replay_route_supports_cursor_last_event_id_and_clear_errors(monkeypatch):
-    registry = RunRegistry()
+async def test_replay_route_supports_cursor_last_event_id_and_clear_errors(monkeypatch, tmp_path):
+    registry = RunRegistry(persistence=AtomicJsonModelMixPersistence(tmp_path))
     run = RunEventJournal("route-run", max_events=2)
     await run.append("discarded")
     second = await run.append("seat_delta", seat_id="worker_a", delta="two")

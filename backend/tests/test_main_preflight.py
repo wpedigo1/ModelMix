@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+import backend.main as main_module
 from backend.main import (
     PipelineResult,
     SendMessageRequest,
@@ -271,3 +272,31 @@ async def test_run_model_preflight_returns_user_facing_error_message():
 
     assert "openrouter:bad-model" in message
     assert "401" in message
+
+
+def test_modelmix_route_serves_built_frontend_index(tmp_path, monkeypatch):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text(
+        "<html><body>ModelMix Cockpit</body></html>", encoding="utf-8"
+    )
+    monkeypatch.setattr(main_module, "FRONTEND_DIST_DIR", str(dist))
+
+    with TestClient(app) as client:
+        response = client.get("/modelmix")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "ModelMix Cockpit" in response.text
+
+
+def test_modelmix_route_reports_404_when_frontend_not_built(tmp_path, monkeypatch):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    monkeypatch.setattr(main_module, "FRONTEND_DIST_DIR", str(dist))
+
+    with TestClient(app) as client:
+        response = client.get("/modelmix")
+
+    assert response.status_code == 404
+    assert "built frontend" in response.json()["detail"]

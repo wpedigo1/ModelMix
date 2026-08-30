@@ -1,6 +1,6 @@
 # ModelMix Mission Record Index
 
-Updated: 2026-08-29 15:00 CT
+Updated: 2026-08-30 CT
 
 This index reconciles completed implementation missions with the canonical engineering records in this repository.
 
@@ -26,6 +26,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 011 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `011-multi-turn-cockpit-display.md` |
 | 012 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `012-session-control-and-prompt-plumbing.md` |
 | 013 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `013-run-and-seat-timeouts.md` |
+| 014 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `014-reachability-and-test-hygiene.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -139,6 +140,20 @@ still yields `run_cancelled` and is never labeled a timeout; and no event is
 written to the journal or durable session after a run reaches terminal — proven
 for both timeout and cancel paths. It makes partial progress on Punch Board items
 **17** and **9** and strengthens item **16**.
+
+## Mission 014 Result
+
+**Mission 014 is implemented and verified locally.**
+
+Mission 014 adds a real `GET /modelmix` route (serving `index.html` from
+`FRONTEND_DIST_DIR`) and a visible Council sidebar navigation link, making
+the three-panel cockpit reachable from a production build. It fixes every
+`RunRegistry()` construction in `backend/tests/` to write to an isolated
+`tmp_path` store, eliminating the test-suite's long-standing pollution of the
+live `data/modelmix/sessions/` directory. The grep that found all sites is
+reported in the canonical mission report. It corresponds to Punch Board items
+**21** (fix: production-build reachability), **26** (partial: visible navigation
+entry), and **33** (enabler: acceptance run can now start from a built app).
 
 ## Evidence Rule
 

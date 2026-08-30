@@ -9,7 +9,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–013**.
+Completed and locally verified implementation missions: **001–014**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -40,6 +40,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 011 | **PASS (LOCAL)** | Multi-turn cockpit display: prior runs archived chronologically into per-seat `history`, pure `archiveCurrentRun`, prior turns rendered above the live turn in each panel | `011-multi-turn-cockpit-display.md` |
 | 012 | **PASS (LOCAL)** | Session control and prompt plumbing: starting state carries `prompt`/`models`, no placeholder for absent prompts, separate New Session control via `modelSelectorsDisabled` (clears local session key, resets cockpit, preserves models) | `012-session-control-and-prompt-plumbing.md` |
 | 013 | **PASS (LOCAL)** | Run and seat timeouts: ModelMix-owned 600s/300s wall-clock bounds (`timeouts.py`), `reason: "timeout"` terminal outcomes reusing `seat_failed`/`moderator_failed`/`run_failed`, honest partial Moderator path for a timed-out seat, and a verified no-late-writes guarantee | `013-run-and-seat-timeouts.md` |
+| 014 | **PASS (LOCAL)** | Reachability + test hygiene: real `GET /modelmix` serves the built frontend and the Council sidebar gains a ModelMix nav link (cockpit reachable from a production build); every backend-test `RunRegistry()` writes to an isolated `tmp_path` store instead of the live session directory | `014-reachability-and-test-hygiene.md` |
 
 ## Current Verified Product Slice
 
@@ -66,6 +67,7 @@ The accepted implementation through Mission 009 establishes:
 - a multi-turn cockpit display: each panel renders its seat's prior turns (compact prompt header above that turn's output) above the live streaming turn, sourced from a `history` array archived from prior session runs.
 - honest prompt/model plumbing and a session reset: archived turns carry the real submitted prompt and selected model IDs, absent prompts render nothing (no placeholder), and a separate New Session control (disabled while a run is active) clears the local session key and resets the cockpit while preserving model selections.
 - ModelMix-owned wall-clock run and seat timeouts: `timeouts.py` owns `RUN_TIMEOUT_SECONDS = 600` and `SEAT_TIMEOUT_SECONDS = 300`; `run_seat` and `run_moderator` bound their phases and `RunRegistry._run` bounds the whole run, terminating through the existing event types with `reason: "timeout"`, preserving prior deltas, routing a timed-out seat through the honest partial Moderator path, distinguishing explicit cancel (`run_cancelled`) from timeout, and guaranteeing no journal/persistence writes after a run reaches terminal.
+- production-build reachability and test hygiene: `GET /modelmix` serves `index.html` from `FRONTEND_DIST_DIR` (404 with a clear message when not built) and the Council sidebar has one visible ModelMix nav link, so the three-panel cockpit is reachable from a built app; every `RunRegistry()` in `backend/tests/` writes to an isolated `tmp_path` store — proven by an unchanged real-data file count (229 before = 229 after) across every previously-polluting test file.
 
 ## Mission 007.5 Verification Evidence
 
@@ -101,7 +103,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **18 — Add normalized provider streaming interface**
 - **19 — Multiplex streams into one ordered SSE run feed**
 - **20 — Stream Moderator**
-- **21 — Build browser-first three-panel cockpit**
+- **21 — Build browser-first three-panel cockpit** — reachable from a production build (`GET /modelmix`) and from the Council sidebar (ModelMix nav link) as of Mission 014
 - **22 — Bind UI to durable run/session state**
 - **23 — Add Stop behavior**
 
@@ -113,7 +115,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **14 — Deterministic mock provider:** current tests use deterministic fakes/mocks, but the full locked failure/timeout/rate-limit fixture matrix remains open.
 - **29 — Finalized Mix multi-turn behavior:** seat histories, Moderator history, hot-swap continuity, deterministic context bounding, and completed-turn cockpit display are implemented; retention/delete UX remains open.
 - **17 — Spend/runtime guardrails:** explicit Stop, the turn cap, seat-history per-message/per-seat character budgets (Mission 010), and wall-clock run (600s) / seat-Moderator (300s) timeouts (Mission 013) exist; cost/token ceilings and output warning/hard-cap work remain open.
-- **26 — Provider/settings UX:** searchable configured selectors are complete; full alpha provider/settings flow remains open.
+- **26 — Provider/settings UX:** searchable configured selectors are complete; the visible ModelMix sidebar navigation entry point exists (Mission 014); full alpha provider/settings flow remains open.
 
 ### Not yet satisfied / upcoming
 
@@ -126,7 +128,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **30 — Credential verification in actual packaging model**
 - **31 — Local backend hardening**
 - **32 — Basic structured observability**
-- **33 — Alpha acceptance gate**
+- **33 — Alpha acceptance gate** — enabled by Mission 014 (the cockpit is now reachable from a production build); the acceptance run itself remains open
 - **34–47 — Post-alpha roadmap**
 
 ## Locked Safeguards Still Open
@@ -224,3 +226,23 @@ are untouched: the focused suites (49) and the full backend suite (341 prior
 tests, 352 with the 11 new timeout tests) pass, and the frontend trio
 (test/build/lint) stays green even though no frontend file changed. See
 `013-run-and-seat-timeouts.md`.
+
+## Mission 014 Result
+
+Mission 014 makes the cockpit reachable and stops the tests from polluting live
+data. `backend/main.py` registers `GET /modelmix` next to the root handler: it
+serves `index.html` from `FRONTEND_DIST_DIR` (registered before the StaticFiles
+mount so it wins in production builds) and returns a clear 404 when the frontend
+is not built; two route tests in `test_main_preflight.py` cover the 200 and 404
+paths. The Council sidebar gains one visible green **ModelMix** link
+(`/modelmix`). Every `RunRegistry()` construction in `backend/tests/` now passes
+an explicit `AtomicJsonModelMixPersistence` rooted at `tmp_path`: the four
+named timeout sites plus the five journal constructors and the shared moderator
+`start_run` helper (see the canonical report for the exact grep). The suite-run
+disk proof: 229 session files in the real `data/modelmix/sessions/` before and
+after re-running all three previously-polluting test files. Two one-line
+cosmetics landed: the `multiplex_workers` `event_factory` parameter regained
+its signature indentation, and `history.py` regained its trailing newline.
+Validation: full backend suite **354 passed** (352 prior + 2 new route tests),
+ruff clean, frontend **35 passed** / build green / lint clean. See
+`014-reachability-and-test-hygiene.md`.

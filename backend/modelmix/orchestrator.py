@@ -24,7 +24,7 @@ async def multiplex_workers(
     provider_resolver: ProviderResolver,
     is_disconnected: Optional[DisconnectCheck] = None,
     run_id: Optional[str] = None,
-event_factory: Optional[EventFactory] = None,
+    event_factory: Optional[EventFactory] = None,
     emit_run_completed: bool = True,
     seat_histories: Optional[Dict[str, List[Dict[str, str]]]] = None,
     seat_timeout: Optional[float] = None,

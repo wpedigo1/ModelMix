@@ -83,20 +83,23 @@ async def wait_for(predicate, timeout=1):
         await asyncio.sleep(0)
 
 
-async def start_run(worker_a, worker_b, moderator):
+async def start_run(worker_a, worker_b, moderator, persistence=None):
     providers = {"a": worker_a, "b": worker_b, "m": moderator}
-    registry = RunRegistry()
+    registry = RunRegistry() if persistence is None else RunRegistry(persistence=persistence)
     run = await registry.start("original prompt", "a", "b", providers.__getitem__, "m")
     return registry, run
 
 
-async def test_moderator_waits_for_both_workers_and_receives_visible_isolated_outputs():
+async def test_moderator_waits_for_both_workers_and_receives_visible_isolated_outputs(tmp_path):
     gate_a = asyncio.Event()
     gate_b = asyncio.Event()
     worker_a = StreamingProvider(("visible A",), gate_a)
     worker_b = StreamingProvider(("visible B",), gate_b)
     moderator = StreamingProvider(("final ", "answer"))
-    _, run = await start_run(worker_a, worker_b, moderator)
+    _, run = await start_run(
+        worker_a, worker_b, moderator,
+        persistence=AtomicJsonModelMixPersistence(tmp_path),
+    )
 
     await wait_for(lambda: worker_a.started and worker_b.started)
     gate_a.set()
@@ -252,11 +255,14 @@ async def test_failed_seat_partial_history_is_reused_and_empty_failure_is_skippe
     assert run_2.status == "completed"
 
 
-async def test_one_worker_failure_allows_honest_partial_moderation():
+async def test_one_worker_failure_allows_honest_partial_moderation(tmp_path):
     worker_a = StreamingProvider(failure="worker A failed")
     worker_b = StreamingProvider(("usable B",))
     moderator = StreamingProvider(("synthesis",))
-    _, run = await start_run(worker_a, worker_b, moderator)
+    _, run = await start_run(
+        worker_a, worker_b, moderator,
+        persistence=AtomicJsonModelMixPersistence(tmp_path),
+    )
     await run.task
 
     handoff = moderator.messages[0][1]["content"]
@@ -269,12 +275,13 @@ async def test_one_worker_failure_allows_honest_partial_moderation():
     assert run.status == "partial"
 
 
-async def test_both_workers_failing_prevents_moderator_synthesis():
+async def test_both_workers_failing_prevents_moderator_synthesis(tmp_path):
     moderator = StreamingProvider(("must not run",))
     _, run = await start_run(
         StreamingProvider(failure="A failed"),
         StreamingProvider(failure="B failed"),
         moderator,
+        persistence=AtomicJsonModelMixPersistence(tmp_path),
     )
     await run.task
     events = await run.events_after(0)
@@ -285,10 +292,11 @@ async def test_both_workers_failing_prevents_moderator_synthesis():
     assert run.status == "failed"
 
 
-async def test_moderator_failure_preserves_worker_output_and_fails_run():
+async def test_moderator_failure_preserves_worker_output_and_fails_run(tmp_path):
     moderator = StreamingProvider(failure="moderator unavailable")
     _, run = await start_run(
-        StreamingProvider(("kept A",)), StreamingProvider(("kept B",)), moderator
+        StreamingProvider(("kept A",)), StreamingProvider(("kept B",)), moderator,
+        persistence=AtomicJsonModelMixPersistence(tmp_path),
     )
     await run.task
     events = await run.events_after(0)
@@ -301,10 +309,11 @@ async def test_moderator_failure_preserves_worker_output_and_fails_run():
     assert not any(event["type"] == "run_completed" for event in events)
 
 
-async def test_non_streaming_moderator_fallback_is_replayable_once():
+async def test_non_streaming_moderator_fallback_is_replayable_once(tmp_path):
     moderator = NonStreamingModerator()
     _, run = await start_run(
-        StreamingProvider(("A",)), StreamingProvider(("B",)), moderator
+        StreamingProvider(("A",)), StreamingProvider(("B",)), moderator,
+        persistence=AtomicJsonModelMixPersistence(tmp_path),
     )
     await run.task
     events = await run.events_after(0)
@@ -315,12 +324,15 @@ async def test_non_streaming_moderator_fallback_is_replayable_once():
     assert sum(event["type"] == "moderator_delta" for event in events) == 1
 
 
-async def test_cancel_before_moderator_prevents_start_and_is_replayable():
+async def test_cancel_before_moderator_prevents_start_and_is_replayable(tmp_path):
     gate = asyncio.Event()
     worker_a = StreamingProvider(("A",), gate)
     worker_b = StreamingProvider(("B",), gate)
     moderator = StreamingProvider(("final",))
-    registry, run = await start_run(worker_a, worker_b, moderator)
+    registry, run = await start_run(
+        worker_a, worker_b, moderator,
+        persistence=AtomicJsonModelMixPersistence(tmp_path),
+    )
     await wait_for(lambda: worker_a.started and worker_b.started)
     await registry.cancel(run.run_id)
     await run.task
@@ -331,11 +343,12 @@ async def test_cancel_before_moderator_prevents_start_and_is_replayable():
     assert not any(event["type"] == "run_completed" for event in events)
 
 
-async def test_cancel_during_moderator_cancels_it_without_success():
+async def test_cancel_during_moderator_cancels_it_without_success(tmp_path):
     moderator_gate = asyncio.Event()
     moderator = StreamingProvider(("late",), moderator_gate)
     registry, run = await start_run(
-        StreamingProvider(("A",)), StreamingProvider(("B",)), moderator
+        StreamingProvider(("A",)), StreamingProvider(("B",)), moderator,
+        persistence=AtomicJsonModelMixPersistence(tmp_path),
     )
     await wait_for(lambda: moderator.started)
     await registry.cancel(run.run_id)
