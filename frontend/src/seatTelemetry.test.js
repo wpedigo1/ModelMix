@@ -47,8 +47,8 @@ test('idle seats produce no telemetry items', () => {
     startedAt: null,
     completedAt: null,
   };
-  assert.deepEqual(buildSeatTelemetry(idleWorker, 'worker_a'), []);
-  assert.deepEqual(buildSeatTelemetry(waitingModerator, 'moderator'), []);
+  assert.deepEqual(buildSeatTelemetry(idleWorker), []);
+  assert.deepEqual(buildSeatTelemetry(waitingModerator), []);
 });
 
 test('a completed seat with usage shows authoritative provider-reported usage', () => {
@@ -60,8 +60,8 @@ test('a completed seat with usage shows authoritative provider-reported usage', 
     startedAt: 100,
     completedAt: 112.4,
   };
-  const items = buildSeatTelemetry(seat, 'worker_a');
-  assert.equal(items.length, 2);
+  const items = buildSeatTelemetry(seat);
+  assert.equal(items.length, 3);
   const usage = items.find((item) => item.key === 'usage');
   assert.equal(usage.label, 'Usage');
   assert.equal(usage.value, 'authoritative (provider-reported)');
@@ -77,7 +77,7 @@ test('a usage object without total_tokens falls back to totalTokenCount', () => 
     startedAt: 100,
     completedAt: 112.4,
   };
-  const usage = buildSeatTelemetry(seat, 'worker_a').find((item) => item.key === 'usage');
+  const usage = buildSeatTelemetry(seat).find((item) => item.key === 'usage');
   assert.equal(usage.value, 'authoritative (provider-reported)');
   assert.equal(usage.detail, '77 tokens');
 });
@@ -91,7 +91,7 @@ test('a completed seat without usage shows honest unavailable', () => {
     startedAt: 100,
     completedAt: 112.4,
   };
-  const items = buildSeatTelemetry(seat, 'worker_a');
+  const items = buildSeatTelemetry(seat);
   const usage = items.find((item) => item.key === 'usage');
   assert.equal(usage.value, 'unavailable');
   assert.equal(usage.detail, null);
@@ -106,7 +106,7 @@ test('elapsed timing is labeled calculated with a time range detail', () => {
     startedAt: 100,
     completedAt: 112.4,
   };
-  const timing = buildSeatTelemetry(seat, 'worker_a').find((item) => item.key === 'timing');
+  const timing = buildSeatTelemetry(seat).find((item) => item.key === 'timing');
   assert.equal(timing.label, 'Elapsed');
   assert.equal(timing.value, '12.4s (calculated)');
   assert.equal(timing.detail, `${localClock(100)} → ${localClock(112.4)}`);
@@ -121,8 +121,8 @@ test('a started but not completed seat shows a Started item without fabricating 
     startedAt: 100,
     completedAt: null,
   };
-  const items = buildSeatTelemetry(seat, 'worker_a');
-  assert.equal(items.length, 2);
+  const items = buildSeatTelemetry(seat);
+  assert.equal(items.length, 3);
   const timing = items.find((item) => item.key === 'timing');
   assert.equal(timing.label, 'Started');
   assert.equal(timing.value, localClock(100));
@@ -137,13 +137,13 @@ test('a completed seat with only completedAt shows a Completed item', () => {
     startedAt: null,
     completedAt: 112.4,
   };
-  const timing = buildSeatTelemetry(seat, 'worker_a').find((item) => item.key === 'timing');
+  const timing = buildSeatTelemetry(seat).find((item) => item.key === 'timing');
   assert.equal(timing.label, 'Completed');
   assert.equal(timing.value, localClock(112.4));
 });
 
-test('moderator finish reason is rendered only for the moderator seat', () => {
-  const moderator = {
+test('finish reason is rendered identically for every seat and passes provider values verbatim', () => {
+  const seat = {
     text: 'synthesis',
     status: 'completed',
     error: null,
@@ -153,13 +153,58 @@ test('moderator finish reason is rendered only for the moderator seat', () => {
     startedAt: 100,
     completedAt: 112.4,
   };
-  const modItems = buildSeatTelemetry(moderator, 'moderator');
-  const modFinish = modItems.find((item) => item.key === 'finish');
+  const modFinish = buildSeatTelemetry(seat).find((item) => item.key === 'finish');
   assert.equal(modFinish.value, 'stop');
 
-  const workerWithSameShape = { ...moderator };
-  const workerItems = buildSeatTelemetry(workerWithSameShape, 'worker_a');
-  assert.equal(workerItems.some((item) => item.key === 'finish'), false);
+  const workerFinish = buildSeatTelemetry({ ...seat }).find((item) => item.key === 'finish');
+  assert.equal(workerFinish.label, 'Finish');
+  assert.equal(workerFinish.value, 'stop');
+
+  const otherWorkerFinish = buildSeatTelemetry({ ...seat, finishReason: 'tool-calls' }).find((item) => item.key === 'finish');
+  assert.equal(otherWorkerFinish.value, 'tool-calls');
+});
+
+test('worker finish reason verbatim render applies only to values ModelMix does not own', () => {
+  const seat = {
+    text: 'stop',
+    status: 'completed',
+    error: null,
+    finishReason: 'stop',
+    usage: null,
+    startedAt: 100,
+    completedAt: 112.4,
+  };
+  const items = buildSeatTelemetry(seat);
+  const finish = items.find((item) => item.key === 'finish');
+  assert.equal(finish.value, 'stop');
+});
+
+test('worker finish reason modelmix_output_cap renders as readable ModelMix copy', () => {
+  const seat = {
+    text: 'output',
+    status: 'completed',
+    error: null,
+    finishReason: 'modelmix_output_cap',
+    usage: null,
+    startedAt: 100,
+    completedAt: 112.4,
+  };
+  const finish = buildSeatTelemetry(seat).find((item) => item.key === 'finish');
+  assert.equal(finish.value, 'Output capped by ModelMix');
+});
+
+test('finish reason for a worker without a reported reason stays known-unknown', () => {
+  const worker = {
+    text: 'answer',
+    status: 'completed',
+    error: null,
+    finishReason: null,
+    usage: null,
+    startedAt: 100,
+    completedAt: 112.4,
+  };
+  const finish = buildSeatTelemetry(worker).find((item) => item.key === 'finish');
+  assert.equal(finish.value, 'not reported');
 });
 
 test('moderator without a reported finish reason stays known-unknown', () => {
@@ -173,7 +218,7 @@ test('moderator without a reported finish reason stays known-unknown', () => {
     startedAt: 100,
     completedAt: 112.4,
   };
-  const finish = buildSeatTelemetry(moderator, 'moderator').find((item) => item.key === 'finish');
+  const finish = buildSeatTelemetry(moderator).find((item) => item.key === 'finish');
   assert.equal(finish.value, 'not reported');
 });
 
@@ -188,7 +233,56 @@ test('an oversized usage object is summarized by field count, never merged', () 
     startedAt: 100,
     completedAt: 112.4,
   };
-  const usageItem = buildSeatTelemetry(seat, 'worker_a').find((item) => item.key === 'usage');
+  const usageItem = buildSeatTelemetry(seat).find((item) => item.key === 'usage');
   assert.equal(usageItem.value, 'authoritative (provider-reported)');
   assert.equal(usageItem.detail, '10 fields');
+});
+
+test('a crossed output warning renders as a plain informational footer line with formatted counts', () => {
+  const seat = {
+    text: 'long answer',
+    status: 'running',
+    error: null,
+    finishReason: null,
+    usage: null,
+    outputWarning: { chars: 22451, threshold: 20000 },
+    startedAt: 100,
+    completedAt: null,
+  };
+  const items = buildSeatTelemetry(seat);
+  const warning = items.find((item) => item.key === 'output-warning');
+  assert.equal(warning.label, 'Approaching output limit');
+  assert.equal(warning.value, '22,451 / 20,000 chars');
+  const finish = items.find((item) => item.key === 'finish');
+  assert.equal(finish.value, 'not reported');
+});
+
+test('a crossed output warning stays visible alongside a capped completion', () => {
+  const seat = {
+    text: 'long answer',
+    status: 'completed',
+    error: null,
+    finishReason: 'modelmix_output_cap',
+    usage: null,
+    outputWarning: { chars: 22451, threshold: 20000 },
+    startedAt: 100,
+    completedAt: 112.4,
+  };
+  const items = buildSeatTelemetry(seat);
+  assert.equal(items.find((item) => item.key === 'output-warning').value, '22,451 / 20,000 chars');
+  assert.equal(items.find((item) => item.key === 'finish').value, 'Output capped by ModelMix');
+});
+
+test('no output-warning line is rendered when the seat never crossed a threshold', () => {
+  const seat = {
+    text: 'answer',
+    status: 'completed',
+    error: null,
+    finishReason: 'stop',
+    usage: null,
+    startedAt: 100,
+    completedAt: 112.4,
+  };
+  const items = buildSeatTelemetry(seat);
+  assert.equal(items.some((item) => item.key === 'output-warning'), false);
 });

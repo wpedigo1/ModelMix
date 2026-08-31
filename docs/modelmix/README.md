@@ -36,6 +36,7 @@ Historical engineering evidence through locally verified Mission 020:
 20. [`018-telemetry-rendering.md`](018-telemetry-rendering.md) — **PASS (LOCAL)**
 21. [`019-output-guardrails-backend.md`](019-output-guardrails-backend.md) — **PASS (LOCAL)**
 22. [`020-configurable-output-guardrails-backend.md`](020-configurable-output-guardrails-backend.md) — **PASS (LOCAL)**
+23. [`021-guardrails-settings-and-visibility.md`](021-guardrails-settings-and-visibility.md) — **PASS (LOCAL)**
 
 Mission reports preserve what was observed or delivered during that slice. They do not automatically override a later locked decision in the Punch Board.
 
@@ -55,7 +56,7 @@ Do not silently promote an older proposal into a current architecture decision.
 
 As of 2026-08-30 CT:
 
-- Missions **001–020** are recorded as implemented (007.5 interlock included); Mission 008 is present on current `main`.
+- Missions **001–021** are recorded as implemented (007.5 interlock included); Mission 008 is present on current `main`.
 - Mission **007.5** closed the MCP 2.x security/compatibility interlock.
 - Accepted Mission 007.5 implementation commit: `e018ed06807beda2c11531f065b2d4181c346ca8`.
 - MCP remains at **2.1.1**; Python and frontend dependency audits were recorded clean.
@@ -67,6 +68,7 @@ As of 2026-08-30 CT:
 - Mission **018** renders the telemetry truth layer honestly in the cockpit: compact per-seat footers (live turn only) show `Usage: authoritative (provider-reported)`/`unavailable`, the Moderator-only `finish_reason`, and ModelMix-calculated elapsed timing labeled `(calculated)`; per-historical-turn footers and cost/pricing wiring remain explicitly deferred follow-ups.
 - Mission **019** enforces the output guardrails in the backend run path: a new `backend/modelmix/guardrails.py` owns the provisional char bounds — `WARNING_OUTPUT_THRESHOLD_CHARS = 20_000`, `HARD_OUTPUT_CAP_CHARS = 40_000` — and `run_seat`/`run_moderator` emit a one-shot `seat_output_warning`/`moderator_output_warning`, then stop consuming the provider stream at the hard cap, truncating to exactly the cap and terminating as `seat_completed`/`moderator_completed` with `finish_reason: "modelmix_output_cap"` (an honest outcome distinct from completion, cancellation, provider termination, failure, and timeout); the provider-quota usage warning stays deferred (no authoritative quota data exists) and the thresholds await a configurability mission.
 - Mission **020** makes those thresholds configurable per request: `TwoWorkerRequest` gains optional `warning_threshold_chars`/`hard_cap_chars`, `routes.py` defaults omissions to the Mission 019 constants, rejects values outside `guardrails.MIN_OUTPUT_CHARS_BOUND = 100` / `MAX_OUTPUT_CHARS_BOUND = 200_000` and any `hard_cap_chars < warning_threshold_chars` as 422 before any provider is resolved or called, and the resolved pair rides the exact `registry.start → _run → _run_phase → multiplex_workers/run_moderator` chain (mirroring `seat_timeout`). Enforcement and event contracts are unchanged, the frontend omits both fields today (byte-for-byte Mission 019 behavior), and no value is persisted server-side.
+- Mission **021** closes the remaining item-17 work: a **Guardrails** section in the Settings dialog (4th section after Defaults) lets the user save/clear a local `modelmix.guardrails` override — bounded `100`–`200_000` chars with the server's cross-check (`hard_cap_chars >= warning_threshold_chars`) mirrored so the UI never offers a payload the server would 422; when a valid override is saved it is sent with every run request as `warning_threshold_chars`/`hard_cap_chars` (both omitted otherwise). On the way in, `seat_output_warning`/`moderator_output_warning` events are recorded as live `outputWarning` on the seat (never persisted to history/hydration) and rendered in the footer as a plain `Approaching output limit: 22,451 / 20,000 chars` line; worker seats gain the Moderator's `finish_reason` capture and all-seat finish captions with `modelmix_output_cap` → "Output capped by ModelMix" (other values verbatim). Frontend-only; no backend or API changes.
 - Schema-v1 session files live under `data/modelmix/sessions/` by default and are written atomically behind the ModelMix persistence interface.
 - Alpha persistence remains **versioned atomic JSON behind a ModelMix-owned interface**.
 - **SQLite migration is not part of the alpha plan.**

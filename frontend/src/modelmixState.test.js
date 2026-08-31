@@ -370,6 +370,7 @@ test('archiveCurrentRun appends the outgoing run, resets live slots, and keeps s
     text: 'A evidence',
     status: 'completed',
     error: null,
+    finishReason: null,
     usage: null,
     startedAt: null,
     completedAt: null,
@@ -387,6 +388,7 @@ test('archiveCurrentRun appends the outgoing run, resets live slots, and keeps s
     text: 'B evidence',
     status: 'completed',
     error: null,
+    finishReason: null,
     usage: null,
     startedAt: null,
     completedAt: null,
@@ -629,14 +631,14 @@ test('archiveCurrentRun carries usage, startedAt, and completedAt into the histo
 
   const archived = archiveCurrentRun(state);
   assert.deepEqual(archived.history[0].worker_a, {
-    text: 'A evidence', status: 'completed', error: null, usage: { total_tokens: 3 }, startedAt: 10, completedAt: 11,
+    text: 'A evidence', status: 'completed', error: null, finishReason: null, usage: { total_tokens: 3 }, startedAt: 10, completedAt: 11,
   });
   assert.deepEqual(archived.history[0].moderator, {
     text: 'M synthesis', status: 'completed', error: null, finishReason: 'stop',
     usage: { total_tokens: 4 }, startedAt: 12, completedAt: 13,
   });
   assert.deepEqual(archived.history[0].worker_b, {
-    text: 'B evidence', status: 'failed', error: 'stopped', usage: null, startedAt: 14, completedAt: 15,
+    text: 'B evidence', status: 'failed', error: 'stopped', finishReason: null, usage: null, startedAt: 14, completedAt: 15,
   });
 });
 
@@ -644,4 +646,152 @@ test('describeUsage returns authoritative only for a non-null object', () => {
   assert.equal(describeUsage({ total_tokens: 5 }), 'authoritative');
   assert.equal(describeUsage(null), 'unavailable');
   assert.equal(describeUsage(undefined), 'unavailable');
+});
+
+test('worker seats start with a null finishReason plus full moderator parity on completion', () => {
+  const initial = createModelMixState();
+  assert.equal(initial.worker_a.finishReason, null);
+  assert.equal(initial.worker_b.finishReason, null);
+
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 1, type: 'seat_delta', seat_id: 'worker_a', delta: 'A',
+  });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 2, type: 'seat_completed', seat_id: 'worker_a', finish_reason: 'stop',
+    usage: { total_tokens: 5 }, ts: 202,
+  });
+  assert.equal(state.worker_a.finishReason, 'stop');
+  assert.equal(state.worker_a.usage.total_tokens, 5);
+  assert.equal(state.worker_a.completedAt, 202);
+  assert.equal(state.worker_b.finishReason, null);
+});
+
+test('worker seat_completed captures the ModelMix-owned modelmix_output_cap finish reason', () => {
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 1, type: 'seat_delta', seat_id: 'worker_b', delta: 'long output',
+  });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 2, type: 'seat_completed', seat_id: 'worker_b', finish_reason: 'modelmix_output_cap',
+  });
+  assert.equal(state.worker_b.finishReason, 'modelmix_output_cap');
+  assert.equal(state.worker_b.status, 'completed');
+});
+
+test('seat_output_warning updates only its own seat and never the peers or moderator', () => {
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 1, type: 'seat_delta', seat_id: 'worker_a', delta: 'A' });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 2, type: 'seat_output_warning', seat_id: 'worker_a', chars: 22451, threshold: 20000,
+  });
+  assert.deepEqual(state.worker_a.outputWarning, { chars: 22451, threshold: 20000 });
+  assert.equal(state.worker_b.outputWarning, undefined);
+  assert.equal(state.moderator.outputWarning, undefined);
+});
+
+test('moderator_output_warning updates only the moderator seat', () => {
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 1, type: 'moderator_started' });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 2, type: 'moderator_output_warning', chars: 30000, threshold: 20000,
+  });
+  assert.deepEqual(state.moderator.outputWarning, { chars: 30000, threshold: 20000 });
+  assert.equal(state.worker_a.outputWarning, undefined);
+  assert.equal(state.worker_b.outputWarning, undefined);
+});
+
+test('outputWarning stays live-only and never leaks into archive or history entries', () => {
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 1, type: 'seat_delta', seat_id: 'worker_a', delta: 'A' });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 2, type: 'seat_output_warning', seat_id: 'worker_a', chars: 22451, threshold: 20000,
+  });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 3, type: 'seat_completed', seat_id: 'worker_a', finish_reason: 'modelmix_output_cap',
+  });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 4, type: 'moderator_delta', delta: 'M',
+  });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 5, type: 'moderator_output_warning', chars: 22000, threshold: 20000,
+  });
+  assert.deepEqual(state.worker_a.outputWarning, { chars: 22451, threshold: 20000 });
+  assert.deepEqual(state.moderator.outputWarning, { chars: 22000, threshold: 20000 });
+
+  const archived = archiveCurrentRun({
+    ...state,
+    prompt: 'question',
+    models: { worker_a: 'p:a', moderator: 'p:m', worker_b: 'p:b' },
+  });
+  assert.equal('outputWarning' in archived.history[0].worker_a, false);
+  assert.equal('outputWarning' in archived.history[0].moderator, false);
+  assert.equal('outputWarning' in archived.worker_a, false);
+});
+
+test('hydration reads worker finish reasons but never invents outputWarning on live seats or history', () => {
+  const document = {
+    schema_version: 1,
+    session: {
+      session_id: 'session-1',
+      runs: [
+        {
+          run_id: 'run-old', latest_seq: 4, status: 'completed', prompt: 'Prior',
+          models: { worker_a: 'p:a', moderator: 'p:m', worker_b: 'p:b' },
+        },
+        {
+          run_id: 'run-live', latest_seq: 4, status: 'completed', prompt: 'Live',
+          models: { worker_a: 'p:a', moderator: 'p:m', worker_b: 'p:b' },
+        },
+      ],
+      messages: [
+        {
+          run_id: 'run-old', seat: 'worker_a', content: 'old A', status: 'completed',
+          finish_reason: 'modelmix_output_cap',
+        },
+        {
+          run_id: 'run-live', seat: 'worker_a', content: 'live A', status: 'completed',
+          finish_reason: 'stop',
+        },
+        {
+          run_id: 'run-live', seat: 'moderator', content: 'live M', status: 'completed',
+          finish_reason: 'tool-calls',
+        },
+      ],
+    },
+  };
+  const state = hydrateModelMixState(document);
+  assert.equal(state.worker_a.finishReason, 'stop');
+  assert.equal(state.worker_b.finishReason, null);
+  assert.equal(state.moderator.finishReason, 'tool-calls');
+  assert.equal(state.history[0].worker_a.finishReason, 'modelmix_output_cap');
+  assert.equal(state.history[0].moderator.finishReason, null);
+  assert.equal('outputWarning' in state.worker_a, false);
+  assert.equal('outputWarning' in state.history[0].worker_a, false);
+});
+
+test('moderator finishReason behavior is unchanged by worker parity work', () => {
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 1, type: 'moderator_started' });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 2, type: 'moderator_completed', finish_reason: 'stop', usage: { total_tokens: 7 },
+  });
+  assert.equal(state.moderator.finishReason, 'stop');
+  assert.equal(state.moderator.status, 'completed');
+  assert.equal(state.worker_a.finishReason, null);
+  assert.equal(state.worker_b.finishReason, null);
+  assert.equal(state.worker_a.text, '');
+});
+
+test('a worker seat that crosses the warning and completes normally keeps the truthful warning alongside finish', () => {
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 1, type: 'seat_delta', seat_id: 'worker_a', delta: 'A' });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 2, type: 'seat_output_warning', seat_id: 'worker_a', chars: 22451, threshold: 20000,
+  });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 3, type: 'seat_completed', seat_id: 'worker_a', finish_reason: 'stop',
+  });
+  assert.equal(state.worker_a.finishReason, 'stop');
+  assert.deepEqual(state.worker_a.outputWarning, { chars: 22451, threshold: 20000 });
 });

@@ -35,6 +35,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 018 | **PASS (LOCAL)** | Telemetry rendering: the cockpit surfaces Mission 015's captured truth as compact per-seat footers (usage labeled `authoritative (provider-reported)` via `describeUsage` showing the provider-reported total token count when present — `total_tokens`/`totalTokenCount` — else the raw key names, or honest `unavailable`, ModelMix-calculated elapsed timing labeled `(calculated)` from `started_at`/`completed_at`, Moderator-only `finish_reason`, raw wall-clock start/end range) rendered only for the live turn — prior-turn archives keep telemetry hidden (explicit follow-up) and cost/pricing wiring stays deliberately out of scope |
 | 019 | **PASS (LOCAL)** | Output guardrails, backend enforcement: a new `guardrails.py` owns the provisional char bounds (`WARNING_OUTPUT_THRESHOLD_CHARS = 20_000`, `HARD_OUTPUT_CAP_CHARS = 40_000`, exact-boundary `clip_delta`); `run_seat` and `run_moderator` emit a one-shot `seat_output_warning`/`moderator_output_warning` on the first threshold crossing, then stop consuming the provider stream at the hard cap, truncating deterministically to exactly the cap and terminating as `seat_completed`/`moderator_completed` (NOT failed) with `finish_reason: "modelmix_output_cap"` — honestly distinct from provider termination, failure, timeout, and user cancellation. Non-streaming paths are capped with no warning. Constants are provisional defaults (configurability is a later settings mission); provider-quota usage warnings are explicitly deferred as not honestly buildable — no quota data exists. No changes to `events.py`/`persistence.py`/`journal.py`/`timeouts.py`/`history.py`/`registry.py` or any frontend file |
 | 020 | **PASS (LOCAL)** | Configurable output guardrails, backend: `TwoWorkerRequest` gains optional `warning_threshold_chars`/`hard_cap_chars` (`gt=0`); `routes.py::_resolve_guardrail_overrides` defaults omitted fields to the Mission 019 constants, rejects values outside `guardrails.MIN_OUTPUT_CHARS_BOUND = 100` / `MAX_OUTPUT_CHARS_BOUND = 200_000`, and rejects `hard_cap_chars < warning_threshold_chars` — every violation surfaces as a 422 before any provider is resolved or called. The resolved pair rides the exact `registry.start → _run → _run_phase → multiplex_workers/run_moderator` chain (mirroring `seat_timeout`); enforcement logic, event payloads, and the `modelmix_output_cap` finish reason are byte-for-byte unchanged, the frontend sends neither field yet (omitting both is byte-for-byte Mission 019 behavior), and nothing is persisted server-side |
+| 021 | **PASS (LOCAL)** | Guardrails settings and visibility, frontend: a 4th Settings section (Guardrails) saves/clears a local `modelmix.guardrails` override via a new `guardrailSettings.js` module (validate/load/save/clear, `MIN=100`/`MAX=200_000` bounds mirroring the backend, server cross-check mirrored); `send()` injects `warning_threshold_chars`/`hard_cap_chars` only when a valid override exists (both omitted otherwise — byte-for-byte Mission 020 behavior); `seat_output_warning`/`moderator_output_warning` become a live-only `outputWarning` on the seat (never persisted to history/hydration) rendered in every seat footer as `Approaching output limit: 22,451 / 20,000 chars`; worker seats gain the Moderator's `finish_reason` capture, and finish captions render on all seats (`modelmix_output_cap` → "Output capped by ModelMix", everything else verbatim). Frontend-only — no backend, API, or persistence changes |
 
 **Mission 008 is present on `main` and its persistence tests pass.**
 
@@ -87,7 +88,7 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 - **9 — Define run state machine:** core active/terminal outcomes exist; complete timeout/retry/state contract remains open. Mission 013 adds honest wall-clock `reason: "timeout"` outcomes for runs, seats, and Moderator.
 - **12 — Define provider capability matrix:** streaming/fallback and configured discovery exist; full matrix remains open.
 - **14 — Build deterministic mock provider:** deterministic fakes/mocks support current tests; full failure/timeout/rate-limit fixture matrix remains open.
-- **17 — Add basic spend/runtime guardrails:** Stop, turn cap, wall-clock run (600s) / seat-Moderator (300s) timeouts (Mission 013), seat-history per-message/per-seat character budgets (Mission 010 partial progress on context bounding), and — new in Mission 019 — a hard output cap plus one-shot output warning for every worker seat and the Moderator with an honest `modelmix_output_cap` terminal outcome, made configurable per request in Mission 020 (`warning_threshold_chars`/`hard_cap_chars`, bounded 100–200_000 chars, validated to 422 before any provider call); cost/token ceilings, frontend controls, and local-preference wiring remain open.
+- **17 — Add basic spend/runtime guardrails:** Stop, turn cap, wall-clock run (600s) / seat-Moderator (300s) timeouts (Mission 013), seat-history per-message/per-seat character budgets (Mission 010 partial progress on context bounding), and — new in Mission 019 — a hard output cap plus one-shot output warning for every worker seat and the Moderator with an honest `modelmix_output_cap` terminal outcome, made configurable per request in Mission 020 (`warning_threshold_chars`/`hard_cap_chars`, bounded 100–200_000 chars, validated to 422 before any provider call), and made user-configurable from the cockpit in Mission 021 (Guardrails settings section saving a local `modelmix.guardrails` override that is sent with every run request, with the crossed warning and honest finish captions rendered live in every seat footer); cost/token ceilings remain the only open sub-item.
 - **29 — Finalize Mix multi-turn session behavior:** seat-scoped Worker/Moderator history, bounding, failure-partial reuse, hot-swap continuity, completed-turn cockpit display, and New Session reset are implemented; retention/delete UX remains open.
 - **26 — Add provider/settings UX sufficient for alpha:** searchable configured selectors are complete; the visible ModelMix navigation entry point in the Council sidebar exists (Mission 014); the cockpit Settings surface is now a real entry (Mission 017) with read-only provider status from the exported `configuredSources`; full alpha provider/settings flow remains open.
 
@@ -193,9 +194,15 @@ cross-checked (`hard_cap_chars >= warning_threshold_chars`), and rejected as
 422 **before** any provider is resolved or called. The pair rides the exact
 `seat_timeout` chain (`registry.start → _run → _run_phase →
 multiplex_workers/run_moderator`); enforcement logic and event payloads are
-unchanged. The provider/account usage warning remains open because no
-authoritative quota data exists to compare against; controls in the Settings
-UI (with local-preference persistence) are the remaining item-17 work.
+unchanged. **Mission 021** closes the frontend slice: a Guardrails section in
+the cockpit Settings saves/clears a local `modelmix.guardrails` override
+(validated to the same bounds and cross-check so the UI never offers a
+payload the server would 422), `send()` includes both fields only when a valid
+override exists, the per-seat warning renders live in the footer as a plain
+informational line, and worker seats now report honest finish captions
+including "Output capped by ModelMix". The provider/account usage warning
+remains open because no authoritative quota data exists to compare against;
+the cost/token ceiling is the remaining item-17 sub-work.
 
 ## PHASE 4 — Streaming
 
@@ -351,11 +358,11 @@ Toggle; configurable warning percentage; authoritative percentage only when trul
 
 ### Excessive Output Token Warning
 
-Separate toggle; configurable absolute and/or known-max percentage threshold; warn once; estimates labeled.
+Separate toggle; configurable absolute and/or known-max percentage threshold; warn once; estimates labeled. The configurable threshold is now realized as **character** counts (not tokens — no reliable token-equivalence data exists) via the Guardrails settings section (Mission 021), saved locally and sent per request as `warning_threshold_chars`.
 
 ### Hard Output Cap
 
-Separate toggle; configurable threshold; stop at cap or closest enforceable boundary.
+Separate toggle; configurable threshold; stop at cap or closest enforceable boundary. Realized as an exact deterministic character cap (Missions 019–021), user-configurable via the Guardrails settings section and sent per request as `hard_cap_chars`.
 
 Terminal state must distinguish:
 - normal completion;
@@ -367,18 +374,18 @@ Hard cap is **not post-alpha by default**. Wire it when settings/run-control rea
 
 ## Immediate Next Engineering Gap
 
-The output guardrails are now enforced for real output (Mission 019) and the
-two thresholds are configurable per request (Mission 020): every worker seat
-and the Moderator carry a hard cap (default 40k chars, exact deterministic
-truncation via `guardrails.py`, terminal `finish_reason: "modelmix_output_cap"`,
-honestly distinct from normal completion, user cancellation, provider/model
-termination, failure, and timeout) plus a one-shot output warning (default 20k
-chars, `seat_output_warning`/`moderator_output_warning`). The per-request
-override accepts `warning_threshold_chars`/`hard_cap_chars` (bounded
-100–200_000 and cross-checked) and rejects invalid values with a 422 before
-any provider call; a settings/local-preference UI mission is what makes the
-chosen values feel persistent to the user, and no running value is ever
-persisted server-side. The provider/account usage warning stays explicitly open
+The output guardrails are now enforced for real output (Mission 019), the
+two thresholds are configurable per request (Mission 020), and the cockpit
+makes them user-configurable with local persistence (Mission 021): a
+Guardrails section in Settings saves/clears a local `modelmix.guardrails`
+override (bounded 100–200_000 and cross-checked like the server) that
+`send()` attaches to every run request, the one-shot warning renders live in
+the seat footer as a plain informational line
+(`Approaching output limit: 22,451 / 20,000 chars`), and every seat — workers
+included — reports its honest `finish_reason` caption, with "Output capped by
+ModelMix" for capped runs. No running value is ever persisted server-side, and
+the frontend's static 20k/40k default help text is explicitly labeled
+non-live. The provider/account usage warning stays explicitly open
 because no authoritative quota/rate-limit data exists anywhere to compare
 against. Mission 015's telemetry truth layer is rendered as compact per-seat
 footers (Mission 018) with no telemetry dashboard, usage kept opaque and

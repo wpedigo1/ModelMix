@@ -41,6 +41,11 @@ function usageDetail(usage) {
   return rawUsageKeys(usage);
 }
 
+function finishLabel(reason) {
+  if (reason === 'modelmix_output_cap') return 'Output capped by ModelMix';
+  return reason || 'not reported';
+}
+
 function isSeatActive(seat) {
   if (!seat || typeof seat !== 'object') return false;
   const ran = typeof seat.status === 'string' && !['idle', 'waiting'].includes(seat.status);
@@ -49,7 +54,7 @@ function isSeatActive(seat) {
   return ran || hasFields;
 }
 
-export function buildSeatTelemetry(seat, seatKey) {
+export function buildSeatTelemetry(seat) {
   if (!isSeatActive(seat)) return [];
   const items = [];
   const usage = seat.usage;
@@ -59,11 +64,20 @@ export function buildSeatTelemetry(seat, seatKey) {
     value: describeUsage(usage) === 'authoritative' ? 'authoritative (provider-reported)' : 'unavailable',
     detail: describeUsage(usage) === 'authoritative' ? usageDetail(usage) : null,
   });
-  if (seatKey === 'moderator') {
+  items.push({
+    key: 'finish',
+    label: 'Finish',
+    value: finishLabel(seat.finishReason),
+  });
+  if (
+    seat.outputWarning
+    && Number.isInteger(seat.outputWarning.chars)
+    && Number.isInteger(seat.outputWarning.threshold)
+  ) {
     items.push({
-      key: 'finish',
-      label: 'Finish',
-      value: seat.finishReason || 'not reported',
+      key: 'output-warning',
+      label: 'Approaching output limit',
+      value: `${seat.outputWarning.chars.toLocaleString('en-US')} / ${seat.outputWarning.threshold.toLocaleString('en-US')} chars`,
     });
   }
   const started = seat.startedAt;

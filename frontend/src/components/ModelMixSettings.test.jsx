@@ -5,6 +5,7 @@ import { act } from 'react';
 import { afterEach, beforeEach, test, vi } from 'vitest';
 import pkg from '../../package.json';
 import { DEFAULT_SAVED_MODELS_KEY, loadSavedSeatModels } from '../defaultSeatModels';
+import { GUARDRAIL_STORAGE_KEY, loadGuardrailOverride } from '../guardrailSettings';
 
 const { mockSettings, mockDiscovered } = vi.hoisted(() => ({ mockSettings: {}, mockDiscovered: [] }));
 
@@ -115,6 +116,14 @@ function selectedLabel(inputId) {
   const control = document.getElementById(inputId).closest('.model-select__control');
   const single = control.querySelector('.model-select__single-value');
   return single ? single.textContent : null;
+}
+
+function typeInput(element, value) {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  act(() => {
+    setter.call(element, value);
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
 }
 
 test('gear button opens a settings dialog and the close control dismisses it', async () => {
@@ -239,4 +248,85 @@ test('Defaults section saves the current selections and Clear removes them', asy
   assert.equal(loadSavedSeatModels(window.localStorage), null);
   assert.ok(document.querySelector('.modelmix-settings-section').textContent.includes('No saved defaults — built-in defaults apply.'));
   assert.equal(document.querySelector('.modelmix-settings-clear').disabled, true);
+});
+
+test('Guardrails section starts empty with Save and Clear disabled and static default help text', async () => {
+  await renderObserver();
+  openSettings();
+  click(navButton('Guardrails'));
+
+  const warning = document.getElementById('modelmix-guardrail-warning');
+  const cap = document.getElementById('modelmix-guardrail-cap');
+  assert.ok(warning);
+  assert.ok(cap);
+  assert.equal(warning.value, '');
+  assert.equal(cap.value, '');
+
+  const sectionText = document.querySelector('.modelmix-settings-section').textContent;
+  assert.ok(sectionText.includes('ModelMix\'s built-in default'));
+  assert.ok(sectionText.includes('20,000'));
+  assert.ok(sectionText.includes('40,000'));
+  assert.ok(sectionText.includes('not a live-fetched server value'));
+  assert.ok(sectionText.includes('No saved override — server defaults apply.'));
+
+  assert.equal(document.querySelector('.modelmix-settings-save').disabled, true);
+  assert.equal(document.querySelector('.modelmix-settings-clear').disabled, true);
+});
+
+test('Guardrails section shows an inline error and keeps Save disabled for an invalid pair', async () => {
+  await renderObserver();
+  openSettings();
+  click(navButton('Guardrails'));
+
+  const cap = document.getElementById('modelmix-guardrail-cap');
+  typeInput(cap, '100');
+  const warning = document.getElementById('modelmix-guardrail-warning');
+  typeInput(warning, '500');
+  const section = document.querySelector('.modelmix-settings-section');
+  assert.ok(section.textContent.includes('Hard cap must be at least the warning threshold'));
+  assert.equal(document.querySelector('.modelmix-settings-error').getAttribute('role'), 'alert');
+  assert.equal(document.querySelector('.modelmix-settings-save').disabled, true);
+
+  typeInput(cap, '250000');
+  assert.ok(section.textContent.includes('must be between 100 and 200000 characters'));
+  assert.equal(document.querySelector('.modelmix-settings-save').disabled, true);
+});
+
+test('Guardrails section saving a valid pair enables Clear and writes the override', async () => {
+  await renderObserver();
+  openSettings();
+  click(navButton('Guardrails'));
+
+  typeInput(document.getElementById('modelmix-guardrail-warning'), '5000');
+  typeInput(document.getElementById('modelmix-guardrail-cap'), '10000');
+  assert.equal(document.querySelector('.modelmix-settings-save').disabled, false);
+
+  click(document.querySelector('.modelmix-settings-save'));
+  assert.deepEqual(loadGuardrailOverride(window.localStorage), {
+    warning_threshold_chars: 5000,
+    hard_cap_chars: 10000,
+  });
+  assert.ok(document.querySelector('.modelmix-settings-section').textContent.includes('Saved override will be sent with each request.'));
+  assert.equal(document.querySelector('.modelmix-settings-clear').disabled, false);
+});
+
+test('Guardrails section Clear removes the override and resets both inputs', async () => {
+  window.localStorage.setItem(GUARDRAIL_STORAGE_KEY, JSON.stringify({
+    warning_threshold_chars: 5000,
+    hard_cap_chars: 10000,
+  }));
+  await renderObserver();
+  openSettings();
+  click(navButton('Guardrails'));
+
+  assert.equal(document.getElementById('modelmix-guardrail-warning').value, '5000');
+  assert.equal(document.getElementById('modelmix-guardrail-cap').value, '10000');
+  assert.equal(document.querySelector('.modelmix-settings-clear').disabled, false);
+
+  click(document.querySelector('.modelmix-settings-clear'));
+  assert.equal(loadGuardrailOverride(window.localStorage), null);
+  assert.equal(document.getElementById('modelmix-guardrail-warning').value, '');
+  assert.equal(document.getElementById('modelmix-guardrail-cap').value, '');
+  assert.equal(document.querySelector('.modelmix-settings-clear').disabled, true);
+  assert.ok(document.querySelector('.modelmix-settings-section').textContent.includes('No saved override — server defaults apply.'));
 });

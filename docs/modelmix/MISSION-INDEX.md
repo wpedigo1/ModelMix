@@ -33,6 +33,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 018 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `018-telemetry-rendering.md` |
 | 019 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `019-output-guardrails-backend.md` |
 | 020 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `020-configurable-output-guardrails-backend.md` |
+| 021 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `021-guardrails-settings-and-visibility.md` |
 
 ## Mission 007 Provenance Clarification
 

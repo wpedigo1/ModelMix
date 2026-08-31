@@ -11,6 +11,14 @@ import {
   loadSavedSeatModels,
   saveSeatModels,
 } from '../defaultSeatModels';
+import {
+  clearGuardrailOverride,
+  loadGuardrailOverride,
+  MAX_OUTPUT_CHARS_BOUND,
+  MIN_OUTPUT_CHARS_BOUND,
+  saveGuardrailOverride,
+  validateGuardrailOverride,
+} from '../guardrailSettings';
 import pkg from '../../package.json';
 import {
   cancelModelMixRun,
@@ -54,6 +62,7 @@ export default function ModelMixObserver() {
   const [settingsSection, setSettingsSection] = useState('about');
   const [settingsSnapshot, setSettingsSnapshot] = useState(null);
   const [defaultsRevision, setDefaultsRevision] = useState(0);
+  const [guardrailsRevision, setGuardrailsRevision] = useState(0);
 
   const updateObserver = useCallback((updater) => {
     setObserver((current) => {
@@ -215,13 +224,19 @@ export default function ModelMixObserver() {
     };
     updateObserver(starting);
     try {
-      const response = await startModelMixRun({
+      const requestBody = {
         prompt: prompt.trim(),
         worker_a_model: workerAModel.trim(),
         moderator_model: moderatorModel.trim(),
         worker_b_model: workerBModel.trim(),
         session_id: observerRef.current.sessionId || undefined,
-      }, controller.signal);
+      };
+      const guardrailOverride = loadGuardrailOverride();
+      if (guardrailOverride) {
+        requestBody.warning_threshold_chars = guardrailOverride.warning_threshold_chars;
+        requestBody.hard_cap_chars = guardrailOverride.hard_cap_chars;
+      }
+      const response = await startModelMixRun(requestBody, controller.signal);
       const runId = response.headers.get('X-ModelMix-Run-ID');
       const sessionId = response.headers.get('X-ModelMix-Session-ID');
       if (sessionId) window.localStorage?.setItem('modelmix.sessionId', sessionId);
@@ -260,6 +275,16 @@ export default function ModelMixObserver() {
   const clearDefaults = () => {
     clearSavedSeatModels(window.localStorage);
     setDefaultsRevision((revision) => revision + 1);
+  };
+
+  const saveGuardrails = (values) => {
+    if (!saveGuardrailOverride(values)) return;
+    setGuardrailsRevision((revision) => revision + 1);
+  };
+
+  const clearGuardrails = () => {
+    clearGuardrailOverride();
+    setGuardrailsRevision((revision) => revision + 1);
   };
 
   const controls = controlState(observer.overall);
@@ -302,6 +327,9 @@ export default function ModelMixObserver() {
           defaultsRevision={defaultsRevision}
           onSaveDefaults={saveDefaults}
           onClearDefaults={clearDefaults}
+          guardrailsRevision={guardrailsRevision}
+          onSaveGuardrails={saveGuardrails}
+          onClearGuardrails={clearGuardrails}
         />
       )}
 
@@ -408,7 +436,7 @@ function TranscriptPane({
   const priorTurns = history.filter((entry) => entry[seatKey]?.text);
   const collapseLabel = `${collapsed ? 'Expand' : 'Collapse'} ${title}`;
   const maximizeLabel = `${maximized ? 'Restore' : 'Maximize'} ${title}`;
-  const telemetry = buildSeatTelemetry(participant, seatKey);
+  const telemetry = buildSeatTelemetry(participant);
   return (
     <article className={`modelmix-worker ${className}`.trim()}>
       <header>
@@ -451,6 +479,7 @@ const SETTINGS_SECTIONS = [
   { id: 'about', label: 'About' },
   { id: 'providers', label: 'Providers' },
   { id: 'defaults', label: 'Defaults' },
+  { id: 'guardrails', label: 'Guardrails' },
 ];
 
 function ModelMixSettings({
@@ -462,6 +491,9 @@ function ModelMixSettings({
   defaultsRevision,
   onSaveDefaults,
   onClearDefaults,
+  guardrailsRevision,
+  onSaveGuardrails,
+  onClearGuardrails,
 }) {
   return (
     <div className="modelmix-settings-backdrop" onClick={onClose}>
@@ -498,6 +530,13 @@ function ModelMixSettings({
               revision={defaultsRevision}
               onSave={onSaveDefaults}
               onClear={onClearDefaults}
+            />
+          )}
+          {section === 'guardrails' && (
+            <GuardrailsSection
+              key={guardrailsRevision}
+              onSave={onSaveGuardrails}
+              onClear={onClearGuardrails}
             />
           )}
         </div>
@@ -588,6 +627,83 @@ function DefaultsSection({ currentModels, onSave, onClear }) {
       <div className="modelmix-settings-actions">
         <button type="button" className="modelmix-settings-save" onClick={onSave}>Save current selections as defaults</button>
         <button type="button" className="modelmix-settings-clear" disabled={!saved} onClick={onClear}>Clear saved defaults</button>
+      </div>
+    </div>
+  );
+}
+
+function GuardrailsSection({ onSave, onClear }) {
+  const [fields, setFields] = useState(() => {
+    const saved = loadGuardrailOverride();
+    return {
+      warning: saved ? String(saved.warning_threshold_chars) : '',
+      cap: saved ? String(saved.hard_cap_chars) : '',
+    };
+  });
+
+  const parsed = {
+    warning_threshold_chars: fields.warning === '' ? NaN : Number(fields.warning),
+    hard_cap_chars: fields.cap === '' ? NaN : Number(fields.cap),
+  };
+  const validation = validateGuardrailOverride(parsed);
+  const edited = fields.warning !== '' || fields.cap !== '';
+  const saved = loadGuardrailOverride();
+  return (
+    <div className="modelmix-settings-section">
+      <p className="modelmix-settings-line">
+        Save both thresholds as character counts — these are not token counts. When saved, both are sent with every request and the server validates them again.
+      </p>
+      <label className="modelmix-settings-line" htmlFor="modelmix-guardrail-warning">
+        Warning threshold (characters)
+      </label>
+      <input
+        id="modelmix-guardrail-warning"
+        className="modelmix-settings-input"
+        type="number"
+        min={MIN_OUTPUT_CHARS_BOUND}
+        max={MAX_OUTPUT_CHARS_BOUND}
+        step="1"
+        value={fields.warning}
+        onChange={(event) => setFields((current) => ({ ...current, warning: event.target.value }))}
+        aria-label="Warning threshold in characters"
+      />
+      <label className="modelmix-settings-line" htmlFor="modelmix-guardrail-cap">
+        Hard cap (characters)
+      </label>
+      <input
+        id="modelmix-guardrail-cap"
+        className="modelmix-settings-input"
+        type="number"
+        min={MIN_OUTPUT_CHARS_BOUND}
+        max={MAX_OUTPUT_CHARS_BOUND}
+        step="1"
+        value={fields.cap}
+        onChange={(event) => setFields((current) => ({ ...current, cap: event.target.value }))}
+        aria-label="Hard cap in characters"
+      />
+      {!validation.valid && edited && (
+        <p className="modelmix-settings-error" role="alert">{validation.error}</p>
+      )}
+      <p className="modelmix-settings-line">
+        ModelMix's built-in default: warning 20,000 chars and hard cap 40,000 chars. This is a static default value, not a live-fetched server value — requests that omit both thresholds use it.
+      </p>
+      {saved ? (
+        <p className="modelmix-settings-line">Saved override will be sent with each request.</p>
+      ) : (
+        <p className="modelmix-settings-line">No saved override — server defaults apply.</p>
+      )}
+      <div className="modelmix-settings-actions">
+        <button
+          type="button"
+          className="modelmix-settings-save"
+          disabled={!validation.valid}
+          onClick={() => onSave(parsed)}
+        >
+          Save as the default override
+        </button>
+        <button type="button" className="modelmix-settings-clear" disabled={!saved} onClick={onClear}>
+          Clear saved override
+        </button>
       </div>
     </div>
   );
