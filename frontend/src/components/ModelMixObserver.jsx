@@ -209,12 +209,12 @@ export default function ModelMixObserver() {
 
   const send = async (event) => {
     event.preventDefault();
-    if (!prompt.trim() || !workerAModel.trim() || !workerBModel.trim()) return;
-    if (mode !== 'compare' && !moderatorModel.trim()) return;
+    if (!prompt.trim() || !workerAModel.trim()) return;
+    if (!isSolo && !workerBModel.trim()) return;
+    if (mode === 'mix' && !moderatorModel.trim()) return;
     connectionRef.current?.abort();
     const controller = new AbortController();
     connectionRef.current = controller;
-    const isCompare = mode === 'compare';
     const starting = {
       ...archiveCurrentRun(observerRef.current),
       overall: 'connecting',
@@ -222,8 +222,8 @@ export default function ModelMixObserver() {
       prompt: prompt.trim(),
       models: {
         worker_a: workerAModel.trim(),
-        moderator: isCompare ? '' : moderatorModel.trim(),
-        worker_b: workerBModel.trim(),
+        moderator: mode === 'mix' ? moderatorModel.trim() : '',
+        worker_b: isSolo ? '' : workerBModel.trim(),
       },
     };
     updateObserver(starting);
@@ -231,10 +231,10 @@ export default function ModelMixObserver() {
       const requestBody = {
         prompt: prompt.trim(),
         worker_a_model: workerAModel.trim(),
-        worker_b_model: workerBModel.trim(),
         session_id: observerRef.current.sessionId || undefined,
       };
-      if (!isCompare) requestBody.moderator_model = moderatorModel.trim();
+      if (!isSolo) requestBody.worker_b_model = workerBModel.trim();
+      if (mode === 'mix') requestBody.moderator_model = moderatorModel.trim();
       const guardrailOverride = loadGuardrailOverride();
       if (guardrailOverride) {
         requestBody.warning_threshold_chars = guardrailOverride.warning_threshold_chars;
@@ -293,12 +293,13 @@ export default function ModelMixObserver() {
 
   const controls = controlState(observer.overall);
   const selectorsDisabled = modelsLoading || modelSelectorsDisabled(observer.overall);
+  const isSolo = mode === 'solo';
   const sendDisabled = controls.sendDisabled
     || modelsLoading
     || !prompt.trim()
     || !workerAModel
-    || !workerBModel
-    || (mode !== 'compare' && !moderatorModel);
+    || (!isSolo && !workerBModel)
+    || (mode === 'mix' && !moderatorModel);
   const modeDisabled = modelsLoading || modelSelectorsDisabled(observer.overall);
   return (
     <main className="modelmix-observer">
@@ -318,7 +319,7 @@ export default function ModelMixObserver() {
             }}
           >
             {MODES.map((value) => (
-              <option key={value} value={value}>{value === 'mix' ? 'Mix' : 'Compare'}</option>
+              <option key={value} value={value}>{value === 'mix' ? 'Mix' : value === 'compare' ? 'Compare' : 'Solo'}</option>
             ))}
           </select>
         </label>
@@ -371,7 +372,7 @@ export default function ModelMixObserver() {
               isLoading={modelsLoading}
             />
           </label>
-          {mode !== 'compare' && (
+          {mode === 'mix' && (
             <label htmlFor="modelmix-moderator-model">
               Moderator model
               <SearchableModelSelect
@@ -386,19 +387,21 @@ export default function ModelMixObserver() {
               />
             </label>
           )}
-          <label htmlFor="modelmix-worker-b-model">
-            Worker B model
-            <SearchableModelSelect
-              inputId="modelmix-worker-b-model"
-              ariaLabel="Worker B model"
-              models={models}
-              allModels={models}
-              value={workerBModel}
-              onChange={setWorkerBModel}
-              isDisabled={selectorsDisabled}
-              isLoading={modelsLoading}
-            />
-          </label>
+          {!isSolo && (
+            <label htmlFor="modelmix-worker-b-model">
+              Worker B model
+              <SearchableModelSelect
+                inputId="modelmix-worker-b-model"
+                ariaLabel="Worker B model"
+                models={models}
+                allModels={models}
+                value={workerBModel}
+                onChange={setWorkerBModel}
+                isDisabled={selectorsDisabled}
+                isLoading={modelsLoading}
+              />
+            </label>
+          )}
         </div>
         {modelsError && <p className="modelmix-model-error" role="alert">{modelsError}</p>}
         <div className="modelmix-actions">
@@ -415,7 +418,7 @@ export default function ModelMixObserver() {
       )}
 
       <section
-        className={`modelmix-workers${panelView.maximized ? ' modelmix-workers--maximized' : ''}`}
+        className={`modelmix-workers${panelView.maximized || isSolo ? ' modelmix-workers--maximized' : ''}`}
         aria-label="ModelMix cockpit"
       >
         {[
@@ -423,8 +426,14 @@ export default function ModelMixObserver() {
           { seatKey: 'moderator', title: 'Moderator', className: 'modelmix-moderator', emptyText: 'Waiting for workers…' },
           { seatKey: 'worker_b', title: 'Worker B', className: '', emptyText: 'Waiting for visible output…' },
         ].map(({ seatKey, title, className, emptyText }) => {
-          const hiddenByMode = mode === 'compare' && seatKey === 'moderator';
-          const viewClasses = `${className} ${getPanelViewClasses(seatKey, panelView.maximized, panelView.collapsed).join(' ')}${hiddenByMode ? ' modelmix-panel-hidden' : ''}`.trim();
+          const hiddenByMode = (mode === 'compare' && seatKey === 'moderator')
+            || (mode === 'solo' && (seatKey === 'moderator' || seatKey === 'worker_b'));
+          // In Solo mode the mode owns the layout: worker_a always renders and
+          // fills the width, so any panelView.maximized targeting another seat
+          // is neutralized (otherwise a maximize on a mode-hidden panel would
+          // blank the cockpit).
+          const effectiveMaximized = isSolo ? '' : panelView.maximized;
+          const viewClasses = `${className} ${getPanelViewClasses(seatKey, effectiveMaximized, panelView.collapsed).join(' ')}${hiddenByMode ? ' modelmix-panel-hidden' : ''}`.trim();
           return (
             <TranscriptPane
               key={seatKey}

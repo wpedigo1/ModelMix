@@ -1,6 +1,6 @@
 export const MODE_STORAGE_KEY = 'modelmix.mode';
 
-export const MODES = ['mix', 'compare'];
+export const MODES = ['mix', 'compare', 'solo'];
 
 export const DEFAULT_MODE = 'mix';
 

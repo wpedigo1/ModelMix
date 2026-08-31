@@ -17,8 +17,8 @@ function memoryStorage() {
   };
 }
 
-test('only mix and compare are valid modes, no solo anywhere', () => {
-  assert.deepEqual(MODES, ['mix', 'compare']);
+test('only mix, compare, and solo are valid modes', () => {
+  assert.deepEqual(MODES, ['mix', 'compare', 'solo']);
   assert.equal(DEFAULT_MODE, 'mix');
 });
 
@@ -35,26 +35,29 @@ test('loadSavedMode rejects an invalid or missing stored value and defaults to m
   const storage = memoryStorage();
   storage.setItem(MODE_STORAGE_KEY, 'not-a-mode');
   assert.equal(loadSavedMode(storage), 'mix');
-  storage.setItem(MODE_STORAGE_KEY, 'solo');
+  storage.setItem(MODE_STORAGE_KEY, 'five-worker');
   assert.equal(loadSavedMode(storage), 'mix');
   storage.setItem(MODE_STORAGE_KEY, '  ');
   assert.equal(loadSavedMode(storage), 'mix');
 });
 
-test('loadSavedMode parses a saved valid mode, trimming whitespace', () => {
+test('loadSavedMode is a valid stored mode, trimming whitespace', () => {
   const storage = memoryStorage();
   storage.setItem(MODE_STORAGE_KEY, 'compare');
   assert.equal(loadSavedMode(storage), 'compare');
   storage.setItem(MODE_STORAGE_KEY, '  mix  ');
   assert.equal(loadSavedMode(storage), 'mix');
+  storage.setItem(MODE_STORAGE_KEY, ' solo ');
+  assert.equal(loadSavedMode(storage), 'solo');
 });
 
 test('saveMode writes and round-trips a valid mode, rejects invalid ones', () => {
   const storage = memoryStorage();
   assert.equal(saveMode('compare', storage), true);
   assert.equal(loadSavedMode(storage), 'compare');
-  assert.equal(saveMode('solo', storage), false);
-  assert.equal(saveMode('what', storage), false);
+  assert.equal(saveMode('solo', storage), true);
+  assert.equal(loadSavedMode(storage), 'solo');
+  assert.equal(saveMode('five-worker', storage), false);
   assert.equal(saveMode({}, storage), false);
 });
 

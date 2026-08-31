@@ -43,6 +43,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 028 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `028-compare-backend-verification.md` |
 | 029 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `029-compare-mode-status-fix-and-frontend.md` |
 | 030 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `030-solo-mode-backend.md` |
+| 031 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `031-solo-mode-frontend.md` |
 
 
 ## Mission 007 Provenance Clarification
@@ -654,6 +655,41 @@ persistence/streaming/moderator/compare/acceptance/solo files **63 passed**; ful
 `uv run pytest backend/tests -q` **460 passed**; `ruff check` clean on changed
 backend files (the repo-wide `ruff format --check` state is pre-existing and
 untouched); frontend **130 passed** / `build` green / `lint` green.
+
+## Mission 031 Result
+
+**Mission 031 is implemented and verified locally.**
+
+Mission 031 delivers the frontend half of Punch Board item 27 (Solo), closing
+the item with Mission 030's backend support. `modelmixMode.js` now accepts and
+persists `solo`, and the mode control presents Mix / Compare / Solo. In Solo,
+the composer renders only the Worker A selector; Worker B and Moderator are not
+required, and `send()` omits both `worker_b_model` and `moderator_model` from
+the request object entirely.
+
+The Moderator and Worker B panels stay mounted and receive the existing
+`modelmix-panel-hidden` class. Worker A uses the existing single-column
+`modelmix-workers--maximized` visual treatment. Mode visibility remains
+independent from panel-view state: Solo neutralizes a maximize target on a
+mode-hidden seat so Worker A cannot disappear, while preserving the underlying
+panel-view state for use after leaving Solo.
+
+New `frontend/src/components/ModelMixSendSolo.test.jsx` adds 8 tests for Solo
+selector/panel visibility, exact request-key omission, model requirements, Mix
+and Compare regressions, active-run mode locking, worker-A-only SSE rendering,
+and the hidden-seat maximize interaction. `modelmixMode.test.js` now covers
+Solo validity and persistence. The sole modified pre-existing frontend test is
+the necessary top-bar option-list assertion, extended to
+`['Mix','Compare','Solo']`; every other pre-existing frontend test passes
+unmodified.
+
+Validation observed: frontend **138 passed** (15 files; 130 prior + 8 Solo) /
+production build green (**439 modules transformed**) / lint clean. The exact
+backend command hit the known inaccessible Windows pytest temp root (**246
+passed, 214 setup errors**, `WinError 5`); the workspace-temp rerun passed
+**460 tests in 35.32s**. No backend file, reducer helper, CSS, dependency, or
+lockfile changed. Punch Board items 27 (Solo) and 28 (Compare) are now complete
+end to end.
 
 ## Evidence Rule
 

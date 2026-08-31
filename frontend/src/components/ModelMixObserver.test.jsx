@@ -92,7 +92,7 @@ test('top bar is a single compact strip with brand, mode control, session status
   assert.equal(modeSelect.value, 'mix');
   assert.deepEqual(
     [...modeSelect.options].map((option) => option.textContent),
-    ['Mix', 'Compare'],
+    ['Mix', 'Compare', 'Solo'],
   );
   assert.equal(document.querySelector('.modelmix-models #modelmix-moderator-model') != null, true);
   assert.ok(document.querySelector('.modelmix-topbar .new-session'));
