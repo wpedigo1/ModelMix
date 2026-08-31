@@ -48,6 +48,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 019 | **PASS (LOCAL)** | Output guardrails (backend enforcement): new `guardrails.py` owns provisional `WARNING_OUTPUT_THRESHOLD_CHARS = 20_000` / `HARD_OUTPUT_CAP_CHARS = 40_000` and an exact-boundary `clip_delta`; `run_seat`/`run_moderator` emit a one-shot `seat_output_warning`/`moderator_output_warning` on first crossing, then at the hard cap stop consuming the provider stream and terminate as `seat_completed`/`moderator_completed` with `finish_reason: "modelmix_output_cap"` — an honest terminal outcome distinct from completion, cancellation, provider termination, failure, and timeout; non-streaming paths are capped with no warning; no `events.py`/`persistence.py`/`journal.py`/`timeouts.py`/`history.py`/`registry.py`/frontend changes | `019-output-guardrails-backend.md` |
 | 020 | **PASS (LOCAL)** | Configurable output guardrails (backend): `TwoWorkerRequest` gains optional `warning_threshold_chars`/`hard_cap_chars` (`gt=0`); `routes.py::_resolve_guardrail_overrides` defaults omissions to the Mission 019 constants, rejects values outside `guardrails.MIN_OUTPUT_CHARS_BOUND = 100` / `MAX_OUTPUT_CHARS_BOUND = 200_000`, and rejects `hard_cap_chars < warning_threshold_chars` — all surfaced as 422 before any provider is called; the resolved pair rides the exact `registry.start → _run → _run_phase → multiplex_workers/run_moderator` chain (mirroring `seat_timeout`); enforcement logic and event contract byte-for-byte unchanged, frontend zero changes, nothing persisted | `020-configurable-output-guardrails-backend.md` |
 | 021 | **PASS (LOCAL)** | Guardrails settings + visibility (frontend): new `guardrailSettings.js` pure module (validate/load/save/clear + `MIN=100`/`MAX=200_000` bounds) powers a 4th **Guardrails** section in the Settings overlay (after Defaults) that saves/clears a local `modelmix.guardrails` override; `send()` injects `warning_threshold_chars`/`hard_cap_chars` only when a valid override exists; `seat_output_warning`/`moderator_output_warning` are recorded as live-only `outputWarning` (never persisted to history/hydration) and rendered in every seat footer (`Approaching output limit: 22,451 / 20,000 chars`); worker seats gain the Moderator's `finish_reason` capture and finish captions now render on all seats with `modelmix_output_cap` → "Output capped by ModelMix" and every other value verbatim; `buildSeatTelemetry` drops the now-obsolete `seatKey` param. Frontend-only — no backend, API, or persistence changes | `021-guardrails-settings-and-visibility.md` |
+| 022 | **PASS (LOCAL)** | Alpha acceptance integration tests, backend (verify-only): new `test_modelmix_alpha_acceptance.py` proves Punch Board item-33 checklist items 4–11 through the real routes — ordered stream of both workers then the Moderator, cancel via the real route (one `run_cancel_requested` after all deltas, terminal `run_cancelled`, no post-cancel deltas, persisted `cancelled`, both providers terminated), worker-failure survival (run ends `partial`; failed worker's partial output stays persisted but is excluded from the Moderator handoff, replaced by the honest unavailable line), session reopen reconstructing the full 7-message transcript, multi-turn seat isolation across a real second POST (no cross-seat leakage), provider-faithful telemetry on reopen, and no credential leak into stream/journal/persisted session. One deliberate async-httpx single-loop deviation only for the two-in-flight cancel test — everything else reuses the sync TestClient pattern. Discloses an observed cancel-path race: a sub-ms cancel window can hang the run `active` until the 600s run timeout, with `_run_phase` stuck in the `multiplex_workers` generator-`finally` gather and one seat's provider generator never receiving `CancelledError`; reported as a real gap, not patched (verify-only) | `022-alpha-acceptance-integration-test.md` |
 
 ## Current Verified Product Slice
 
@@ -137,7 +138,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **30 — Credential verification in actual packaging model**
 - **31 — Local backend hardening**
 - **32 — Basic structured observability**
-- **33 — Alpha acceptance gate** — enabled by Mission 014 (the cockpit is now reachable from a production build); the acceptance run itself remains open
+- **33 — Alpha acceptance gate** — backend-provable checklist items (stream both workers + Moderator, cancel, survive worker failure, reopen session, multi-turn isolation, honest telemetry, no credential leak) proven through the real HTTP surface by **Mission 022** (`test_modelmix_alpha_acceptance.py`, 7 tests/395 total); UI-bound items (launch, three panels, configure) remain covered by Missions 014/016/007 evidence, and a live-provider manual launch pass remains the final alpha step. Mission 022 also disclosed a real cancel-path race (sub-ms cancel window can hang the run until the 600s run timeout) — reported, not patched under verify-only rules
 - **34–47 — Post-alpha roadmap**
 
 ## Locked Safeguards Still Open
@@ -490,3 +491,52 @@ prior + 13 new; no existing test modified), targeted suites **65 passed**,
 `ruff check` clean on all six changed Python files, and frontend unchanged with
 `npm test` **86 passed**, `npm run build` green (437 modules), `npm run lint`
 clean.
+
+## Mission 022 Result
+
+Mission 022 proves the backend-provable half of the Punch Board item-33 alpha
+acceptance checklist as integration tests through the real HTTP surface, in
+one new file `backend/tests/test_modelmix_alpha_acceptance.py` (7 tests; 395
+backend total = 388 prior + 7 new; no production file, no existing test file,
+and no dependency modified). The file reuses the canonical sync TestClient
+route pattern for everything except the cancel scenario, which needs two
+in-flight requests on one loop and uses `httpx.AsyncClient(ASGITransport)`
+on the existing single-loop pattern from `test_modelmix_journal.py`.
+
+Coverage in item-33 terms: items 4 (stream both workers) and 5 (stream
+Moderator) via scenario 1 (ordered single-feed SSE, contiguous seqs, full
+persisted history); item 6 (cancel) via scenario 2 — exactly one
+`run_cancel_requested` after all deltas, terminal `run_cancelled`, no
+post-cancel deltas, persisted `cancelled`, both providers terminated; item 7
+(worker failure) via scenario 3 — run ends `partial`, the failed worker's
+partial output stays persisted, the Moderator handoff receives only the honest
+`Unavailable because the worker failed.` line and never the failed worker's
+deltas; item 8 (reopen) via scenario 4 — a fresh registry rehydrates the full
+7-message transcript from the same persisted dir; item 9 (multi-turn) via
+scenario 5 — real second POST, exact per-seat turn histories with no
+cross-worker leakage; item 10 (honest telemetry) via scenario 6 — exact
+provider `usage`, `finish_reason`, and real `started_at`/`completed_at` floats
+on reopen; item 11 (no credential leak) via scenario 7 — a fake key pre-sent
+by the provider is byte-absent from the stream, the journal, and the persisted
+session document. Items 1–3 are UI-bound and remain covered by prior-mission
+evidence (Mission 014 launch reachability, Mission 016 three panels, Missions
+007/016 configure A/B/Moderator).
+
+One genuine robustness gap was discovered during the cancel verification and
+is disclosed rather than patched (verify-only rules): issuing the cancel
+inside a sub-millisecond window right after a seat delta can leave the run
+stuck `active` until the 600s run timeout, with `_run_phase` blocked in the
+`multiplex_workers` generator-`finally` gather and the seat's provider
+generator never receiving its `CancelledError`. With the natural client rhythm
+used by the submission's scenario 2 — cancellation fired ~10ms after output is
+visible — the cancel completes cleanly (10/10 consecutive runs observed). The
+existing sync TestClient cancel test still passes. Follow-up is recommended in
+the `_run_phase`/`aiter_with_deadline` cancellation hand-off.
+
+Validation actually run and observed: `uv run pytest
+backend/tests/test_modelmix_alpha_acceptance.py -v` → **7 passed in 1.80s**;
+the cancel test repeated 10× → **10 passed**; full `uv run pytest backend/tests
+-q` → **395 passed in 16.64s**; frontend baseline re-asserted with `npm test`
+→ **118 passed (12 files)**, `npm run build` → green (438 modules, 2.87s),
+`npm run lint` → clean; pre-commit `git status --short` showed only the new
+test file untracked.

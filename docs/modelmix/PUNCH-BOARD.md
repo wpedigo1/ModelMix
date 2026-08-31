@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 020: 2026-08-30 CT
+Reconciled through Mission 022: 2026-08-30 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -36,6 +36,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 019 | **PASS (LOCAL)** | Output guardrails, backend enforcement: a new `guardrails.py` owns the provisional char bounds (`WARNING_OUTPUT_THRESHOLD_CHARS = 20_000`, `HARD_OUTPUT_CAP_CHARS = 40_000`, exact-boundary `clip_delta`); `run_seat` and `run_moderator` emit a one-shot `seat_output_warning`/`moderator_output_warning` on the first threshold crossing, then stop consuming the provider stream at the hard cap, truncating deterministically to exactly the cap and terminating as `seat_completed`/`moderator_completed` (NOT failed) with `finish_reason: "modelmix_output_cap"` — honestly distinct from provider termination, failure, timeout, and user cancellation. Non-streaming paths are capped with no warning. Constants are provisional defaults (configurability is a later settings mission); provider-quota usage warnings are explicitly deferred as not honestly buildable — no quota data exists. No changes to `events.py`/`persistence.py`/`journal.py`/`timeouts.py`/`history.py`/`registry.py` or any frontend file |
 | 020 | **PASS (LOCAL)** | Configurable output guardrails, backend: `TwoWorkerRequest` gains optional `warning_threshold_chars`/`hard_cap_chars` (`gt=0`); `routes.py::_resolve_guardrail_overrides` defaults omitted fields to the Mission 019 constants, rejects values outside `guardrails.MIN_OUTPUT_CHARS_BOUND = 100` / `MAX_OUTPUT_CHARS_BOUND = 200_000`, and rejects `hard_cap_chars < warning_threshold_chars` — every violation surfaces as a 422 before any provider is resolved or called. The resolved pair rides the exact `registry.start → _run → _run_phase → multiplex_workers/run_moderator` chain (mirroring `seat_timeout`); enforcement logic, event payloads, and the `modelmix_output_cap` finish reason are byte-for-byte unchanged, the frontend sends neither field yet (omitting both is byte-for-byte Mission 019 behavior), and nothing is persisted server-side |
 | 021 | **PASS (LOCAL)** | Guardrails settings and visibility, frontend: a 4th Settings section (Guardrails) saves/clears a local `modelmix.guardrails` override via a new `guardrailSettings.js` module (validate/load/save/clear, `MIN=100`/`MAX=200_000` bounds mirroring the backend, server cross-check mirrored); `send()` injects `warning_threshold_chars`/`hard_cap_chars` only when a valid override exists (both omitted otherwise — byte-for-byte Mission 020 behavior); `seat_output_warning`/`moderator_output_warning` become a live-only `outputWarning` on the seat (never persisted to history/hydration) rendered in every seat footer as `Approaching output limit: 22,451 / 20,000 chars`; worker seats gain the Moderator's `finish_reason` capture, and finish captions render on all seats (`modelmix_output_cap` → "Output capped by ModelMix", everything else verbatim). Frontend-only — no backend, API, or persistence changes |
+| 022 | **PASS (LOCAL)** | Alpha acceptance integration tests (backend, verify-only): new `test_modelmix_alpha_acceptance.py` proves items 4–11 of the item-33 checklist through the real HTTP surface — stream both workers + Moderator on one ordered feed, cancel (real route; terminal `run_cancelled`, no post-cancel deltas, persisted `cancelled`), survive worker failure (partial run, failed worker excluded from the Moderator handoff), reopen session (full persisted transcript), multi-turn isolation across a second POST, provider-faithful telemetry (exact usage/finish/timestamps), and no credential leak into stream/journal/persisted session. One deliberate async-httpx single-loop deviation for the two-in-flight cancel test; everything else reuses the sync TestClient pattern. Discloses an observed cancel-path race (sub-ms cancel window can hang the run until the 600s run timeout) as a real gap, not patched under verify-only rules | `022-alpha-acceptance-integration-test.md` |
 
 **Mission 008 is present on `main` and its persistence tests pass.**
 
@@ -260,13 +261,27 @@ Independent bounded seat histories, Moderator history, hot-swap continuity, and 
 
 ## ALPHA GATE
 
-### 33. Alpha acceptance test — **ENABLER — MISSION 014**
+### 33. Alpha acceptance test — **BACKEND-PROVABLE COVERAGE COMPLETE — MISSION 022**
 
 Launch; three panels; configure A/B/Moderator; stream both workers; stream Moderator; cancel; survive worker failure; reopen session; multi-turn isolation; honest telemetry; no credential leak.
 
 Mission 014 removed the reachability blocker: a production build now serves the
 cockpit at `/modelmix` and offers a visible Council sidebar link, so the alpha
 acceptance launch can actually begin from a built app rather than a dev server.
+
+Mission 022 proves items 4–11 (the backend-provable checklist) as integration
+tests through the real HTTP surface in
+`backend/tests/test_modelmix_alpha_acceptance.py` (7 tests, 395 backend total).
+Items 1–3 are UI-bound and remain covered by prior-mission evidence (014
+launch, 016 three panels, 007/016 configure A/B/Moderator). A final
+live-provider manual launch pass is still the remaining alpha step.
+
+Mission 022 additionally disclosed one genuine robustness gap found during the
+cancel verification: a sub-millisecond cancel window (cancel fires right as a
+seat emits) can leave the run stuck `active` until the 600s run timeout, with
+`_run_phase` blocked in the `multiplex_workers` generator-`finally` gather and
+one seat's provider generator never receiving `CancelledError`. Not patched
+under verify-only rules — flagged for follow-up (see the Mission 022 report).
 
 **Nothing below this line may delay the alpha gate.**
 

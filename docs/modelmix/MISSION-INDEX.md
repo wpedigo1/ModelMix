@@ -34,6 +34,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 019 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `019-output-guardrails-backend.md` |
 | 020 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `020-configurable-output-guardrails-backend.md` |
 | 021 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `021-guardrails-settings-and-visibility.md` |
+| 022 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `022-alpha-acceptance-integration-test.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -353,6 +354,41 @@ modules), `npm run lint` clean. This advances Punch Board item **17** to the
 per-request configurability level; the remaining item-17 openings are the
 provider/account usage warning (deferred, not honestly buildable) and
 frontend/local-preference wiring of threshold controls.
+
+## Mission 022 Result
+
+**Mission 022 is implemented and verified locally.**
+
+Mission 022 (verify-only) adds the backend-provable half of Punch Board item 33
+as one new integration test file,
+`backend/tests/test_modelmix_alpha_acceptance.py` — 7 tests driving the real
+HTTP routes: ordered stream of both workers then the Moderator on one feed;
+cancel via the real route (one `run_cancel_requested` after all deltas,
+terminal `run_cancelled`, no post-cancel deltas, persisted `cancelled`, both
+providers terminated); worker-failure survival (run ends `partial`, failed seat
+excluded from the Moderator handoff, replaced by the honest unavailable line);
+session reopen reconstructing the full 7-message transcript; multi-turn seat
+isolation across a real second POST; provider-faithful telemetry on reopen
+(exact usage, finish_reason, real timestamps); and no credential leak into the
+SSE stream, the journal, or the persisted session. The cancel scenario is the
+single deliberate harness deviation (two in-flight requests → async httpx on
+one loop); everything else reuses the sync TestClient pattern. No production
+file, existing test file, or dependency was changed.
+
+Disclosed as a genuine gap (not patched under verify-only rules): a
+sub-millisecond cancel window can leave the run stuck `active` until the 600s
+run timeout, with `_run_phase` blocked in the `multiplex_workers`
+generator-`finally` gather and one seat's provider generator never receiving
+`CancelledError`. The natural client rhythm used by scenario 2 cancels cleanly
+(10/10 observed); follow-up in the `_run_phase`/`aiter_with_deadline` cancel
+hand-off is recommended.
+
+Validation observed: new file **7 passed in 1.80s**; cancel scenario stable
+10/10; full backend **395 passed in 16.64s** (388 prior + 7 new); frontend
+baseline re-asserted **118 passed**, build green, lint clean; pre-commit diff
+was exactly one new test file. Items 1–3 of the item-33 checklist remain
+covered by prior-mission evidence (014/016/007); a live-provider manual launch
+pass is the remaining alpha step.
 
 ## Evidence Rule
 
