@@ -1,6 +1,6 @@
 # ModelMix Mission Record Index
 
-Updated: 2026-08-30 CT
+Updated: 2026-08-31 CT
 
 This index reconciles completed implementation missions with the canonical engineering records in this repository.
 
@@ -37,6 +37,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 022 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `022-alpha-acceptance-integration-test.md` |
 | 023 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `023-cancellation-race-fix.md` |
 | 024 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `024-cancel-before-start-terminal-fix.md` |
+| 025 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `025-harden-local-backend-boundary.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -441,6 +442,27 @@ moved inside `try` so the except handler covers the earliest cancel point.
 Deterministically proven by `test_cancel_before_run_starts_reaches_terminal_cancelled`
 in `test_modelmix_cancel_race.py`. Full backend **404 passed**, no existing
 test modified, `ruff check` clean.
+
+## Mission 025 Result
+
+**Mission 025 is implemented and verified locally.**
+
+Mission 025 requires admin auth (`_require_admin`, reused exactly as-is) on
+every endpoint that reads/writes/uses stored credentials or makes a server
+outbound request using a client-influenced target/credential. Added
+`dependencies=[Depends(_require_admin)]` to 20 endpoints in `backend/main.py`
+(16 required + 4 judgment-call extensions: `GET /api/models`,
+`GET /api/models/direct`, `GET /api/ollama/tags`,
+`GET /api/custom-endpoint/models`). Three existing tests that hit a newly-
+guarded endpoint over a non-loopback TestClient peer (font-size, advisor
+presets, council presets) were switched to loopback peers as the legitimate
+local-operator case. New `test_admin_guard_credential_endpoints.py` (27 tests)
+proves non-loopback rejection without a token, loopback/token success, and
+that the `test-custom-endpoint` SSRF-to-credential path is rejected before any
+outbound call. Full backend **431 passed**, `ruff` clean; frontend **118
+passed**, build green, lint clean. Flagged follow-ups: CORS regex matches any
+dotted-IPv4 origin, and custom-endpoint URL allow-listing for a local
+loopback attacker.
 
 ## Evidence Rule
 

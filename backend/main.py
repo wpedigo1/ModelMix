@@ -1702,7 +1702,7 @@ async def disconnect_all_providers():
     return payload
 
 
-@app.put("/api/settings")
+@app.put("/api/settings", dependencies=[Depends(_require_admin)])
 async def update_app_settings(request: UpdateSettingsRequest):
     """Update application settings."""
     updates = {}
@@ -1940,7 +1940,7 @@ async def update_app_settings(request: UpdateSettingsRequest):
     return build_settings_response(settings)
 
 
-@app.post("/api/settings/credential-storage")
+@app.post("/api/settings/credential-storage", dependencies=[Depends(_require_admin)])
 async def set_credential_storage(payload: Dict[str, Any]):
     """Migrate credential storage mode (file <-> keyring)."""
     mode = (payload or {}).get("mode")
@@ -1961,7 +1961,7 @@ class OAuthStartResponse(BaseModel):
     status: str = "pending"
 
 
-@app.post("/api/oauth/{provider_id}/start")
+@app.post("/api/oauth/{provider_id}/start", dependencies=[Depends(_require_admin)])
 async def oauth_start(provider_id: str):
     try:
         return await start_oauth_session(provider_id)
@@ -1971,12 +1971,12 @@ async def oauth_start(provider_id: str):
         raise HTTPException(status_code=502, detail=str(exc))
 
 
-@app.get("/api/oauth/{provider_id}/status")
+@app.get("/api/oauth/{provider_id}/status", dependencies=[Depends(_require_admin)])
 async def oauth_status(provider_id: str, session_id: str):
     return get_oauth_session_status(provider_id, session_id)
 
 
-@app.delete("/api/oauth/{provider_id}")
+@app.delete("/api/oauth/{provider_id}", dependencies=[Depends(_require_admin)])
 async def oauth_disconnect(provider_id: str):
     try:
         disconnect_oauth(provider_id)
@@ -1985,12 +1985,12 @@ async def oauth_disconnect(provider_id: str):
     return {"status": "disconnected", "provider_id": provider_id}
 
 
-@app.get("/api/credentials/import/relay-ai/discover")
+@app.get("/api/credentials/import/relay-ai/discover", dependencies=[Depends(_require_admin)])
 async def relay_ai_discover():
     return discover_relay_ai_credentials()
 
 
-@app.post("/api/credentials/import/relay-ai")
+@app.post("/api/credentials/import/relay-ai", dependencies=[Depends(_require_admin)])
 async def relay_ai_import(payload: Dict[str, Any]):
     ids = payload.get("ids") or []
     replace_existing = bool(payload.get("replace_existing"))
@@ -2012,7 +2012,7 @@ async def dismiss_relay_import(payload: Dict[str, Any] = None):
 
 
 
-@app.get("/api/models/direct")
+@app.get("/api/models/direct", dependencies=[Depends(_require_admin)])
 async def get_direct_models():
     """Get available models from all configured direct providers."""
     all_models = []
@@ -2033,7 +2033,7 @@ async def get_direct_models():
     return all_models
 
 
-@app.post("/api/settings/test-tavily")
+@app.post("/api/settings/test-tavily", dependencies=[Depends(_require_admin)])
 async def test_tavily_api(request: TestTavilyRequest):
     """Test Tavily API key with a simple search."""
     import httpx
@@ -2072,7 +2072,7 @@ class TestBraveRequest(BaseModel):
     api_key: str | None = None
 
 
-@app.post("/api/settings/test-brave")
+@app.post("/api/settings/test-brave", dependencies=[Depends(_require_admin)])
 async def test_brave_api(request: TestBraveRequest):
     """Test Brave API key with a simple search."""
     import httpx
@@ -2111,7 +2111,7 @@ class TestSerperRequest(BaseModel):
     api_key: str | None = None
 
 
-@app.post("/api/settings/test-serper")
+@app.post("/api/settings/test-serper", dependencies=[Depends(_require_admin)])
 async def test_serper_api(request: TestSerperRequest):
     """Test Serper API key with a simple search."""
     import httpx
@@ -2149,7 +2149,7 @@ class TestTinyfishRequest(BaseModel):
     api_key: str | None = None
 
 
-@app.post("/api/settings/test-tinyfish")
+@app.post("/api/settings/test-tinyfish", dependencies=[Depends(_require_admin)])
 async def test_tinyfish_api(request: TestTinyfishRequest):
     """Test TinyFish API key with a simple search."""
     import httpx
@@ -2190,7 +2190,7 @@ class TestProviderRequest(BaseModel):
     api_key: Optional[str] = None
 
 
-@app.post("/api/settings/test-provider")
+@app.post("/api/settings/test-provider", dependencies=[Depends(_require_admin)])
 async def test_provider_api(request: TestProviderRequest):
     """Test an API key for a specific provider."""
     from .council import PROVIDERS
@@ -2212,7 +2212,7 @@ class TestOpenCodeRequest(BaseModel):
     product: Optional[str] = None  # "zen" | "go" | None (= test both)
 
 
-@app.post("/api/settings/test-opencode")
+@app.post("/api/settings/test-opencode", dependencies=[Depends(_require_admin)])
 async def test_opencode_key(request: TestOpenCodeRequest):
     """Test the OpenCode API key by listing models on Zen and/or Go."""
     from .providers.opencode import OpenCodeProvider
@@ -2240,7 +2240,7 @@ class TestOllamaRequest(BaseModel):
     base_url: str
 
 
-@app.get("/api/ollama/tags")
+@app.get("/api/ollama/tags", dependencies=[Depends(_require_admin)])
 async def get_ollama_tags(base_url: Optional[str] = None):
     """Fetch available models from Ollama."""
     import httpx
@@ -2281,7 +2281,7 @@ async def get_ollama_tags(base_url: Optional[str] = None):
         return {"models": [], "error": str(e)}
 
 
-@app.post("/api/settings/test-ollama")
+@app.post("/api/settings/test-ollama", dependencies=[Depends(_require_admin)])
 async def test_ollama_connection(request: TestOllamaRequest):
     """Test connection to Ollama instance."""
     import httpx
@@ -2312,7 +2312,7 @@ class TestCustomEndpointRequest(BaseModel):
     api_key: Optional[str] = None
 
 
-@app.post("/api/settings/test-custom-endpoint")
+@app.post("/api/settings/test-custom-endpoint", dependencies=[Depends(_require_admin)])
 async def test_custom_endpoint(request: TestCustomEndpointRequest):
     """Test connection to a custom OpenAI-compatible endpoint."""
     from .providers.custom_openai import CustomOpenAIProvider
@@ -2322,7 +2322,7 @@ async def test_custom_endpoint(request: TestCustomEndpointRequest):
     return await provider.validate_connection(request.url, api_key)
 
 
-@app.get("/api/custom-endpoint/models")
+@app.get("/api/custom-endpoint/models", dependencies=[Depends(_require_admin)])
 async def get_custom_endpoint_models():
     """Fetch available models from the custom endpoint."""
     from .providers.custom_openai import CustomOpenAIProvider
@@ -2337,7 +2337,7 @@ async def get_custom_endpoint_models():
     return {"models": models}
 
 
-@app.get("/api/models")
+@app.get("/api/models", dependencies=[Depends(_require_admin)])
 async def get_openrouter_models():
     """Fetch available models from OpenRouter API."""
     import httpx
@@ -2397,7 +2397,7 @@ async def get_openrouter_models():
         return {"models": [], "error": str(e)}
 
 
-@app.post("/api/settings/test-openrouter")
+@app.post("/api/settings/test-openrouter", dependencies=[Depends(_require_admin)])
 async def test_openrouter_api(request: TestOpenRouterRequest):
     """Test OpenRouter API key with a simple request."""
     import httpx

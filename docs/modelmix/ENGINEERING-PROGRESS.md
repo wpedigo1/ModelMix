@@ -51,6 +51,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 022 | **PASS (LOCAL)** | Alpha acceptance integration tests, backend (verify-only): new `test_modelmix_alpha_acceptance.py` proves Punch Board item-33 checklist items 4–11 through the real routes — ordered stream of both workers then the Moderator, cancel via the real route (one `run_cancel_requested` after all deltas, terminal `run_cancelled`, no post-cancel deltas, persisted `cancelled`, both providers terminated), worker-failure survival (run ends `partial`; failed worker's partial output stays persisted but is excluded from the Moderator handoff, replaced by the honest unavailable line), session reopen reconstructing the full 7-message transcript, multi-turn seat isolation across a real second POST (no cross-seat leakage), provider-faithful telemetry on reopen, and no credential leak into stream/journal/persisted session. One deliberate async-httpx single-loop deviation only for the two-in-flight cancel test — everything else reuses the sync TestClient pattern. Discloses an observed cancel-path race: a sub-ms cancel window can hang the run `active` until the 600s run timeout, with `_run_phase` stuck in the `multiplex_workers` generator-`finally` gather and one seat's provider generator never receiving `CancelledError`; reported as a real gap, not patched (verify-only) | `022-alpha-acceptance-integration-test.md` |
 | 023 | **PASS (LOCAL)** | Deterministic cancellation-race fix on `main @ b82505d`: `multiplex_workers`' generator `finally` replaces the unbounded `asyncio.gather` with `await_cancellation_grace(tasks)` (new `CANCEL_GRACE_SECONDS = 5.0` in `timeouts.py`), so a seat task that absorbs cancellation can no longer block the `CancelledError` from reaching `run_cancelled`; the Moderator phase awaits its task via `asyncio.shield` because a direct task await was proven to leave `_run_phase` un-woken forever when the moderator task absorbs the cancel. Deterministically proven by `backend/tests/test_modelmix_cancel_race.py` (8 tests constructing the stall with a holding fake — abandoned-mid-stream structure asserts, no-fast-path change, never `"timeout"`); full backend **403 passed**, frontend unchanged at **118 passed** / build / lint green | `023-cancellation-race-fix.md` |
 | 024 | **PASS (LOCAL)** | Cancel-before-start terminal state fix: `start()` adds `await asyncio.sleep(0)` after `asyncio.create_task(...)` to guarantee `_run` has entered its `try` block before the caller can cancel; `mark_status("active")` moved inside `try` so the except handler covers the earliest cancel point. Root cause: CPython 3.10 `coro.throw(CancelledError)` on a never-started coroutine skips the body entirely. Deterministically proven by `test_cancel_before_run_starts_reaches_terminal_cancelled`; full backend **404 passed**, `ruff check` clean, no existing test modified | `024-cancel-before-start-terminal-fix.md` |
+| 025 | **PASS (LOCAL)** | Harden the local backend boundary: required admin auth (`_require_admin`, reused unchanged) on every endpoint that reads/writes/uses stored credentials or makes a server outbound request with a client-influenced target/credential. Added `dependencies=[Depends(_require_admin)]` to 20 endpoints in `backend/main.py` (16 required + 4 judgment extensions: `GET /api/models`, `GET /api/models/direct`, `GET /api/ollama/tags`, `GET /api/custom-endpoint/models`), closing the `test-custom-endpoint` blind SSRF-to-stored-key path before any outbound call. Three existing tests hitting a newly-guarded endpoint over a non-loopback TestClient peer (font-size, advisor presets, council presets) switched to loopback peers as the legitimate local-operator case. New `test_admin_guard_credential_endpoints.py` (27 tests) proves non-loopback rejection without token (401/403), loopback success, bearer-token success, and outbound-never-invoked for the SSRF path. Full backend **431 passed**, `ruff clean`; frontend **118 passed** / build / lint green. Flagged follow-ups: CORS regex matches any dotted-IPv4 origin; custom-endpoint URL allow-listing for a local loopback attacker | `025-harden-local-backend-boundary.md` |
 
 ## Current Verified Product Slice
 
@@ -625,3 +626,48 @@ Validation observed: new test **1 passed in 0.82s**; full `uv run pytest
 backend/tests -q` → **404 passed in 27.16s** (403 prior + 1 new, no existing
 test modified); `ruff check` clean on both changed Python files. The alpha gate
 is **not** declared here; the next verification pass owns that declaration.
+
+## Mission 025 Result
+
+Mission 025 hardens the local backend boundary so endpoints that
+read/write/use stored credentials or make a server outbound request with a
+client-influenced target/credential require admin auth. `_require_admin` is
+reused exactly as-is; its token branch is identical to the one already proven
+by the existing export test.
+
+Implementation: `dependencies=[Depends(_require_admin)]` added to 20 endpoint
+decorators in `backend/main.py`:
+
+- Required (16): `PUT /api/settings`, `POST /api/settings/credential-storage`,
+  `POST /api/oauth/{provider_id}/start`, `GET /api/oauth/{provider_id}/status`,
+  `DELETE /api/oauth/{provider_id}`,
+  `GET /api/credentials/import/relay-ai/discover`,
+  `POST /api/credentials/import/relay-ai`, and the nine
+  `POST /api/settings/test-*` endpoints.
+- Judgment extensions (4): `GET /api/models`, `GET /api/models/direct`,
+  `GET /api/ollama/tags`, `GET /api/custom-endpoint/models` — server outbound
+  requests whose target/key derives from stored or client-influenced state.
+
+Not guarded (verified): `GET /api/settings` (booleans only, no credential
+values), `GET /api/settings/defaults` (static), `PUT
+/api/settings/relay-ai-import-dismissed` (UI flag).
+
+Security impact: the previously-confirmed `test-custom-endpoint` blind
+SSRF-to-stored-key path (forwards client `url` to
+`CustomOpenAIProvider.validate_connection`, omitted `api_key` falls back to the
+stored credential via `resolve_api_key`) is now rejected 401/403 **before** any
+outbound call; the test spies on `validate_connection` and asserts it is never
+awaited for a rejected request.
+
+Deferred/report-only findings: `_dev_cors_regex` matches any dotted-IPv4 origin
+(not just private/loopback ranges); a loopback-local attacker could still point
+the custom-endpoint URL at an internal host (suggest URL allow-listing in a
+follow-up). `resolve_api_key`, the credential store, and CORS regex are
+intentionally untouched per scope.
+
+Validation observed: new `test_admin_guard_credential_endpoints.py` passes;
+targeted `-k "admin or credential or settings"` → **71 passed**; full `uv run
+pytest backend/tests -q` → **431 passed** (404 prior + 27 new); `ruff check
+backend` clean; frontend re-asserted **118 passed**, build green (1.56s), lint
+clean. The alpha gate is **not** declared here; the next verification pass owns
+that declaration.

@@ -37,7 +37,7 @@ def settings_client():
          patch("backend.main.apply_settings_secret_updates", side_effect=lambda updates: updates):
         update_settings.side_effect = lambda **updates: Settings(**updates)
         build_settings_response.side_effect = lambda settings: {"font_size": settings.font_size}
-        with TestClient(app) as client:
+        with TestClient(app, client=("127.0.0.1", 50000)) as client:
             yield client
 
 
