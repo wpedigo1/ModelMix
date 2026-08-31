@@ -38,6 +38,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 023 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `023-cancellation-race-fix.md` |
 | 024 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `024-cancel-before-start-terminal-fix.md` |
 | 025 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `025-harden-local-backend-boundary.md` |
+| 026 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `026-windows-credential-file-hardening.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -463,6 +464,27 @@ outbound call. Full backend **431 passed**, `ruff` clean; frontend **118
 passed**, build green, lint clean. Flagged follow-ups: CORS regex matches any
 dotted-IPv4 origin, and custom-endpoint URL allow-listing for a local
 loopback attacker.
+
+## Mission 026 Result
+
+**Mission 026 is implemented and verified locally.**
+
+Mission 026 replaces the ineffective `os.chmod(0o600)` no-op on Windows with
+real per-user ACL hardening for `data/credentials.json`, scoped to
+`backend/credentials/file_backend.py` only. After the atomic write and the
+unchanged Unix `chmod`, `_harden_credentials_file()` runs
+`icacls "<path>" /inheritance:r /grant:r "<current-user>":F` via `subprocess`
+(no `pywin32`), resolving the current user from `USERNAME`/`USERDOMAIN` env
+vars (fallback `os.getlogin()`), gated entirely behind
+`sys.platform == "win32"`. Failures log a warning and never crash a write; a
+once-per-process startup warning surfaces pre-existing/never-hardened
+plaintext files on Windows. Default `file` storage mode and
+`get_effective_mode()` are unchanged by declared boundary. New
+`test_credentials_file_hardening.py` (7 tests) mocks `subprocess.run` /
+`sys.platform`. Full backend **438 passed**, `ruff` clean; frontend **118
+passed** / build / lint green. Punch Board item 30 advanced (current-model
+half); a separate later re-verification of credential storage is required once
+Tauri packaging (item 34) exists.
 
 ## Evidence Rule
 

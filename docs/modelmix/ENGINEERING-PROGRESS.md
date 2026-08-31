@@ -52,6 +52,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 023 | **PASS (LOCAL)** | Deterministic cancellation-race fix on `main @ b82505d`: `multiplex_workers`' generator `finally` replaces the unbounded `asyncio.gather` with `await_cancellation_grace(tasks)` (new `CANCEL_GRACE_SECONDS = 5.0` in `timeouts.py`), so a seat task that absorbs cancellation can no longer block the `CancelledError` from reaching `run_cancelled`; the Moderator phase awaits its task via `asyncio.shield` because a direct task await was proven to leave `_run_phase` un-woken forever when the moderator task absorbs the cancel. Deterministically proven by `backend/tests/test_modelmix_cancel_race.py` (8 tests constructing the stall with a holding fake — abandoned-mid-stream structure asserts, no-fast-path change, never `"timeout"`); full backend **403 passed**, frontend unchanged at **118 passed** / build / lint green | `023-cancellation-race-fix.md` |
 | 024 | **PASS (LOCAL)** | Cancel-before-start terminal state fix: `start()` adds `await asyncio.sleep(0)` after `asyncio.create_task(...)` to guarantee `_run` has entered its `try` block before the caller can cancel; `mark_status("active")` moved inside `try` so the except handler covers the earliest cancel point. Root cause: CPython 3.10 `coro.throw(CancelledError)` on a never-started coroutine skips the body entirely. Deterministically proven by `test_cancel_before_run_starts_reaches_terminal_cancelled`; full backend **404 passed**, `ruff check` clean, no existing test modified | `024-cancel-before-start-terminal-fix.md` |
 | 025 | **PASS (LOCAL)** | Harden the local backend boundary: required admin auth (`_require_admin`, reused unchanged) on every endpoint that reads/writes/uses stored credentials or makes a server outbound request with a client-influenced target/credential. Added `dependencies=[Depends(_require_admin)]` to 20 endpoints in `backend/main.py` (16 required + 4 judgment extensions: `GET /api/models`, `GET /api/models/direct`, `GET /api/ollama/tags`, `GET /api/custom-endpoint/models`), closing the `test-custom-endpoint` blind SSRF-to-stored-key path before any outbound call. Three existing tests hitting a newly-guarded endpoint over a non-loopback TestClient peer (font-size, advisor presets, council presets) switched to loopback peers as the legitimate local-operator case. New `test_admin_guard_credential_endpoints.py` (27 tests) proves non-loopback rejection without token (401/403), loopback success, bearer-token success, and outbound-never-invoked for the SSRF path. Full backend **431 passed**, `ruff clean`; frontend **118 passed** / build / lint green. Flagged follow-ups: CORS regex matches any dotted-IPv4 origin; custom-endpoint URL allow-listing for a local loopback attacker | `025-harden-local-backend-boundary.md` |
+| 026 | **PASS (LOCAL)** | Real Windows ACL hardening for credential file storage, scoped to `backend/credentials/file_backend.py`: `os.chmod(0o600)` is a no-op on Windows, so after each atomic credential write `_harden_credentials_file()` runs `icacls "<path>" /inheritance:r /grant:r "<current-user>":F` via `subprocess` (no new dependency), gated behind `sys.platform == "win32"`; the current user is resolved from `USERNAME`/`USERDOMAIN` env vars (fallback `os.getlogin()`). Failures log a warning and never crash a write; a once-per-process startup warning surfaces pre-existing or never-hardened plaintext files on Windows. Default `file` mode and `get_effective_mode()` unchanged by declared boundary. New `test_credentials_file_hardening.py` (7 tests) mocks `subprocess.run`/`sys.platform`. Full backend **438 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Advances item 30 (current-model half); separate later re-verification of credential storage required once Tauri (item 34) exists | `026-windows-credential-file-hardening.md` |
 
 ## Current Verified Product Slice
 
@@ -671,3 +672,50 @@ pytest backend/tests -q` → **431 passed** (404 prior + 27 new); `ruff check
 backend` clean; frontend re-asserted **118 passed**, build green (1.56s), lint
 clean. The alpha gate is **not** declared here; the next verification pass owns
 that declaration.
+
+## Mission 026 Result
+
+Mission 026 advances Punch Board item 30 (current-model half) by giving
+`data/credentials.json` **real** per-user access-control hardening on Windows,
+scoped to `backend/credentials/file_backend.py` only. The confirmed gap:
+`os.chmod(CREDENTIALS_FILE, 0o600)` is a no-op for per-user-account ACL
+enforcement on Windows.
+
+Implementation:
+- `_harden_credentials_file()` runs, after the unchanged Unix `chmod`, the
+  `icacls "<path>" /inheritance:r /grant:r "<current-user>":F` command via
+  `subprocess` (no `pywin32`), gated entirely behind
+  `sys.platform == "win32"`.
+- `_resolve_windows_current_user()` resolves the grant principal from
+  `USERNAME`/`USERDOMAIN` env vars (preferred: reliable for a logged-in session
+  and a user-run service), falling back to `os.getlogin()`.
+- Fail-safe: icacls unavailability / exceptions / non-zero exit are logged as
+  a warning and never raise, so a credential write always succeeds — mirroring
+  the existing `except OSError: pass` philosophy but logging the failure.
+- `_warn_if_unhardened()` logs once per process (module `_startup_warned`
+  flag) when running on Windows and the credentials file exists and was not
+  successfully hardened this session, surfacing pre-existing plaintext files.
+
+Declared boundary (not an oversight): `credential_storage`'s default `file`
+mode and `get_effective_mode()` are product decisions, unchanged here.
+Credential values are never modified; `keyring_backend.py`, `store.py` facade,
+and `main.py` routes untouched.
+
+Validation observed:
+- `uv run pytest backend/tests/test_credentials_store.py
+  backend/tests/test_credentials_keyring.py
+  backend/tests/test_credentials_availability.py
+  backend/tests/test_admin_guard_credential_endpoints.py -v` → **41 passed**
+  (all unmodified).
+- New `test_credentials_file_hardening.py`: **7 passed** (acceptance criteria
+  1–6).
+- Full `uv run pytest backend/tests -q` → **438 passed in 27.76s** (431 prior
+  + 7 new, no existing test modified).
+- `uv run ruff check backend` → All checks passed.
+- Frontend re-asserted: **118 passed**, build green (1.57s), lint clean.
+
+Follow-up required: a **separate, later re-verification of credential storage
+is needed once Tauri 2 packaging (Punch Board item 34) actually exists**, since
+Tauri's own storage/IPC model may behave differently and cannot be assumed to
+inherit this mission's guarantees. The alpha gate is **not** declared here; the
+next verification pass owns that declaration.
