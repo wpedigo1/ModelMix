@@ -257,12 +257,13 @@ def test_no_moderator_one_worker_fails_reaches_partial_and_persists_failure(
 
 
 # ---------------------------------------------------------------------------
-# Investigation point 3 — both workers fail moderator-less: observe and assert
-# the real terminal behavior.
+# Investigation point 3 — both workers fail moderator-less: the honest terminal
+# status is "failed" (nothing survived to look at), aligning the no-moderator
+# path with the moderator path's all-failed outcome. Corrected by Mission 029.
 # ---------------------------------------------------------------------------
 
 
-def test_no_moderator_both_workers_fail_reaches_run_completed_partial(
+def test_no_moderator_both_workers_fail_reaches_run_completed_failed(
     monkeypatch, tmp_path
 ):
     providers = {
@@ -290,11 +291,12 @@ def test_no_moderator_both_workers_fail_reaches_run_completed_partial(
     }
     assert failed_seats == {"worker_a", "worker_b"}
     assert not any(event["type"] in MODERATOR_EVENT_TYPES for event in events)
-    # Observed real behavior (not an assumption): with both workers failed and
-    # no moderator, multiplex_workers still emits run_completed with status
-    # "partial" because its "failed" flag is true, and never emits run_failed.
+    # Corrected honest-terminal behavior (Mission 029): every seat that ran
+    # failed, so multiplex_workers emits run_completed with status "failed" --
+    # matching the moderator path's all-failed outcome -- rather than the
+    # previous misleading "partial", and it never emits run_failed.
     assert events[-1]["type"] == "run_completed"
-    assert events[-1]["status"] == "partial"
+    assert events[-1]["status"] == "failed"
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 028: 2026-08-31 CT
+Reconciled through Mission 029: 2026-08-31 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -43,6 +43,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 026 | **PASS (LOCAL)** | Real Windows ACL hardening for credential file storage: `os.chmod(0o600)` is a no-op on Windows, so `file_backend` now runs `icacls "<path>" /inheritance:r /grant:r "<current-user>":F` via `subprocess` (no pywin32) after each atomic credential write, gated behind `sys.platform == "win32"`; current user resolved from `USERNAME`/`USERDOMAIN` env vars (fallback `os.getlogin()`); failures log a warning and never crash a write (mirrors the `except OSError: pass` philosophy but logs); a once-per-process startup warning surfaces pre-existing/never-hardened plaintext files on Windows. Scoped to `file_backend.py` only; default `file` mode and `get_effective_mode()` unchanged by declared boundary; no credential-value changes. New `test_credentials_file_hardening.py` (7 tests) mocks `subprocess.run`/`sys.platform`. Full backend **438 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Advances Punch Board item 30 (current-model half); a separate later re-verification of credential storage is required once Tauri (item 34) exists | `026-windows-credential-file-hardening.md` |
 | 027 | **PASS (LOCAL)** | Auto-remediate an unhardened credentials file on startup: `_warn_if_unhardened()` in `file_backend.py` now attempts `_harden_credentials_file()` directly on the first touch (read or write) of an existing, unhardened Windows file, then logs INFO "Restricted..." on success or the existing warning on failure — a single, one-time, automatic remediation (no new key write or manual icacls needed to protect a pre-existing file). `_harden_credentials_file()` logic reused exactly; never raises. Extends `test_credentials_file_hardening.py` to 10 tests (one Mission 026 test necessarily reconciled, flagged). Full backend **441 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Item 30 current-model half closeable; Tauri re-check (item 34) carried forward | `027-credentials-file-startup-remediation.md` |
 | 028 | **PASS (LOCAL)** | Verify and harden the existing Compare (no-moderator) backend path: `TwoWorkerRequest.moderator_model` optional and `registry._run_phase` / `orchestrator.multiplex_workers` already support a two-worker run with no moderator phase, but had zero test coverage. Driven through the REAL HTTP route (`POST /runs/stream` with `moderator_model` omitted) in new `test_modelmix_compare_mode_backend.py` (7 tests), proving: both workers stream with ZERO moderator events and `run_completed "completed"`; one worker fails -> `"partial"` + persisted session reflects the failed seat via `GET /sessions/{id}`; both workers fail -> observed as-shipped `run_completed "partial"` (not `failed`; product-semantics note, not a defect); multi-turn isolation holds moderator-less and the dead `seat_histories["moderator"]` key never leaks; per-worker guardrails (warning/hard cap) apply; cancellation reaches `run_cancelled` mid-stream; reopening a moderator-less session reconstructs with no moderator message and nothing chokes on the moderator's absence (`models["moderator"]` persists as `None`, tolerated). NO production code changed; no `mode` concept added; no frontend change. Full backend **448 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Backend half of item 28 deliverable | `028-compare-backend-verification.md` |
+| 029 | **PASS (LOCAL)** | Deliver the frontend Compare mode + a no-moderator status fix, closing item 28. Part 1 backend fix: when BOTH workers fail with no moderator, `multiplex_workers` now reaches `run_completed` with `status="failed"` instead of `"partial"` (replaced `failed: bool` with `failed_seats: set`; moderator path `emit_run_completed=False` untouched); point-3 test renamed to `test_no_moderator_both_workers_fail_reaches_run_completed_failed` and asserts `failed`. Part 2 frontend Compare mode: inert top-bar `Mode: Mix` span becomes a real `select.modelmix-mode-select` (Mix / Compare) persisted via new `modelmixMode.js` (`loadSavedMode`/`saveMode`, `localStorage["modelmix.mode"]`, valid values only `mix`/`compare`, NO `solo`); Compare hides the Moderator selector, omits `moderator_model` from the request body, hides-but-keeps-mounted the center moderator panel (`modelmix-panel-hidden`), and uses a 2-column models grid; mode control disables during an active run via existing `modelSelectorsDisabled`. New tests: `modelmixMode.test.js` (6), `ModelMixSendCompare.test.jsx` (6). One existing top-bar test necessarily updated (span became a real control) — sole modified existing test. Validation: backend **448 passed**, `ruff` clean; frontend **130 passed** / build / lint green. Item 28 (Compare) CLOSED | `029-compare-mode-status-fix-and-frontend.md` |
 
 
 **Mission 008 is present on `main` and its persistence tests pass.**
@@ -104,9 +105,8 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 
 - **4 — Lock license and provenance** — **PARTIAL — MISSION 017** (the cockpit About section now surfaces the MIT license, the copyright holder, the real version, the text-only AI Counsel attribution, and the repo URL; `OPEN_SOURCE_CREDITS.md`, inherited-module provenance, and the shipped dependency-license inventory remain open)
 - **13 — Define privacy/data-routing rules**
-- **24 — Build thin top controls** — **PARTIAL — MISSIONS 012/016/017** (Mission 012: separate New Session control; Mission 016: one compact persistent top strip — brand, inert `Mode: Mix` label, session status, moved New Session, Details-hidden debug line, Back to Council — and CSS-driven panel Collapse/Maximize/Reset; Mission 017: the Settings surface is now a real gear entry opening the Settings overlay; only an interactive Mode selector remains open)
+- **24 — Build thin top controls** — **PARTIAL — MISSIONS 012/016/017/029** (Mission 012: separate New Session control; Mission 016: one compact persistent top strip — brand, mode control, session status, moved New Session, Details-hidden debug line, Back to Council — and CSS-driven panel Collapse/Maximize/Reset; Mission 017: the Settings surface is now a real gear entry opening the Settings overlay; Mission 029 replaces the inert `Mode: Mix` label with a working Mix/Compare selector; only Solo's mode capability remains open)
 - **27 — Add Solo**
-- **28 — Add Compare**
 - **30 — Verify credential storage in actual packaging model**
 - **31 — Harden local backend boundary**
 - **32 — Add basic structured observability**
@@ -252,22 +252,32 @@ Mission 007 completed searchable configured selectors. Mission 017 adds the cock
 
 ### 27. Add Solo — **OPEN**
 
-### 28. Add Compare — **OPEN (backend verification half complete — Mission 028; frontend half remains)**
+### 28. Add Compare — **CLOSED (Missions 028 + 029)**
 
 Mission 028 verified the existing no-moderator two-worker backend path end to
 end through the real HTTP route (`POST /api/modelmix/runs/stream` with
 `moderator_model` omitted): both workers stream with zero moderator events,
 `run_completed "completed"`; one worker fails -> `"partial"` with the persisted
 session reflecting the failed seat; both workers fail -> observed as-shipped
-`run_completed "partial"` (product-semantics note: not `failed`); multi-turn
-isolation holds moderator-less with the dead `seat_histories["moderator"]` key
-never leaking; per-worker guardrails apply; cancellation reaches
-`run_cancelled` mid-stream; and reopening a moderator-less session reconstructs
-with no moderator message (`models["moderator"]` persists as `None`, tolerated).
-New `test_modelmix_compare_mode_backend.py` (7 tests); NO production code
-changed; full backend **448 passed**, `ruff` clean; frontend **118 passed** /
-build / lint green. The remaining half of item 28 — the frontend Compare mode
-selector/panel work — is the next mission. Report: `028-compare-backend-verification.md`.
+`run_completed "partial"`; multi-turn isolation holds moderator-less with the
+dead `seat_histories["moderator"]` key never leaking; per-worker guardrails
+apply; cancellation reaches `run_cancelled` mid-stream; and reopening a
+moderator-less session reconstructs with no moderator message
+(`models["moderator"]` persists as `None`, tolerated). New
+`test_modelmix_compare_mode_backend.py` (7 tests).
+
+Mission 029 delivers the rest. Part 1 backend status fix: when **both** workers
+fail with no moderator, `multiplex_workers` now reaches `run_completed` with
+`status="failed"` instead of `"partial"` (point-3 test now asserts `failed`);
+the moderator path is untouched. Part 2 frontend Compare mode: the inert top-bar
+`Mode: Mix` span becomes a real `select.modelmix-mode-select` (Mix / Compare),
+persisted via new `modelmixMode.js`; in Compare mode the Moderator selector is
+hidden, `moderator_model` is omitted from the request body, and the center
+moderator panel is hidden-but-kept-mounted. Validation: backend **448 passed** +
+`ruff` clean; frontend **130 passed** / build / lint green. One existing
+frontend top-bar test was updated (the mode span had to become a real control)
+and is the sole modified existing test. Reports:
+`028-compare-backend-verification.md`, `029-compare-mode-status-fix-and-frontend.md`.
 
 ### 29. Finalize Mix multi-turn session behavior — **PARTIAL — MISSIONS 009/011/012**
 

@@ -41,6 +41,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 026 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `026-windows-credential-file-hardening.md` |
 | 027 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `027-credentials-file-startup-remediation.md` |
 | 028 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `028-compare-backend-verification.md` |
+| 029 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `029-compare-mode-status-fix-and-frontend.md` |
 
 
 ## Mission 007 Provenance Clarification
@@ -547,6 +548,55 @@ Full backend **448 passed** (441 prior + 7 net new), `ruff` clean; frontend
 **118 passed** / build / lint green. Punch Board item 28's backend verification
 half is complete; the frontend Compare mode selector/panel work is the next
 mission.
+
+## Mission 029 Result
+
+**Mission 029 is implemented and verified locally.**
+
+Mission 029 delivers the other half of Punch Board item 28 (Compare): it fixes
+one no-moderator backend status edge and ships the Compare frontend mode.
+
+**Part 1 — Backend status fix.** In the no-moderator path, when **both** workers
+fail, `multiplex_workers` now reaches `run_completed` with `status="failed"`
+instead of `"partial"` (which was misleading for a run with no surviving output).
+Implemented by replacing a `failed: bool` with a `failed_seats: set` and
+computing the status as `"failed" if failed_seats and len(failed_seats) ==
+len(tasks) else "partial" if failed_seats else "completed"`. The moderator path
+(`emit_run_completed=False`) is untouched; a `run_completed` is still only
+emitted for the no-moderator case. [revert candidate: `git revert <sha>`]
+
+**Part 2 — Frontend Compare mode.** Replaces the inert top-bar `Mode: Mix`
+`<span>` with a real `select.modelmix-mode-select` (options Mix / Compare),
+persisted to `localStorage["modelmix.mode"]` via the new pure module
+`modelmixMode.js` (`loadSavedMode` / `saveMode`, valid values only `mix` /
+`compare`, default `mix`; **no** `solo` anywhere). In Compare mode: the
+composer's Moderator selector is not rendered; the Moderator model is omitted
+from the request body (`moderator_model` key absent); the center moderator panel
+is hidden-but-kept-mounted via the existing `modelmix-panel-hidden` seam; the
+models strip uses a 2-column grid. The mode control disables during an active
+run using the existing `modelSelectorsDisabled` helper.
+
+Files: `backend/modelmix/orchestrator.py`,
+`backend/tests/test_modelmix_compare_mode_backend.py` (point-3 test renamed to
+`test_no_moderator_both_workers_fail_reaches_run_completed_failed`, now asserts
+`status="failed"`), `frontend/src/modelmixMode.js` (new),
+`frontend/src/modelmixMode.test.js` (new, 6 tests),
+`frontend/src/components/ModelMixSendCompare.test.jsx` (new, 6 tests),
+`frontend/src/components/ModelMixObserver.{jsx,css}`,
+`frontend/src/components/ModelMixObserver.test.jsx`.
+
+Validation observed: combined backend `test_modelmix_compare_mode_backend.py` +
+`test_modelmix_moderator.py` **18 passed**; full `uv run pytest backend/tests -q`
+**448 passed**; `ruff` clean on both changed backend files; frontend **130
+passed** (up from 118; +6 `modelmixMode`, +6 `ModelMixSendCompare`) / `build`
+green / `lint` green.
+
+One existing frontend test was modified: the top-bar test now asserts the real
+`select.modelmix-mode-select` (options `['Mix','Compare']`, default `value===
+'mix'`) instead of the old inert `Mode: Mix` span; it was impossible to keep the
+span as a non-control while making it a real mode control. This is the sole
+modified existing test; all other existing tests pass unmodified. Punch Board
+item 28 (Compare) is now genuinely closeable.
 
 ## Evidence Rule
 

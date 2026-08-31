@@ -145,7 +145,7 @@ async def multiplex_workers(
     }
     terminal_seats = set()
     cancelled = False
-    failed = False
+    failed_seats: set = set()
     try:
         while len(terminal_seats) < len(tasks):
             if not cancelled and is_disconnected is not None and await is_disconnected():
@@ -165,10 +165,16 @@ async def multiplex_workers(
             if event_type in {"seat_completed", "seat_failed", "seat_cancelled"}:
                 terminal_seats.add(seat_id)
             if event_type == "seat_failed":
-                failed = True
+                failed_seats.add(seat_id)
 
         if not cancelled and emit_run_completed:
-            yield await create("run_completed", status="partial" if failed else "completed")
+            if failed_seats and len(failed_seats) == len(tasks):
+                status = "failed"
+            elif failed_seats:
+                status = "partial"
+            else:
+                status = "completed"
+            yield await create("run_completed", status=status)
     finally:
         for task in tasks.values():
             if not task.done():

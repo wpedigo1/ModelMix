@@ -79,15 +79,22 @@ function viewClasses(article) {
   return [...article.classList].filter((name) => name.startsWith('modelmix-panel-'));
 }
 
-test('top bar is a single compact strip with brand, static Mode, session status, New Session, and Back to Council', async () => {
+test('top bar is a single compact strip with brand, mode control, session status, New Session, and Back to Council', async () => {
   await renderObserver();
   const h1 = document.querySelector('.modelmix-topbar h1');
   assert.ok(h1);
   assert.equal(h1.textContent, 'ModelMix');
   const mode = document.querySelector('.modelmix-mode');
   assert.ok(mode);
-  assert.equal(mode.textContent, 'Mode: Mix');
-  assert.equal(mode.nodeName, 'SPAN');
+  const modeSelect = document.querySelector('.modelmix-mode-select');
+  assert.ok(modeSelect);
+  assert.equal(modeSelect.nodeName, 'SELECT');
+  assert.equal(modeSelect.value, 'mix');
+  assert.deepEqual(
+    [...modeSelect.options].map((option) => option.textContent),
+    ['Mix', 'Compare'],
+  );
+  assert.equal(document.querySelector('.modelmix-models #modelmix-moderator-model') != null, true);
   assert.ok(document.querySelector('.modelmix-topbar .new-session'));
   assert.equal(document.querySelector('.modelmix-session-status').textContent, 'completed');
   const council = document.querySelector('.modelmix-topbar a');
@@ -98,9 +105,6 @@ test('top bar is a single compact strip with brand, static Mode, session status,
   assert.ok(document.querySelector('.modelmix-actions span[role="status"]'));
   assert.ok(!document.body.textContent.includes('Settings'));
   assert.ok([...document.querySelectorAll('a')].every((anchor) => !(anchor.getAttribute('href') || '').includes('settings')));
-  assert.equal(document.querySelectorAll('select').length, 0);
-  assert.equal(document.querySelectorAll('.modelmix-header').length, 0);
-  assert.equal(document.querySelectorAll('.modelmix-kicker').length, 0);
 });
 
 test('collapse hides only the transcript body via class while the panel stays mounted', async () => {

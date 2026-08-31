@@ -56,6 +56,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 026 | **PASS (LOCAL)** | Real Windows ACL hardening for credential file storage, scoped to `backend/credentials/file_backend.py`: `os.chmod(0o600)` is a no-op on Windows, so after each atomic credential write `_harden_credentials_file()` runs `icacls "<path>" /inheritance:r /grant:r "<current-user>":F` via `subprocess` (no new dependency), gated behind `sys.platform == "win32"`; the current user is resolved from `USERNAME`/`USERDOMAIN` env vars (fallback `os.getlogin()`). Failures log a warning and never crash a write; a once-per-process startup warning surfaces pre-existing or never-hardened plaintext files on Windows. Default `file` mode and `get_effective_mode()` unchanged by declared boundary. New `test_credentials_file_hardening.py` (7 tests) mocks `subprocess.run`/`sys.platform`. Full backend **438 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Advances item 30 (current-model half); separate later re-verification of credential storage required once Tauri (item 34) exists | `026-windows-credential-file-hardening.md` |
 | 027 | **PASS (LOCAL)** | Auto-remediate an unhardened credentials file on startup, scoped to `_warn_if_unhardened()` in `backend/credentials/file_backend.py`: on the first touch (read or write) of an existing, not-yet-hardened Windows file it now attempts `_harden_credentials_file()` directly (logic reused exactly from Mission 026), logging INFO "Restricted..." on success or the existing warning on failure. A single once-per-process automatic remediation — an upgraded user who just opens the app gets their pre-existing plaintext file protected without writing a new key or running icacls themselves. Never raises; a failed attempt logs and continues. Extends `test_credentials_file_hardening.py` to 10 tests (one Mission 026 test necessarily reconciled because its "reads never invoke icacls / always warn" assertion is directly contradicted by remediation-on-read; flagged). Full backend **441 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Item 30 current-model half closeable; Tauri re-check (item 34) carried forward | `027-credentials-file-startup-remediation.md` |
 | 028 | **PASS (LOCAL)** | Verify and harden the existing Compare (no-moderator) backend path. `TwoWorkerRequest.moderator_model` optional and `registry._run_phase` / `orchestrator.multiplex_workers` already support a two-worker run with no moderator phase, but had ZERO test coverage. Driven through the REAL HTTP route (`POST /api/modelmix/runs/stream` with `moderator_model` omitted) in new `test_modelmix_compare_mode_backend.py` (7 tests, alpha-acceptance harness): (1) both workers stream fully with ZERO moderator events and `run_completed "completed"`; (2) one worker fails -> `run_completed "partial"` + persisted session reflects the failed seat via `GET /sessions/{id}`; (3) both workers fail -> OBSERVED as-shipped `run_completed "partial"` (not `failed`; product-semantics note, not a defect); (4) multi-turn isolation holds moderator-less and the dead `seat_histories["moderator"]` key never leaks to either worker; (5) per-worker guardrails (warning/hard cap) still apply; (6) cancellation reaches `run_cancelled` mid-stream; (7) reopening a moderator-less session reconstructs with no moderator message and nothing chokes on the moderator's absence (`models["moderator"]` persists as `None`, tolerated by `_validate`). No real defect found; NO production code changed; no `mode` concept added; no frontend change. Full backend **448 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Backend half of item 28 deliverable; frontend Compare half is the next mission | `028-compare-backend-verification.md` |
+| 029 | **PASS (LOCAL)** | Deliver the frontend Compare mode + a no-moderator status fix, closing item 28. Part 1 backend fix in `orchestrator.multiplex_workers`: replaced `failed: bool` with `failed_seats: set`, so when BOTH workers fail with no moderator the run reaches `run_completed` with `status="failed"` (not `"partial"`); moderator path (`emit_run_completed=False`) untouched. Point-3 compare test renamed to `test_no_moderator_both_workers_fail_reaches_run_completed_failed` and now asserts `failed`. Part 2 frontend Compare mode: the inert top-bar `Mode: Mix` `<span>` becomes a real `select.modelmix-mode-select` (Mix / Compare) persisted via new pure module `modelmixMode.js` (`loadSavedMode`/`saveMode`, `localStorage["modelmix.mode"]`, valid values only `mix`/`compare`, default `mix`, NO `solo`); in Compare mode the composer Moderator selector is not rendered, `moderator_model` is omitted from the request body, the center moderator panel is hidden-but-kept-mounted via existing `modelmix-panel-hidden` seam, and the models strip uses a 2-col grid; the mode control disables during an active run via existing `modelSelectorsDisabled`. New tests: `modelmixMode.test.js` (6), `ModelMixSendCompare.test.jsx` (6). One existing top-bar test necessarily updated (the mode span had to become a real control) — sole modified existing test; all others pass unmodified. Validation: combined compare+moderator backend **18 passed**, full **448 passed**, `ruff` clean; frontend **130 passed** (118 prior + 12 net new) / build green / lint green. Item 28 (Compare) CLOSED | `029-compare-mode-status-fix-and-frontend.md` |
 
 
 ## Current Verified Product Slice
@@ -143,7 +144,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 
 - **13 — Privacy/data-routing rules**
 - **27 — Solo**
-- **28 — Compare** — backend verification half complete (Mission 028); frontend Compare mode selector/panel work remains the next mission
+- **28 — Compare** — **CLOSED (Missions 028 + 029).** Backend path verified end to end (Mission 028) and the frontend Compare mode + no-moderator status fix delivered (Mission 029): real `select.modelmix-mode-select` (Mix/Compare) persisted via `modelmixMode.js`; Compare hides the Moderator selector, omits `moderator_model` from the request body, hides-but-keeps-mounted the moderator panel; both-workers-fail now emits `run_completed "failed"` instead of `"partial"`. Backend **448 passed**, `ruff` clean; frontend **130 passed** / build / lint green.
 - **30 — Credential verification in actual packaging model**
 - **31 — Local backend hardening**
 - **32 — Basic structured observability**
@@ -815,5 +816,51 @@ Validation observed:
 - Frontend (`cd frontend && npm test && npm run build && npm run lint`): **118
   passed**, build green (1.61s), lint clean.
 
-Punch Board item 28's backend verification half is now complete; the remaining
-half — the frontend Compare mode selector/panel work — is the next mission.
+Punch Board item 28's backend verification half was complete after Mission 028;
+Mission 029 delivered the rest and closed item 28.
+
+## Mission 029 Result
+
+Mission 029 delivers the frontend Compare mode and a no-moderator status fix,
+closing Punch Board item 28 (Compare).
+
+**Part 1 — Backend status fix.** In the no-moderator path, when **both** workers
+fail, `multiplex_workers` now reaches `run_completed` with `status="failed"`
+instead of `"partial"` — a run with no surviving output should not present as a
+mere partial completion. Implementation: `failed: bool` → `failed_seats: set`,
+with the terminal status computed as `"failed" if failed_seats and
+len(failed_seats) == len(tasks) else "partial" if failed_seats else
+"completed"`. The moderator path (`emit_run_completed=False`) is untouched; a
+`run_completed` is still only emitted for the no-moderator case. The Mission 028
+point-3 test was renamed to `test_no_moderator_both_workers_fail_reaches_run_completed_failed`
+and now asserts `status="failed"`.
+
+**Part 2 — Frontend Compare mode.** The inert top-bar `Mode: Mix` `<span>` is
+replaced by a real `select.modelmix-mode-select` with options Mix / Compare,
+persisted to `localStorage["modelmix.mode"]` through the new pure module
+`modelmixMode.js` (`loadSavedMode` / `saveMode`; valid values only `mix` /
+`compare`; default `mix`; **no** `solo` anywhere). Behavior in Compare mode:
+the composer's Moderator selector is not rendered; `moderator_model` is omitted
+from the request body entirely; the center moderator panel is hidden-but-kept-
+mounted using the existing `modelmix-panel-hidden` seam; the models strip uses a
+2-column grid (`.modelmix-models--compare`). The mode control disables during an
+active run through the existing `modelSelectorsDisabled`/`controlState` helpers.
+
+Validation observed:
+- `uv run pytest backend/tests/test_modelmix_compare_mode_backend.py
+  backend/tests/test_modelmix_moderator.py -v` → **18 passed** (7 compare + 11
+  moderator; moderator path undisturbed by the status fix).
+- Full `uv run pytest backend/tests -q` → **448 passed** (unchanged total: the
+  compare test was renamed, not added).
+- `uv run ruff check backend/modelmix/orchestrator.py
+  backend/tests/test_modelmix_compare_mode_backend.py` → All checks passed.
+- Frontend (`cd frontend && npm test && npm run build && npm run lint`): **130
+  passed** (118 prior + 6 `modelmixMode.test.js` + 6
+  `ModelMixSendCompare.test.jsx`), build green, lint clean.
+
+One existing frontend test was modified: the top-bar test now asserts the real
+`select.modelmix-mode-select` (options `['Mix','Compare']`, default
+`value === 'mix'`, present `#modelmix-moderator-model`) instead of the old inert
+span. The mode control needed to be a real control, so the span-based assertion
+could not survive as-is. This is the sole modified existing test; every other
+existing test passes unchanged. Punch Board item 28 (Compare) is now CLOSED.

@@ -19,6 +19,7 @@ import {
   saveGuardrailOverride,
   validateGuardrailOverride,
 } from '../guardrailSettings';
+import { loadSavedMode, MODES, saveMode } from '../modelmixMode';
 import pkg from '../../package.json';
 import {
   cancelModelMixRun,
@@ -63,6 +64,7 @@ export default function ModelMixObserver() {
   const [settingsSnapshot, setSettingsSnapshot] = useState(null);
   const [defaultsRevision, setDefaultsRevision] = useState(0);
   const [guardrailsRevision, setGuardrailsRevision] = useState(0);
+  const [mode, setMode] = useState(() => loadSavedMode(window.localStorage));
 
   const updateObserver = useCallback((updater) => {
     setObserver((current) => {
@@ -207,10 +209,12 @@ export default function ModelMixObserver() {
 
   const send = async (event) => {
     event.preventDefault();
-    if (!prompt.trim() || !workerAModel.trim() || !moderatorModel.trim() || !workerBModel.trim()) return;
+    if (!prompt.trim() || !workerAModel.trim() || !workerBModel.trim()) return;
+    if (mode !== 'compare' && !moderatorModel.trim()) return;
     connectionRef.current?.abort();
     const controller = new AbortController();
     connectionRef.current = controller;
+    const isCompare = mode === 'compare';
     const starting = {
       ...archiveCurrentRun(observerRef.current),
       overall: 'connecting',
@@ -218,7 +222,7 @@ export default function ModelMixObserver() {
       prompt: prompt.trim(),
       models: {
         worker_a: workerAModel.trim(),
-        moderator: moderatorModel.trim(),
+        moderator: isCompare ? '' : moderatorModel.trim(),
         worker_b: workerBModel.trim(),
       },
     };
@@ -227,10 +231,10 @@ export default function ModelMixObserver() {
       const requestBody = {
         prompt: prompt.trim(),
         worker_a_model: workerAModel.trim(),
-        moderator_model: moderatorModel.trim(),
         worker_b_model: workerBModel.trim(),
         session_id: observerRef.current.sessionId || undefined,
       };
+      if (!isCompare) requestBody.moderator_model = moderatorModel.trim();
       const guardrailOverride = loadGuardrailOverride();
       if (guardrailOverride) {
         requestBody.warning_threshold_chars = guardrailOverride.warning_threshold_chars;
@@ -293,13 +297,31 @@ export default function ModelMixObserver() {
     || modelsLoading
     || !prompt.trim()
     || !workerAModel
-    || !moderatorModel
-    || !workerBModel;
+    || !workerBModel
+    || (mode !== 'compare' && !moderatorModel);
+  const modeDisabled = modelsLoading || modelSelectorsDisabled(observer.overall);
   return (
     <main className="modelmix-observer">
       <header className="modelmix-topbar">
         <h1>ModelMix</h1>
-        <span className="modelmix-mode">Mode: Mix</span>
+        <label className="modelmix-mode">
+          <span className="modelmix-mode-label">Mode</span>
+          <select
+            className="modelmix-mode-select"
+            aria-label="Mode"
+            value={mode}
+            disabled={modeDisabled}
+            onChange={(event) => {
+              const next = event.target.value;
+              saveMode(next, window.localStorage);
+              setMode(next);
+            }}
+          >
+            {MODES.map((value) => (
+              <option key={value} value={value}>{value === 'mix' ? 'Mix' : 'Compare'}</option>
+            ))}
+          </select>
+        </label>
         <div className="modelmix-session">
           <span className="modelmix-session-status" data-status={observer.overall}>{observer.overall}</span>
           <button type="button" className="new-session" disabled={modelSelectorsDisabled(observer.overall)} onClick={newSession}>New Session</button>
@@ -335,7 +357,7 @@ export default function ModelMixObserver() {
 
       <form className="modelmix-composer" onSubmit={send}>
         <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} aria-label="Prompt" rows="3" required />
-        <div className="modelmix-models">
+        <div className={`modelmix-models${mode === 'compare' ? ' modelmix-models--compare' : ''}`}>
           <label htmlFor="modelmix-worker-a-model">
             Worker A model
             <SearchableModelSelect
@@ -349,19 +371,21 @@ export default function ModelMixObserver() {
               isLoading={modelsLoading}
             />
           </label>
-          <label htmlFor="modelmix-moderator-model">
-            Moderator model
-            <SearchableModelSelect
-              inputId="modelmix-moderator-model"
-              ariaLabel="Moderator model"
-              models={models}
-              allModels={models}
-              value={moderatorModel}
-              onChange={setModeratorModel}
-              isDisabled={selectorsDisabled}
-              isLoading={modelsLoading}
-            />
-          </label>
+          {mode !== 'compare' && (
+            <label htmlFor="modelmix-moderator-model">
+              Moderator model
+              <SearchableModelSelect
+                inputId="modelmix-moderator-model"
+                ariaLabel="Moderator model"
+                models={models}
+                allModels={models}
+                value={moderatorModel}
+                onChange={setModeratorModel}
+                isDisabled={selectorsDisabled}
+                isLoading={modelsLoading}
+              />
+            </label>
+          )}
           <label htmlFor="modelmix-worker-b-model">
             Worker B model
             <SearchableModelSelect
@@ -398,22 +422,26 @@ export default function ModelMixObserver() {
           { seatKey: 'worker_a', title: 'Worker A', className: '', emptyText: 'Waiting for visible output…' },
           { seatKey: 'moderator', title: 'Moderator', className: 'modelmix-moderator', emptyText: 'Waiting for workers…' },
           { seatKey: 'worker_b', title: 'Worker B', className: '', emptyText: 'Waiting for visible output…' },
-        ].map(({ seatKey, title, className, emptyText }) => (
-          <TranscriptPane
-            key={seatKey}
-            title={title}
-            seatKey={seatKey}
-            participant={observer[seatKey]}
-            history={observer.history}
-            emptyText={emptyText}
-            className={`${className} ${getPanelViewClasses(seatKey, panelView.maximized, panelView.collapsed).join(' ')}`.trim()}
-            statusOverride={seatKey === 'moderator' && observer.overall === 'reconnecting' ? 'reconnecting' : null}
-            collapsed={panelView.collapsed.includes(seatKey)}
-            maximized={panelView.maximized === seatKey}
-            onToggleCollapse={() => toggleCollapsed(seatKey)}
-            onToggleMaximize={() => toggleMaximize(seatKey)}
-          />
-        ))}
+        ].map(({ seatKey, title, className, emptyText }) => {
+          const hiddenByMode = mode === 'compare' && seatKey === 'moderator';
+          const viewClasses = `${className} ${getPanelViewClasses(seatKey, panelView.maximized, panelView.collapsed).join(' ')}${hiddenByMode ? ' modelmix-panel-hidden' : ''}`.trim();
+          return (
+            <TranscriptPane
+              key={seatKey}
+              title={title}
+              seatKey={seatKey}
+              participant={observer[seatKey]}
+              history={observer.history}
+              emptyText={emptyText}
+              className={viewClasses}
+              statusOverride={seatKey === 'moderator' && observer.overall === 'reconnecting' ? 'reconnecting' : null}
+              collapsed={panelView.collapsed.includes(seatKey)}
+              maximized={panelView.maximized === seatKey}
+              onToggleCollapse={() => toggleCollapsed(seatKey)}
+              onToggleMaximize={() => toggleMaximize(seatKey)}
+            />
+          );
+        })}
       </section>
     </main>
   );
