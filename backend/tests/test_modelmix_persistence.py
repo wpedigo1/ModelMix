@@ -316,3 +316,115 @@ async def test_failed_atomic_replace_leaves_previous_canonical_file_readable(tmp
         })
     assert json.loads((tmp_path / "session-1.json").read_text(encoding="utf-8")) == original
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def _validate_document(models):
+    document = {
+        "schema_version": 1,
+        "session": {
+            "session_id": "session-1",
+            "created_at": 1.0,
+            "updated_at": 1.0,
+            "runs": [
+                {
+                    "run_id": "run-1",
+                    "prompt": "question",
+                    "models": models,
+                    "status": "completed",
+                    "latest_seq": 0,
+                    "events": [],
+                }
+            ],
+            "messages": [],
+        },
+    }
+    return AtomicJsonModelMixPersistence._validate(document)
+
+
+def test_validator_accepts_mix_compare_and_solo_model_shapes():
+    for models in [
+        {"worker_a": "p:a", "worker_b": "p:b", "moderator": "p:m"},
+        {"worker_a": "p:a", "worker_b": "p:b", "moderator": None},
+        {"worker_a": "p:a"},
+        {"worker_a": "p:a", "moderator": None},
+        {"worker_a": "p:a", "worker_b": "p:b"},
+    ]:
+        assert _validate_document(models) is None
+
+
+def test_validator_rejects_missing_or_empty_worker_a():
+    for models in [
+        {},
+        {"worker_b": "p:b", "moderator": "p:m"},
+        {"worker_a": "", "worker_b": "p:b"},
+        {"worker_a": 123},
+    ]:
+        with pytest.raises(PersistenceError, match="Malformed ModelMix model references"):
+            _validate_document(models)
+
+
+def test_validator_rejects_worker_b_none_and_unknown_keys():
+    for models in [
+        {"worker_a": "p:a", "worker_b": None},
+        {"worker_a": "p:a", "worker_b": ""},
+        {"worker_a": "p:a", "worker_c": "p:c"},
+        {"worker_a": "p:a", "moderator": ""},
+        {"worker_a": "p:a", "moderator": 7},
+    ]:
+        with pytest.raises(PersistenceError, match="Malformed ModelMix model references"):
+            _validate_document(models)
+
+
+async def test_solo_shape_survives_load_from_disk(tmp_path):
+    document = {
+        "schema_version": 1,
+        "session": {
+            "session_id": "solo",
+            "created_at": 1.0,
+            "updated_at": 1.0,
+            "runs": [
+                {
+                    "run_id": "run-1",
+                    "prompt": "question",
+                    "models": {"worker_a": "p:a"},
+                    "status": "completed",
+                    "latest_seq": 0,
+                    "events": [],
+                }
+            ],
+            "messages": [],
+        },
+    }
+    (tmp_path / "solo.json").write_text(json.dumps(document), encoding="utf-8")
+    loaded = await AtomicJsonModelMixPersistence(tmp_path).load_session("solo")
+    assert loaded["session"]["runs"][0]["models"] == {"worker_a": "p:a"}
+
+
+async def test_mix_compare_and_solo_shapes_all_load_from_disk(tmp_path):
+    for session_id, models in [
+        ("mix", {"worker_a": "p:a", "worker_b": "p:b", "moderator": "p:m"}),
+        ("compare", {"worker_a": "p:a", "worker_b": "p:b", "moderator": None}),
+        ("solo", {"worker_a": "p:a"}),
+    ]:
+        document = {
+            "schema_version": 1,
+            "session": {
+                "session_id": session_id,
+                "created_at": 1.0,
+                "updated_at": 1.0,
+                "runs": [
+                    {
+                        "run_id": "run-1",
+                        "prompt": "question",
+                        "models": models,
+                        "status": "completed",
+                        "latest_seq": 0,
+                        "events": [],
+                    }
+                ],
+                "messages": [],
+            },
+        }
+        (tmp_path / f"{session_id}.json").write_text(json.dumps(document), encoding="utf-8")
+        loaded = await AtomicJsonModelMixPersistence(tmp_path).load_session(session_id)
+        assert loaded["session"]["runs"][0]["models"] == models

@@ -138,12 +138,12 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **17 — Spend/runtime guardrails:** explicit Stop, the turn cap, seat-history per-message/per-seat character budgets (Mission 010), wall-clock run (600s) / seat-Moderator (300s) timeouts (Mission 013), persisted `started_at`/`completed_at` timing truth (Mission 015) surfaced as calculated elapsed in the cockpit (Mission 018), and — new in Mission 019 — a hard output cap plus one-shot output warning for every worker seat and the Moderator with an honest `modelmix_output_cap` terminal outcome, made configurable per request in Mission 020 and **from the cockpit in Mission 021**: a Guardrails settings section saves/clears a local `modelmix.guardrails` override (bounded 100–200_000 chars, server cross-check mirrored) that is sent with every run request, the warning renders live in seat footers (`Approaching output limit: 22,451 / 20,000 chars`), and worker seats show the same honest finish captions as the Moderator. Cost/token ceilings remain the only open sub-item.
 - **26 — Provider/settings UX:** searchable configured selectors are complete; the visible ModelMix sidebar navigation entry point exists (Mission 014); the cockpit Settings surface is now a real entry (Mission 017) with read-only provider status from the exported `configuredSources` and saved default seat models; full alpha provider/settings entry flow remains open.
 - **4 — License and provenance — PARTIAL — MISSION 017** (the cockpit About section surfaces the MIT license, the copyright holder, the real version, the text-only AI Counsel attribution, and the repo URL; the `OPEN_SOURCE_CREDITS.md`, inherited-module provenance, and dependency-license inventory remain open)
-- **24 — Thin top controls — PARTIAL — MISSIONS 012/016/017** (Mission 012: separate New Session control; Mission 016: compact persistent top strip — brand, inert `Mode: Mix` label, session status, moved New Session, Details-hidden debug line, Back to Council, no Settings — plus CSS-driven panel Collapse/Maximize/Reset; Mission 017: the Settings surface ships as a gear entry opening the Settings overlay; only an interactive Mode selector remains open)
+- **24 — Thin top controls — PARTIAL — MISSIONS 012/016/017/029** (Mission 012: separate New Session control; Mission 016: compact persistent top strip — brand, inert `Mode: Mix` label, session status, moved New Session, Details-hidden debug line, Back to Council, no Settings — plus CSS-driven panel Collapse/Maximize/Reset; Mission 017: the Settings surface ships as a gear entry opening the Settings overlay; Mission 029 replaces the inert label with a working Mix/Compare selector; only the Solo (single-worker) rendering capability remains open — Mission 030 handles the Solo backend half)
 
 ### Not yet satisfied / upcoming
 
 - **13 — Privacy/data-routing rules**
-- **27 — Solo**
+- **27 — Solo** — **PARTIAL — MISSION 030 (backend half).** `worker_b_model` is now optional end to end: `TwoWorkerRequest.worker_b_model` is `Optional[str]` (default `None`), the route 422-rejects the worker_b-absent + moderator hybrid before any provider call, `registry`/`orchestrator` run Worker A alone with the `worker_b` key absent from persisted `models`, and the persistence structural guard is statically relaxed to a subset-of-{worker_a,worker_b,moderator} with `worker_a` always present. No `history.py` change needed. Backend **460 passed**, `ruff` clean; frontend **130 passed** / build / lint green. The frontend Solo surface (send with no worker_b / Workers=1) remains open.
 - **28 — Compare** — **CLOSED (Missions 028 + 029).** Backend path verified end to end (Mission 028) and the frontend Compare mode + no-moderator status fix delivered (Mission 029): real `select.modelmix-mode-select` (Mix/Compare) persisted via `modelmixMode.js`; Compare hides the Moderator selector, omits `moderator_model` from the request body, hides-but-keeps-mounted the moderator panel; both-workers-fail now emits `run_completed "failed"` instead of `"partial"`. Backend **448 passed**, `ruff` clean; frontend **130 passed** / build / lint green.
 - **30 — Credential verification in actual packaging model**
 - **31 — Local backend hardening**
@@ -864,3 +864,77 @@ One existing frontend test was modified: the top-bar test now asserts the real
 span. The mode control needed to be a real control, so the span-based assertion
 could not survive as-is. This is the sole modified existing test; every other
 existing test passes unchanged. Punch Board item 28 (Compare) is now CLOSED.
+
+## Mission 030 Result
+
+Mission 030 delivers the backend half of Punch Board item 27 (Solo): it makes
+`worker_b_model` optional end to end so a run can consist of Worker A alone. The
+frontend Solo surface is intentionally out of scope for this mission, leaving
+item 27 partially open.
+
+**Routes.** `TwoWorkerRequest.worker_b_model` is `Optional[str] =
+Field(default=None, min_length=1)`. The route rejects the worker_b-absent +
+moderator hybrid with `422` **before** any provider resolver call (boundary:
+"Solo is exactly one participant, full stop"; no moderator-with-one-worker hybrid
+mode).
+
+**Registry.** `worker_b_model: Optional[str]` threads through
+`RunRegistry.start` / `_run` / `_run_phase`. It is kept as a positional-None
+parameter (not a keyword default) so the required `provider_resolver` order is
+preserved across the existing call sites without a broad signature reorder.
+`start` builds only a `worker_a` + `moderator` seat history and adds `worker_b`
+only when configured; the persisted `models` for a Solo run is
+`{"worker_a", "moderator": None}` (the `worker_b` key is absent); the existing
+Compare shape (`{"worker_a", "worker_b", "moderator": None}`) is unchanged.
+`_run_phase` forwards only the active worker seat histories downstream and adds
+a defensive no-hybrid guard so the moderator phase only runs when BOTH
+`moderator_model` and `worker_b_model` are present.
+
+**Orchestrator.** `multiplex_workers` now accepts `worker_b_model: Optional[str]`
+and computes active seats locally (`models` starts `{"worker_a"}`, gains
+`worker_b` only when configured). The now-unused `SEATS` module constant was
+removed.
+
+**Persistence.** `_validate` replaces the exact three-key set-equality guard
+with: `models` keys a subset of `{worker_a, worker_b, moderator}`; `worker_a`
+always present non-empty; then the existing per-key loop (any present
+non-moderator key must be a non-empty string; `moderator` may be non-empty or
+`None`). Mix / Compare / old three-key shapes still validate; genuinely malformed
+shapes (missing or empty `worker_a`, `worker_b: None`, unknown keys, empty or
+non-string `moderator`) are still rejected — proven by new validator tests.
+
+**No `history.py` change.** A Solo turn produces no worker_b message, so a later
+Mix turn's `build_seat_history("worker_b")` correctly skips the Solo turn
+(verified by the solo-then-mix isolation test; not patched).
+
+Validation observed:
+- New `backend/tests/test_modelmix_solo_mode.py` → **7 passed** (solo streams
+  Worker A only and completes; solo failure reaches `run_completed "failed"`;
+  requests with no worker_b default to Solo; the hybrid is 422-rejected with the
+  resolver never called; solo-then-mix multi-turn isolation holds with worker_b
+  never seeing Worker A's Solo output; per-worker guardrails apply to the Solo
+  worker; cancellation reaches `run_cancelled` mid-stream).
+- New persistence validator tests in `test_modelmix_persistence.py` (Mix /
+  Compare / Solo shapes accepted; missing/empty `worker_a`, `worker_b: None`,
+  unknown keys, non-string/empty `moderator` rejected; Solo shape survives
+  load-from-disk; Mix/Compare/Solo all load).
+- Targeted `uv run pytest` on persistence/streaming/moderator/compare/
+  acceptance/solo files → **63 passed**.
+- Full `uv run pytest backend/tests -q` → **460 passed** (up from 448).
+- `uv run ruff check backend/modelmix backend/tests` → All checks passed. (The
+  repo-wide `ruff format --check` state is pre-existing and left untouched per
+  the no-reformat unrelated code rule.)
+- Frontend (`cd frontend && npm test && npm run build && npm run lint`) → **130
+  passed**, build green, lint clean.
+
+Files: `backend/modelmix/routes.py`, `backend/modelmix/registry.py`,
+`backend/modelmix/orchestrator.py`, `backend/modelmix/persistence.py`,
+`backend/tests/test_modelmix_persistence.py` (validator tests),
+`backend/tests/test_modelmix_solo_mode.py` (new, 7 tests).
+
+Assumption that materially affected implementation: `worker_b_model` is typed
+`Optional[str]` and threaded as a positional-None (route passes `None` for Solo)
+rather than given a `= None` keyword default, because a default before the
+required `provider_resolver`/`moderator_model` position would force a broad
+signature reorder across many existing call sites. Functionally equivalent for
+the route-driven Solo path.

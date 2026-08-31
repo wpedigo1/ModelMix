@@ -14,13 +14,12 @@ from .timeouts import aiter_with_deadline
 ProviderResolver = Callable[[str], LLMProvider]
 DisconnectCheck = Callable[[], Awaitable[bool]]
 EventFactory = Callable[..., Awaitable[Dict[str, Any]]]
-SEATS = (("worker_a", "worker_a_model"), ("worker_b", "worker_b_model"))
 
 
 async def multiplex_workers(
     prompt: str,
     worker_a_model: str,
-    worker_b_model: str,
+    worker_b_model: Optional[str],
     provider_resolver: ProviderResolver,
     is_disconnected: Optional[DisconnectCheck] = None,
     run_id: Optional[str] = None,
@@ -31,7 +30,7 @@ async def multiplex_workers(
     warning_threshold_chars: Optional[int] = None,
     hard_cap_chars: Optional[int] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
-    """Run exactly two isolated model calls and multiplex their visible output."""
+    """Run one or two isolated model calls and multiplex their visible output."""
     run_id = run_id or str(uuid.uuid4())
     sequencer = EventSequencer(run_id) if event_factory is None else None
 
@@ -42,7 +41,9 @@ async def multiplex_workers(
         return sequencer.create(event_type, **payload)
 
     queue: asyncio.Queue[tuple[str, str, Dict[str, Any]]] = asyncio.Queue()
-    models = {"worker_a": worker_a_model, "worker_b": worker_b_model}
+    models = {"worker_a": worker_a_model}
+    if worker_b_model is not None:
+        models["worker_b"] = worker_b_model
     histories = seat_histories or {}
 
     async def run_seat(seat_id: str, model_id: str) -> None:
@@ -141,7 +142,7 @@ async def multiplex_workers(
     yield await create("run_started", seats=list(models))
     tasks = {
         seat_id: asyncio.create_task(run_seat(seat_id, models[seat_id]))
-        for seat_id, _ in SEATS
+        for seat_id in models
     }
     terminal_seats = set()
     cancelled = False

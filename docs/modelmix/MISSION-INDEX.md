@@ -42,6 +42,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 027 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `027-credentials-file-startup-remediation.md` |
 | 028 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `028-compare-backend-verification.md` |
 | 029 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `029-compare-mode-status-fix-and-frontend.md` |
+| 030 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `030-solo-mode-backend.md` |
 
 
 ## Mission 007 Provenance Clarification
@@ -597,6 +598,62 @@ One existing frontend test was modified: the top-bar test now asserts the real
 span as a non-control while making it a real mode control. This is the sole
 modified existing test; all other existing tests pass unmodified. Punch Board
 item 28 (Compare) is now genuinely closeable.
+
+## Mission 030 Result
+
+**Mission 030 is implemented and verified locally.**
+
+Mission 030 delivers the backend half of Punch Board item 27 (Solo): it makes
+`worker_b_model` optional end to end so a run can consist of Worker A alone.
+The frontend Solo surface is intentionally out of scope, so item 27 stays
+partially open.
+
+**Routes.** `TwoWorkerRequest.worker_b_model` is now
+`Optional[str] = Field(default=None, min_length=1)`. The route rejects the
+worker_b-absent + moderator hybrid with `422` **before** any provider resolver
+call (`"A moderator requires a second worker (worker_b_model); Solo mode runs
+worker_a only"`), honoring the "Solo is exactly one participant, full stop"
+boundary. [revert candidate: `git revert <sha>`]
+
+**Registry.** `worker_b_model: Optional[str]` threads through
+`RunRegistry.start` / `_run` / `_run_phase` (kept as a positional-None parameter
+rather than a keyword default to avoid reordering the required
+`provider_resolver` across the codebase). `start` builds only a `worker_a` +
+`moderator` seat history and adds `worker_b` only when it is configured; the
+persisted `models` dict for a Solo run carries `{"worker_a", "moderator": None}`
+(the `worker_b` key is absent); the existing Compare shape
+(`{"worker_a", "worker_b", "moderator": None}`) is unchanged. `_run_phase` passes
+only the active worker seat histories downstream and adds a defensive
+no-hybrid guard (`moderator_model is not None and worker_b_model is not None`
+must both hold before the moderator phase runs).
+
+**Orchestrator.** `multiplex_workers` accepts `worker_b_model: Optional[str]`
+and computes active seats locally (`models` starts as `{"worker_a"}` and gains
+`worker_b` only when configured); the now-unused `SEATS` constant was removed.
+
+**Persistence.** `_validate` statically relaxes the model-references guard from
+an exact three-key set equality to: keys a subset of `{worker_a, worker_b,
+moderator}`; `worker_a` always present non-empty; plus the existing per-key loop
+(any present non-moderator key must be a non-empty string, `moderator` may be a
+non-empty string or `None`). Mix / Compare / old three-key shapes still
+validate; genuinely malformed shapes (missing or empty `worker_a`, `worker_b:
+None`, unknown keys like `worker_c`, empty/non-string `moderator`) are still
+rejected.
+
+**No changes to `history.py`.** A Solo turn produces no worker_b message, so a
+later Mix turn's `build_seat_history("worker_b")` correctly skips it (verified by
+the solo-then-mix isolation test, not patched).
+
+Files: `backend/modelmix/routes.py`, `backend/modelmix/registry.py`,
+`backend/modelmix/orchestrator.py`, `backend/modelmix/persistence.py`,
+`backend/tests/test_modelmix_persistence.py` (new validator tests),
+`backend/tests/test_modelmix_solo_mode.py` (new, 7 tests).
+
+Validation observed: new `test_modelmix_solo_mode.py` **7 passed**; targeted
+persistence/streaming/moderator/compare/acceptance/solo files **63 passed**; full
+`uv run pytest backend/tests -q` **460 passed**; `ruff check` clean on changed
+backend files (the repo-wide `ruff format --check` state is pre-existing and
+untouched); frontend **130 passed** / `build` green / `lint` green.
 
 ## Evidence Rule
 

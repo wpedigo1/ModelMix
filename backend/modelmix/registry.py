@@ -48,7 +48,7 @@ class RunRegistry:
         self,
         prompt: str,
         worker_a_model: str,
-        worker_b_model: str,
+        worker_b_model: Optional[str],
         provider_resolver: ProviderResolver,
         moderator_model: Optional[str] = None,
         session_id: Optional[str] = None,
@@ -63,21 +63,30 @@ class RunRegistry:
         if session_document is None:
             raise RuntimeError("ModelMix session disappeared before run creation")
         seat_histories = {
-            seat_id: build_seat_history(
+            "worker_a": build_seat_history(
                 session_document,
-                seat_id,
+                "worker_a",
+                exclude_run_id=run.run_id,
+            ),
+            "moderator": build_seat_history(
+                session_document,
+                "moderator",
+                exclude_run_id=run.run_id,
+            ),
+        }
+        if worker_b_model is not None:
+            seat_histories["worker_b"] = build_seat_history(
+                session_document,
+                "worker_b",
                 exclude_run_id=run.run_id,
             )
-            for seat_id in ("worker_a", "worker_b", "moderator")
-        }
+        models = {"worker_a": worker_a_model, "moderator": moderator_model}
+        if worker_b_model is not None:
+            models["worker_b"] = worker_b_model
         await self.persistence.create_run(session_id, {
             "run_id": run.run_id,
             "prompt": prompt,
-            "models": {
-                "worker_a": worker_a_model,
-                "moderator": moderator_model,
-                "worker_b": worker_b_model,
-            },
+            "models": models,
             "status": "created",
             "latest_seq": 0,
             "events": [],
@@ -156,7 +165,7 @@ class RunRegistry:
         run: RunEventJournal,
         prompt: str,
         worker_a_model: str,
-        worker_b_model: str,
+        worker_b_model: Optional[str],
         provider_resolver: ProviderResolver,
         moderator_model: Optional[str],
         seat_histories: Dict[str, List[Dict[str, str]]],
@@ -203,15 +212,20 @@ class RunRegistry:
         run: RunEventJournal,
         prompt: str,
         worker_a_model: str,
-        worker_b_model: str,
+        worker_b_model: Optional[str],
         provider_resolver: ProviderResolver,
         moderator_model: Optional[str],
         seat_histories: Dict[str, List[Dict[str, str]]],
         warning_threshold_chars: Optional[int] = None,
         hard_cap_chars: Optional[int] = None,
     ) -> None:
-        worker_outputs = {"worker_a": "", "worker_b": ""}
+        worker_outputs = {"worker_a": ""}
+        if worker_b_model is not None:
+            worker_outputs["worker_b"] = ""
         worker_failures: Dict[str, str] = {}
+        worker_seat_histories = {"worker_a": seat_histories["worker_a"]}
+        if worker_b_model is not None:
+            worker_seat_histories["worker_b"] = seat_histories["worker_b"]
         worker_stream = multiplex_workers(
             prompt,
             worker_a_model,
@@ -223,10 +237,7 @@ class RunRegistry:
             seat_timeout=self.seat_timeout,
             warning_threshold_chars=warning_threshold_chars,
             hard_cap_chars=hard_cap_chars,
-            seat_histories={
-                "worker_a": seat_histories["worker_a"],
-                "worker_b": seat_histories["worker_b"],
-            },
+            seat_histories=worker_seat_histories,
         )
         async with aclosing(worker_stream):
             async for source_event in worker_stream:
@@ -244,7 +255,7 @@ class RunRegistry:
                 if source_event["type"] == "run_completed":
                     await run.mark_status(str(source_event.get("status") or "completed"))
 
-        if moderator_model is not None:
+        if moderator_model is not None and worker_b_model is not None:
             successful_outputs = {
                 seat_id: output
                 for seat_id, output in worker_outputs.items()

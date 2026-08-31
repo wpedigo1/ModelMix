@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 029: 2026-08-31 CT
+Reconciled through Mission 030: 2026-08-31 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -44,6 +44,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 027 | **PASS (LOCAL)** | Auto-remediate an unhardened credentials file on startup: `_warn_if_unhardened()` in `file_backend.py` now attempts `_harden_credentials_file()` directly on the first touch (read or write) of an existing, unhardened Windows file, then logs INFO "Restricted..." on success or the existing warning on failure — a single, one-time, automatic remediation (no new key write or manual icacls needed to protect a pre-existing file). `_harden_credentials_file()` logic reused exactly; never raises. Extends `test_credentials_file_hardening.py` to 10 tests (one Mission 026 test necessarily reconciled, flagged). Full backend **441 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Item 30 current-model half closeable; Tauri re-check (item 34) carried forward | `027-credentials-file-startup-remediation.md` |
 | 028 | **PASS (LOCAL)** | Verify and harden the existing Compare (no-moderator) backend path: `TwoWorkerRequest.moderator_model` optional and `registry._run_phase` / `orchestrator.multiplex_workers` already support a two-worker run with no moderator phase, but had zero test coverage. Driven through the REAL HTTP route (`POST /runs/stream` with `moderator_model` omitted) in new `test_modelmix_compare_mode_backend.py` (7 tests), proving: both workers stream with ZERO moderator events and `run_completed "completed"`; one worker fails -> `"partial"` + persisted session reflects the failed seat via `GET /sessions/{id}`; both workers fail -> observed as-shipped `run_completed "partial"` (not `failed`; product-semantics note, not a defect); multi-turn isolation holds moderator-less and the dead `seat_histories["moderator"]` key never leaks; per-worker guardrails (warning/hard cap) apply; cancellation reaches `run_cancelled` mid-stream; reopening a moderator-less session reconstructs with no moderator message and nothing chokes on the moderator's absence (`models["moderator"]` persists as `None`, tolerated). NO production code changed; no `mode` concept added; no frontend change. Full backend **448 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Backend half of item 28 deliverable | `028-compare-backend-verification.md` |
 | 029 | **PASS (LOCAL)** | Deliver the frontend Compare mode + a no-moderator status fix, closing item 28. Part 1 backend fix: when BOTH workers fail with no moderator, `multiplex_workers` now reaches `run_completed` with `status="failed"` instead of `"partial"` (replaced `failed: bool` with `failed_seats: set`; moderator path `emit_run_completed=False` untouched); point-3 test renamed to `test_no_moderator_both_workers_fail_reaches_run_completed_failed` and asserts `failed`. Part 2 frontend Compare mode: inert top-bar `Mode: Mix` span becomes a real `select.modelmix-mode-select` (Mix / Compare) persisted via new `modelmixMode.js` (`loadSavedMode`/`saveMode`, `localStorage["modelmix.mode"]`, valid values only `mix`/`compare`, NO `solo`); Compare hides the Moderator selector, omits `moderator_model` from the request body, hides-but-keeps-mounted the center moderator panel (`modelmix-panel-hidden`), and uses a 2-column models grid; mode control disables during an active run via existing `modelSelectorsDisabled`. New tests: `modelmixMode.test.js` (6), `ModelMixSendCompare.test.jsx` (6). One existing top-bar test necessarily updated (span became a real control) — sole modified existing test. Validation: backend **448 passed**, `ruff` clean; frontend **130 passed** / build / lint green. Item 28 (Compare) CLOSED | `029-compare-mode-status-fix-and-frontend.md` |
+| 030 | **PASS (LOCAL)** | Backend support for Solo (single-worker) mode. `TwoWorkerRequest.worker_b_model` is now `Optional[str]` (default `None`); the route rejects the worker_b-absent + moderator hybrid with 422 **before** any provider resolver call; `worker_b_model: Optional[str]` threads through `RunRegistry.start`/`_run`/`_run_phase` and `orchestrator.multiplex_workers` (active seats computed locally; removed now-unused `SEATS`). For a Solo run, persisted `models` carry `worker_a` + `moderator: None` with the `worker_b` key absent, never passed to `multiplex_workers`, and no `moderator` events emitted. `persistence._validate` statically relaxes the structural guard from an exact three-key set to a subset-of-{worker_a,worker_b,moderator} with `worker_a` always present non-empty and `worker_b` never None/empty; Mix/Compare/old shapes still validate (proven by tests). Defensive no-hybrid guard in `_run_phase` (`moderator_model` and `worker_b_model` both present required). Zero changes to `history.py` (Solo turns already produce no worker_b message). New `test_modelmix_solo_mode.py` (7 route/orchestration tests: solo completed, solo failed, 422-before-resolver, defaults, solo-then-mix isolation, guardrails, cancellation) + new persistence validator tests. Validation: backend **460 passed**, `ruff` check clean; frontend **130 passed** / build / lint green. Frontend Solo mode out of scope — item 27 remains partially open | `030-solo-mode-backend.md` |
 
 
 **Mission 008 is present on `main` and its persistence tests pass.**
@@ -105,8 +106,8 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 
 - **4 — Lock license and provenance** — **PARTIAL — MISSION 017** (the cockpit About section now surfaces the MIT license, the copyright holder, the real version, the text-only AI Counsel attribution, and the repo URL; `OPEN_SOURCE_CREDITS.md`, inherited-module provenance, and the shipped dependency-license inventory remain open)
 - **13 — Define privacy/data-routing rules**
-- **24 — Build thin top controls** — **PARTIAL — MISSIONS 012/016/017/029** (Mission 012: separate New Session control; Mission 016: one compact persistent top strip — brand, mode control, session status, moved New Session, Details-hidden debug line, Back to Council — and CSS-driven panel Collapse/Maximize/Reset; Mission 017: the Settings surface is now a real gear entry opening the Settings overlay; Mission 029 replaces the inert `Mode: Mix` label with a working Mix/Compare selector; only Solo's mode capability remains open)
-- **27 — Add Solo**
+- **24 — Build thin top controls** — **PARTIAL — MISSIONS 012/016/017/029** (Mission 012: separate New Session control; Mission 016: one compact persistent top strip — brand, mode control, session status, moved New Session, Details-hidden debug line, Back to Council — and CSS-driven panel Collapse/Maximize/Reset; Mission 017: the Settings surface is now a real gear entry opening the Settings overlay; Mission 029 replaces the inert `Mode: Mix` label with a working Mix/Compare selector; only the Solo (single-worker) rendering capability remains open — Mission 030 delivers the Solo backend half)
+- **27 — Add Solo** — **PARTIAL — MISSION 030** (backend half: `worker_b_model` optional end to end, 422 hybrid rejection, validator relaxed; frontend half — send with no worker_b / Workers=1 — remains open)
 - **30 — Verify credential storage in actual packaging model**
 - **31 — Harden local backend boundary**
 - **32 — Add basic structured observability**
@@ -250,7 +251,24 @@ Mission 007 completed searchable configured selectors. Mission 017 adds the cock
 
 ## PHASE 6 — Conversation Modes and Persistence UX
 
-### 27. Add Solo — **OPEN**
+### 27. Add Solo — **PARTIAL — MISSION 030 (backend half; frontend half open)**
+
+Mission 030 makes `worker_b_model` optional end to end so a run can be Worker A
+alone. Backend changes: `TwoWorkerRequest.worker_b_model` is now
+`Optional[str]` (default `None`), threaded through `RunRegistry.start` /
+`_run` / `_run_phase` and `orchestrator.multiplex_workers` (active seats computed
+locally; the now-unused `SEATS` constant removed); the route rejects the
+worker_b-absent + moderator hybrid with 422 **before** any provider resolver
+call; persisted `models` for a Solo run carry `worker_a` plus `moderator: None`
+with the `worker_b` key absent; `persistence._validate` statically relaxes the
+structural guard from an exact three-key set to a subset with `worker_a` always
+present non-empty and `worker_b` never `None`/empty (Mix/Compare/old shapes all
+still validate — proven by tests). Zero changes to `history.py` (Solo turns
+already produce no worker_b message, so `build_seat_history` never reuses one).
+Validation: new `test_modelmix_solo_mode.py` (7 route/orchestration tests) +
+new persistence validator tests; backend **460 passed**, `ruff` clean; frontend
+**130 passed** / build / lint green. Frontend Solo mode (send with no worker_b /
+Workers=1) intentionally out of scope and remains open.
 
 ### 28. Add Compare — **CLOSED (Missions 028 + 029)**
 

@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/modelmix", tags=["modelmix"])
 class TwoWorkerRequest(BaseModel):
     prompt: str = Field(min_length=1)
     worker_a_model: str = Field(min_length=1)
-    worker_b_model: str = Field(min_length=1)
+    worker_b_model: Optional[str] = Field(default=None, min_length=1)
     moderator_model: Optional[str] = Field(default=None, min_length=1)
     session_id: Optional[str] = Field(default=None, min_length=1)
     warning_threshold_chars: Optional[int] = Field(default=None, gt=0)
@@ -80,6 +80,12 @@ async def stream_two_workers(body: TwoWorkerRequest) -> StreamingResponse:
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if body.worker_b_model is None and body.moderator_model is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="A moderator requires a second worker (worker_b_model); "
+            "Solo mode runs worker_a only",
+        )
     try:
         run = await run_registry.start(
             body.prompt,

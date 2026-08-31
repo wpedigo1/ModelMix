@@ -246,7 +246,14 @@ class AtomicJsonModelMixPersistence(ModelMixPersistence):
                 raise PersistenceError("Malformed ModelMix run identity or prompt")
             if run["status"] not in RUN_STATUSES:
                 raise PersistenceError("Malformed ModelMix run status")
-            if not isinstance(run["models"], dict) or set(run["models"]) != {"worker_a", "moderator", "worker_b"}:
+            if not isinstance(run["models"], dict) or not set(run["models"]).issubset(
+                {"worker_a", "worker_b", "moderator"}
+            ):
+                raise PersistenceError("Malformed ModelMix model references")
+            if not (
+                isinstance(run["models"].get("worker_a"), str)
+                and run["models"].get("worker_a")
+            ):
                 raise PersistenceError("Malformed ModelMix model references")
             if not all(
                 isinstance(model, str) and model
