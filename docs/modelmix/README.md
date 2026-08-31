@@ -12,7 +12,7 @@ This directory is the repository home for ModelMix implementation state, mission
 
 ## Mission Reports
 
-Historical engineering evidence through locally verified Mission 020:
+Historical engineering evidence through locally verified Mission 023:
 
 1. [`001-baseline-architecture-spike.md`](001-baseline-architecture-spike.md)
 2. [`002-first-streaming-slice.md`](002-first-streaming-slice.md)
@@ -37,6 +37,8 @@ Historical engineering evidence through locally verified Mission 020:
 21. [`019-output-guardrails-backend.md`](019-output-guardrails-backend.md) — **PASS (LOCAL)**
 22. [`020-configurable-output-guardrails-backend.md`](020-configurable-output-guardrails-backend.md) — **PASS (LOCAL)**
 23. [`021-guardrails-settings-and-visibility.md`](021-guardrails-settings-and-visibility.md) — **PASS (LOCAL)**
+24. [`022-alpha-acceptance-integration-test.md`](022-alpha-acceptance-integration-test.md) — **PASS (LOCAL)**
+25. [`023-cancellation-race-fix.md`](023-cancellation-race-fix.md) — **PASS (LOCAL)**
 
 Mission reports preserve what was observed or delivered during that slice. They do not automatically override a later locked decision in the Punch Board.
 
@@ -56,7 +58,7 @@ Do not silently promote an older proposal into a current architecture decision.
 
 As of 2026-08-30 CT:
 
-- Missions **001–021** are recorded as implemented (007.5 interlock included); Mission 008 is present on current `main`.
+- Missions **001–023** are recorded as implemented (007.5 interlock included); Mission 008 is present on current `main`.
 - Mission **007.5** closed the MCP 2.x security/compatibility interlock.
 - Accepted Mission 007.5 implementation commit: `e018ed06807beda2c11531f065b2d4181c346ca8`.
 - MCP remains at **2.1.1**; Python and frontend dependency audits were recorded clean.
@@ -64,6 +66,8 @@ As of 2026-08-30 CT:
 - Mission **009** adds bounded seat-scoped Worker/Moderator history with hot-swap continuity and explicit cross-seat leakage tests.
 - Mission **010** gives seat history owned character budgets: 4,000 per message and 24,000 per seat with whole-turn oldest-first eviction.
 - Mission **010.5** wires a Vitest runner (`npm test`) so the existing frontend suite executes with an observed 24/24 pass.
+- Mission **022** proves the backend-provable half of the alpha acceptance checklist (items 4–11) as integration tests through the real HTTP surface and discloses a cancel-path race.
+- Mission **023** fixes that race: cancellation cleanup is bounded by `CANCEL_GRACE_SECONDS = 5.0` (`timeouts.await_cancellation_grace`, `multiplex_workers` `finally`), and the Moderator await is shielded in `registry.py`, so a cancel reaches terminal `run_cancelled` within the bound even when seats/Moderator absorb cancellation — proven deterministically by `test_modelmix_cancel_race.py` (8 tests; full backend 403 passed).
 - Mission **017** adds the Settings shell: a gear entry in the top bar opens an in-app overlay — About surfaces the real version, MIT license, and text-only AI Counsel attribution; Providers is a read-only Connected/Not-connected list computed from the now-exported `configuredSources`; Defaults saves/clears the `modelmix.defaultSeatModels` localStorage trio and applies saved seat defaults at initial mount with the exact built-in fallbacks preserved.
 - Mission **018** renders the telemetry truth layer honestly in the cockpit: compact per-seat footers (live turn only) show `Usage: authoritative (provider-reported)`/`unavailable`, the Moderator-only `finish_reason`, and ModelMix-calculated elapsed timing labeled `(calculated)`; per-historical-turn footers and cost/pricing wiring remain explicitly deferred follow-ups.
 - Mission **019** enforces the output guardrails in the backend run path: a new `backend/modelmix/guardrails.py` owns the provisional char bounds — `WARNING_OUTPUT_THRESHOLD_CHARS = 20_000`, `HARD_OUTPUT_CAP_CHARS = 40_000` — and `run_seat`/`run_moderator` emit a one-shot `seat_output_warning`/`moderator_output_warning`, then stop consuming the provider stream at the hard cap, truncating to exactly the cap and terminating as `seat_completed`/`moderator_completed` with `finish_reason: "modelmix_output_cap"` (an honest outcome distinct from completion, cancellation, provider termination, failure, and timeout); the provider-quota usage warning stays deferred (no authoritative quota data exists) and the thresholds await a configurability mission.

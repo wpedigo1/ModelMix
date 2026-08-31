@@ -173,4 +173,4 @@ async def multiplex_workers(
         for task in tasks.values():
             if not task.done():
                 task.cancel()
-        await asyncio.gather(*tasks.values(), return_exceptions=True)
+        await timeouts.await_cancellation_grace(tasks.values())

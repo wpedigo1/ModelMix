@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 022: 2026-08-30 CT
+Reconciled through Mission 023: 2026-08-30 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -37,6 +37,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 020 | **PASS (LOCAL)** | Configurable output guardrails, backend: `TwoWorkerRequest` gains optional `warning_threshold_chars`/`hard_cap_chars` (`gt=0`); `routes.py::_resolve_guardrail_overrides` defaults omitted fields to the Mission 019 constants, rejects values outside `guardrails.MIN_OUTPUT_CHARS_BOUND = 100` / `MAX_OUTPUT_CHARS_BOUND = 200_000`, and rejects `hard_cap_chars < warning_threshold_chars` — every violation surfaces as a 422 before any provider is resolved or called. The resolved pair rides the exact `registry.start → _run → _run_phase → multiplex_workers/run_moderator` chain (mirroring `seat_timeout`); enforcement logic, event payloads, and the `modelmix_output_cap` finish reason are byte-for-byte unchanged, the frontend sends neither field yet (omitting both is byte-for-byte Mission 019 behavior), and nothing is persisted server-side |
 | 021 | **PASS (LOCAL)** | Guardrails settings and visibility, frontend: a 4th Settings section (Guardrails) saves/clears a local `modelmix.guardrails` override via a new `guardrailSettings.js` module (validate/load/save/clear, `MIN=100`/`MAX=200_000` bounds mirroring the backend, server cross-check mirrored); `send()` injects `warning_threshold_chars`/`hard_cap_chars` only when a valid override exists (both omitted otherwise — byte-for-byte Mission 020 behavior); `seat_output_warning`/`moderator_output_warning` become a live-only `outputWarning` on the seat (never persisted to history/hydration) rendered in every seat footer as `Approaching output limit: 22,451 / 20,000 chars`; worker seats gain the Moderator's `finish_reason` capture, and finish captions render on all seats (`modelmix_output_cap` → "Output capped by ModelMix", everything else verbatim). Frontend-only — no backend, API, or persistence changes |
 | 022 | **PASS (LOCAL)** | Alpha acceptance integration tests (backend, verify-only): new `test_modelmix_alpha_acceptance.py` proves items 4–11 of the item-33 checklist through the real HTTP surface — stream both workers + Moderator on one ordered feed, cancel (real route; terminal `run_cancelled`, no post-cancel deltas, persisted `cancelled`), survive worker failure (partial run, failed worker excluded from the Moderator handoff), reopen session (full persisted transcript), multi-turn isolation across a second POST, provider-faithful telemetry (exact usage/finish/timestamps), and no credential leak into stream/journal/persisted session. One deliberate async-httpx single-loop deviation for the two-in-flight cancel test; everything else reuses the sync TestClient pattern. Discloses an observed cancel-path race (sub-ms cancel window can hang the run until the 600s run timeout) as a real gap, not patched under verify-only rules | `022-alpha-acceptance-integration-test.md` |
+| 023 | **PASS (LOCAL)** | Deterministic cancellation-race fix: `multiplex_workers`' `finally` swapped its unbounded `asyncio.gather` for `await_cancellation_grace` (`CANCEL_GRACE_SECONDS = 5.0` in `timeouts.py`), so a seat task that absorbs cancellation can no longer block `run_cancelled`; the Moderator phase awaits its task through `asyncio.shield` so a slow-to-cancel Moderator can no longer leave `_run_phase` un-woken indefinitely. A cancel now reaches terminal `run_cancelled` within the bound even when every seat/Moderator holds past the grace period, and prompt-cancel stays byte-for-byte unchanged. Proven deterministically by `backend/tests/test_modelmix_cancel_race.py` (8 tests that construct the stall condition with a holding fake provider rather than racing timing, plus structural "abandoned mid-stream / never a timeout" contract asserts); full backend **403 passed**, frontend unchanged at **118 passed** / build / lint green | `023-cancellation-race-fix.md` |
 
 **Mission 008 is present on `main` and its persistence tests pass.**
 
@@ -182,7 +183,7 @@ Two isolated workers → complete bounded outputs → Moderator → persisted se
 
 ### 16. Prove failure + cancellation with the same loop — **SUBSTANTIALLY SATISFIED**
 
-One/both worker failure, Moderator failure, timeout/rate limit/cancellation/partial outcomes modeled honestly. **Mission 013** proves run/seat/Moderator timeouts share the same loop and cancellation machinery as failure and explicit cancel, with a no-late-writes guarantee verified in both the journal and durable session. Persisted restart case remains tied to item 11.
+One/both worker failure, Moderator failure, timeout/rate limit/cancellation/partial outcomes modeled honestly. **Mission 013** proves run/seat/Moderator timeouts share the same loop and cancellation machinery as failure and explicit cancel, with a no-late-writes guarantee verified in both the journal and durable session. **Mission 023** proves cancellation stays terminal and bounded even when a seat/Moderator provider does not honor cancellation promptly (deterministic stall tests; `run_cancelled` within `CANCEL_GRACE_SECONDS`). Persisted restart case remains tied to item 11.
 
 ### 17. Add basic spend/runtime guardrails — **PARTIAL**
 
@@ -261,7 +262,7 @@ Independent bounded seat histories, Moderator history, hot-swap continuity, and 
 
 ## ALPHA GATE
 
-### 33. Alpha acceptance test — **BACKEND-PROVABLE COVERAGE COMPLETE — MISSION 022**
+### 33. Alpha acceptance test — **BACKEND-PROVABLE COVERAGE COMPLETE — MISSIONS 022/023**
 
 Launch; three panels; configure A/B/Moderator; stream both workers; stream Moderator; cancel; survive worker failure; reopen session; multi-turn isolation; honest telemetry; no credential leak.
 
@@ -280,8 +281,17 @@ Mission 022 additionally disclosed one genuine robustness gap found during the
 cancel verification: a sub-millisecond cancel window (cancel fires right as a
 seat emits) can leave the run stuck `active` until the 600s run timeout, with
 `_run_phase` blocked in the `multiplex_workers` generator-`finally` gather and
-one seat's provider generator never receiving `CancelledError`. Not patched
-under verify-only rules — flagged for follow-up (see the Mission 022 report).
+one seat's provider generator never receiving `CancelledError`.
+
+**Mission 023 fixed that race:** cancellation cleanup is now bounded by
+`CANCEL_GRACE_SECONDS = 5.0` (`timeouts.await_cancellation_grace`), replacing
+the unbounded gather in `multiplex_workers`' `finally`; the Moderator phase in
+`registry.py` awaits its task through `asyncio.shield` so a slow-to-cancel
+Moderator can no longer hang `_run_phase` indefinitely. A cancel now reaches
+terminal `run_cancelled` within the bound even when every seat/Moderator
+absorbs cancellation. Proven deterministically by
+`backend/tests/test_modelmix_cancel_race.py` (8 tests, fast-cancel regressions
+assert the old behavior is byte-for-byte unchanged); see `023-cancellation-race-fix.md`.
 
 **Nothing below this line may delay the alpha gate.**
 

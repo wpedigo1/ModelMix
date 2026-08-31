@@ -35,6 +35,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 020 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `020-configurable-output-guardrails-backend.md` |
 | 021 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `021-guardrails-settings-and-visibility.md` |
 | 022 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `022-alpha-acceptance-integration-test.md` |
+| 023 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `023-cancellation-race-fix.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -389,6 +390,40 @@ baseline re-asserted **118 passed**, build green, lint clean; pre-commit diff
 was exactly one new test file. Items 1–3 of the item-33 checklist remain
 covered by prior-mission evidence (014/016/007); a live-provider manual launch
 pass is the remaining alpha step.
+
+## Mission 023 Result
+
+**Mission 023 is implemented and verified locally.**
+
+Mission 023 fixes the cancel-path race Mission 022 disclosed, with a code +
+deterministic-test change, on base `main @ b82505d`. Cancellation cleanup is
+bounded by a new ModelMix-owned `CANCEL_GRACE_SECONDS = 5.0`:
+`backend/modelmix/timeouts.py` gains `await_cancellation_grace(tasks)`, which
+`multiplex_workers`' generator `finally` now uses in place of the unbounded
+`asyncio.gather` that could previously block the unwinding `CancelledError`
+behind a seat task that absorbed cancellation. The Moderator phase in
+`registry.py` awaits its moderator task through `asyncio.shield` because the
+same absorbing-generator mechanism left `_run_phase` parked at a plain task
+await with no way to be woken (verified by task dump: `_must_cancel` unset on
+both tasks 20s after cancel); the shield's outer future completes immediately
+on cancellation, the task is then explicitly cancelled, and the same bounded
+grace covers it. `_run`'s `CancelledError` handler, `aiter_with_deadline`,
+the 600s/300s backstops, guardrails logic, and event shapes were left
+untouched.
+
+Deterministic proof: `backend/tests/test_modelmix_cancel_race.py` (8 tests)
+constructs the failure condition directly with a `StallOnCancelProvider` that
+absorbs `CancelledError` and holds on a gate, rather than racing timing; the
+terminal contract is asserted structurally (stall provider's `stream_finished`
+marker still unset at the terminal `run_cancelled`, no `run_failed`
+/`run_completed`, never `"timeout"`, `status == "cancelled"`) with wall-clock
+bounds as a secondary guard, and prompt-cancel regressions assert the old
+behavior is unchanged. Validation observed: new file **8 passed in 11.98s**;
+targeted acceptance subset **57 passed in 16.54s**; full backend **403
+passed in 27.94s** (395 prior + 8 new, no existing test modified); frontend
+unchanged, re-asserted **118 passed**, build green (1.70s), lint clean. The
+alpha gate is **not** declared met here; that declaration is left to the next
+verification pass.
 
 ## Evidence Rule
 

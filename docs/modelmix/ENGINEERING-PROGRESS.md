@@ -9,7 +9,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–020**.
+Completed and locally verified implementation missions: **001–023**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -49,6 +49,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 020 | **PASS (LOCAL)** | Configurable output guardrails (backend): `TwoWorkerRequest` gains optional `warning_threshold_chars`/`hard_cap_chars` (`gt=0`); `routes.py::_resolve_guardrail_overrides` defaults omissions to the Mission 019 constants, rejects values outside `guardrails.MIN_OUTPUT_CHARS_BOUND = 100` / `MAX_OUTPUT_CHARS_BOUND = 200_000`, and rejects `hard_cap_chars < warning_threshold_chars` — all surfaced as 422 before any provider is called; the resolved pair rides the exact `registry.start → _run → _run_phase → multiplex_workers/run_moderator` chain (mirroring `seat_timeout`); enforcement logic and event contract byte-for-byte unchanged, frontend zero changes, nothing persisted | `020-configurable-output-guardrails-backend.md` |
 | 021 | **PASS (LOCAL)** | Guardrails settings + visibility (frontend): new `guardrailSettings.js` pure module (validate/load/save/clear + `MIN=100`/`MAX=200_000` bounds) powers a 4th **Guardrails** section in the Settings overlay (after Defaults) that saves/clears a local `modelmix.guardrails` override; `send()` injects `warning_threshold_chars`/`hard_cap_chars` only when a valid override exists; `seat_output_warning`/`moderator_output_warning` are recorded as live-only `outputWarning` (never persisted to history/hydration) and rendered in every seat footer (`Approaching output limit: 22,451 / 20,000 chars`); worker seats gain the Moderator's `finish_reason` capture and finish captions now render on all seats with `modelmix_output_cap` → "Output capped by ModelMix" and every other value verbatim; `buildSeatTelemetry` drops the now-obsolete `seatKey` param. Frontend-only — no backend, API, or persistence changes | `021-guardrails-settings-and-visibility.md` |
 | 022 | **PASS (LOCAL)** | Alpha acceptance integration tests, backend (verify-only): new `test_modelmix_alpha_acceptance.py` proves Punch Board item-33 checklist items 4–11 through the real routes — ordered stream of both workers then the Moderator, cancel via the real route (one `run_cancel_requested` after all deltas, terminal `run_cancelled`, no post-cancel deltas, persisted `cancelled`, both providers terminated), worker-failure survival (run ends `partial`; failed worker's partial output stays persisted but is excluded from the Moderator handoff, replaced by the honest unavailable line), session reopen reconstructing the full 7-message transcript, multi-turn seat isolation across a real second POST (no cross-seat leakage), provider-faithful telemetry on reopen, and no credential leak into stream/journal/persisted session. One deliberate async-httpx single-loop deviation only for the two-in-flight cancel test — everything else reuses the sync TestClient pattern. Discloses an observed cancel-path race: a sub-ms cancel window can hang the run `active` until the 600s run timeout, with `_run_phase` stuck in the `multiplex_workers` generator-`finally` gather and one seat's provider generator never receiving `CancelledError`; reported as a real gap, not patched (verify-only) | `022-alpha-acceptance-integration-test.md` |
+| 023 | **PASS (LOCAL)** | Deterministic cancellation-race fix on `main @ b82505d`: `multiplex_workers`' generator `finally` replaces the unbounded `asyncio.gather` with `await_cancellation_grace(tasks)` (new `CANCEL_GRACE_SECONDS = 5.0` in `timeouts.py`), so a seat task that absorbs cancellation can no longer block the `CancelledError` from reaching `run_cancelled`; the Moderator phase awaits its task via `asyncio.shield` because a direct task await was proven to leave `_run_phase` un-woken forever when the moderator task absorbs the cancel. Deterministically proven by `backend/tests/test_modelmix_cancel_race.py` (8 tests constructing the stall with a holding fake — abandoned-mid-stream structure asserts, no-fast-path change, never `"timeout"`); full backend **403 passed**, frontend unchanged at **118 passed** / build / lint green | `023-cancellation-race-fix.md` |
 
 ## Current Verified Product Slice
 
@@ -78,6 +79,7 @@ The accepted implementation through Mission 009 establishes:
 - production-build reachability and test hygiene: `GET /modelmix` serves `index.html` from `FRONTEND_DIST_DIR` (404 with a clear message when not built) and the Council sidebar has one visible ModelMix nav link, so the three-panel cockpit is reachable from a built app; every `RunRegistry()` in `backend/tests/` writes to an isolated `tmp_path` store — proven by an unchanged real-data file count (229 before = 229 after) across every previously-polluting test file.
 - a compact persistent top strip and CSS-driven panel view controls: one `header.modelmix-topbar` replaces the separate header and always-visible run metadata — brand, inert `Mode: Mix` label, session status from the existing `observer.overall` vocabulary, the New Session control (moved, same handler/disabled binding, no behavior change), a Details disclosure (off by default) holding the `Run: <id>` / `Last sequence: <n>` debug line, and the unchanged Back to Council link, with no Settings entry; each `TranscriptPane` header gains Collapse (body only, header stays) and Maximize (one panel full width, the other two hidden from layout), plus one Reset visible whenever any panel is collapsed or maximized — all layout via CSS classes so all three panels stay mounted, with view state in `panelView.js` helpers and `ModelMixObserver` local state only (`modelmixState.js`/backend untouched; reload resets the view).
 - a Settings shell in the cockpit: a gear entry in the compact strip (`aria-label="Settings"`, `aria-expanded`) opens a conditionally-rendered modal overlay (no route, no new window) with three sections — About (real `pkg.version` imported from `../../package.json` with no duplicated literal, the MIT/copyright line, text-only AI Counsel attribution, and the repo URL), Providers (read-only OpenRouter/Ollama/Direct/Custom/OAuth Connected-or-Not-connected rows computed from the exported `configuredSources` against the settings `loadModels` already fetches, zero credential values, honest "unavailable" when the snapshot is null), and Defaults (Save/Clear the `modelmix.defaultSeatModels` localStorage trio; the three seat selectors initialize from the saved value at mount, falling back to frozen `FALLBACK_SEAT_MODELS` that exactly match the previous built-in selections — so "no saved defaults ⇒ exact hardcoded defaults" is a direct regression test).
+- bounded cancellation cleanup: a cancel now reaches terminal `run_cancelled` within `CANCEL_GRACE_SECONDS = 5.0` even when a seat or the Moderator's provider absorbs `CancelledError` and holds — `multiplex_workers`' `finally` uses `await_cancellation_grace` (`timeouts.py`) in place of the unbounded gather, and the Moderator await is shielded in `registry.py` so a slow-to-cancel moderator cannot leave the run phase un-woken; fast-cancel behavior is unchanged and proven by deterministic stall-provider tests.
 
 ## Mission 007.5 Verification Evidence
 
@@ -109,7 +111,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **10 — Define ordered event contract** — every canonical event now carries a wall-clock `ts` in both constructors, additive alongside `seq`/`run_id`/`type` (Mission 015); the cockpit surfaces that timing truth per seat (Mission 018)
 - **11 — ModelMix persistence boundary**
 - **15 — Non-streaming Mix vertical slice**
-- **16 — Prove failure + cancellation**
+- **16 — Prove failure + cancellation** — **Mission 013** proves run/seat/Moderator timeouts share the same loop and cancellation machinery as failure and explicit cancel (no-late-writes verified in journal and session); **Mission 023** proves cancellation stays terminal `run_cancelled` within `CANCEL_GRACE_SECONDS` even when a seat/Moderator provider does not honor cancellation (deterministic stall tests)
 - **18 — Add normalized provider streaming interface**
 - **19 — Multiplex streams into one ordered SSE run feed**
 - **20 — Stream Moderator**
@@ -138,7 +140,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **30 — Credential verification in actual packaging model**
 - **31 — Local backend hardening**
 - **32 — Basic structured observability**
-- **33 — Alpha acceptance gate** — backend-provable checklist items (stream both workers + Moderator, cancel, survive worker failure, reopen session, multi-turn isolation, honest telemetry, no credential leak) proven through the real HTTP surface by **Mission 022** (`test_modelmix_alpha_acceptance.py`, 7 tests/395 total); UI-bound items (launch, three panels, configure) remain covered by Missions 014/016/007 evidence, and a live-provider manual launch pass remains the final alpha step. Mission 022 also disclosed a real cancel-path race (sub-ms cancel window can hang the run until the 600s run timeout) — reported, not patched under verify-only rules
+- **33 — Alpha acceptance gate** — backend-provable checklist items (stream both workers + Moderator, cancel, survive worker failure, reopen session, multi-turn isolation, honest telemetry, no credential leak) proven through the real HTTP surface by **Mission 022** (`test_modelmix_alpha_acceptance.py`, 7 tests/395 total); the cancel-path race Mission 022 disclosed (sub-ms cancel window could hang a run until the 600s run timeout) is **closed by Mission 023** with bounded cancel cleanup (`CANCEL_GRACE_SECONDS = 5.0`, deterministic `test_modelmix_cancel_race.py`, 8 tests/403 total). UI-bound items (launch, three panels, configure) remain covered by Missions 014/016/007 evidence, and a live-provider manual launch pass remains the final alpha step. Gate declaration is deferred to the next verification pass
 - **34–47 — Post-alpha roadmap**
 
 ## Locked Safeguards Still Open
@@ -540,3 +542,58 @@ the cancel test repeated 10× → **10 passed**; full `uv run pytest backend/tes
 → **118 passed (12 files)**, `npm run build` → green (438 modules, 2.87s),
 `npm run lint` → clean; pre-commit `git status --short` showed only the new
 test file untracked.
+
+## Mission 023 Result
+
+Mission 023 closes the cancel-path race Mission 022 disclosed, on base `main
+@ b82505d` (verified full backend 395 passed before touching code). The root
+cause was confirmed: `multiplex_workers`' generator `finally` did an unbounded
+`await asyncio.gather(*tasks.values(), return_exceptions=True)`; under Python
+3.10.20 `asyncio.wait_for`'s cancellation path awaits the inner awaitable's
+actual completion (`_cancel_and_wait`), so a seat task whose provider generator
+absorbs `CancelledError` and holds keeps that gather (and the unwinding
+`CancelledError` that `_run`'s `run_cancelled` handler needs) blocked until the
+600s run-timeout force-marked the run failed — the run stayed `active` with
+`run.task` parked at `_run`'s `wait_for`.
+
+Fix, all at the cleanup layer (not inside `aiter_with_deadline`, which was
+left untouched by design):
+- `backend/modelmix/timeouts.py` adds `CANCEL_GRACE_SECONDS = 5.0` and
+  `await_cancellation_grace(tasks)` (`asyncio.wait(..., timeout=...)` over the
+  pending tasks; never force-kills beyond `.cancel()`, abandons strays after
+  the bound).
+- `backend/modelmix/orchestrator.py` `multiplex_workers` `finally` now cancels
+  every pending seat task then awaits `await_cancellation_grace(tasks.values())`
+  — if the tasks finish within grace the behavior is unchanged, otherwise the
+  cleanup gives up after 5s and the run's cancellation unwinds to
+  `run_cancelled`.
+- `backend/modelmix/registry.py` awaits the moderator task through
+  `asyncio.shield(...)` inside the existing try/except: the shield's outer
+  future completes immediately on cancellation, so `_run_phase` is woken
+  promptly and the existing explicit `moderator_task.cancel()` +
+  `await_cancellation_grace((moderator_task,))` + `raise` path runs. The direct
+  `await moderator_task` variant was proven to hang **forever** (a task dump
+  showed `_run_phase` still parked there 20s after cancel with `_must_cancel`
+  unset on both tasks, because `Task.cancel()` only injects `CancelledError`
+  after the awaited task — which had absorbed the cancel — completes).
+
+Deterministic proof, new `backend/tests/test_modelmix_cancel_race.py` (8
+tests): a `StallOnCancelProvider` fake emits one delta then absorbs
+cancellation and holds on a gate, constructing the failure condition directly
+instead of racing timing; the terminal contract is asserted structurally —
+stall provider's `stream_finished` marker unset at the moment of terminal
+`run_cancelled`, `reason is None`, no `run_failed`/`run_completed`, no
+`"timeout"` in the serialized journal, `status == "cancelled"` — with
+wall-clock upper bounds as a secondary guard and prompt-cancel regressions
+asserting the old fast path is byte-for-byte unchanged. Both historical hang
+sources found while developing (a `while True` re-hang in an earlier fake and
+a leaked pending task in the grace-helper test) were test-harness bugs now
+fixed; the final file runs clean in 11.98s.
+
+Validation observed: new file **8 passed in 11.98s**; targeted acceptance
+subset (alpha + streaming + timeouts + journal + moderator + cancel) → **57
+passed in 16.54s**; full `uv run pytest backend/tests -q` → **403 passed in
+27.94s** (395 prior + 8 new, no existing test modified); frontend unchanged,
+re-asserted `npm test` → **118 passed (12 files)**, `npm run build` → green
+(1.70s), `npm run lint` → clean. The alpha gate is **not** declared met here;
+the next verification pass owns that declaration.

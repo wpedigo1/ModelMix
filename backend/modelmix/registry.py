@@ -277,15 +277,24 @@ class RunRegistry:
                 await run.append("run_failed", error="Moderator provider resolution failed")
                 await run.mark_status("failed")
                 return
-            moderator_ok = await run_moderator(
-                moderator_model,
-                moderator_provider,
-                moderator_input,
-                run.append,
-                seat_timeout=self.seat_timeout,
-                warning_threshold_chars=warning_threshold_chars,
-                hard_cap_chars=hard_cap_chars,
+            moderator_task = asyncio.create_task(
+                run_moderator(
+                    moderator_model,
+                    moderator_provider,
+                    moderator_input,
+                    run.append,
+                    seat_timeout=self.seat_timeout,
+                    warning_threshold_chars=warning_threshold_chars,
+                    hard_cap_chars=hard_cap_chars,
+                )
             )
+            try:
+                moderator_ok = await asyncio.shield(moderator_task)
+            except asyncio.CancelledError:
+                if not moderator_task.done():
+                    moderator_task.cancel()
+                await timeouts.await_cancellation_grace((moderator_task,))
+                raise
             if not moderator_ok:
                 await run.append("run_failed", error="Moderator failed")
                 await run.mark_status("failed")
