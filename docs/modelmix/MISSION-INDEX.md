@@ -44,6 +44,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 029 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `029-compare-mode-status-fix-and-frontend.md` |
 | 030 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `030-solo-mode-backend.md` |
 | 031 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `031-solo-mode-frontend.md` |
+| 032 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `032-tauri-toolchain-and-shell.md` |
 
 
 ## Mission 007 Provenance Clarification
@@ -690,6 +691,27 @@ passed, 214 setup errors**, `WinError 5`); the workspace-temp rerun passed
 **460 tests in 35.32s**. No backend file, reducer helper, CSS, dependency, or
 lockfile changed. Punch Board items 27 (Solo) and 28 (Compare) are now complete
 end to end.
+
+## Mission 032 Result
+
+**Mission 032 is implemented and verified locally.**
+
+The machine already had Rust 1.98.0, Cargo 1.98.0, the MSVC C++ build tools,
+and WebView2 Runtime 151.0.4129.107. The initially absent Tauri Cargo subcommand
+was installed as `tauri-cli 2.11.4`. A standard `src-tauri/` scaffold now points
+at `http://localhost:5173/modelmix` for development and `../frontend/dist` for
+the existing production frontend output; its frontend hooks are directory-local
+`npm run dev` / `npm run build` commands. It contains no sidecar or backend
+launch configuration.
+
+With the Python backend running separately, `cargo tauri dev` compiled and
+launched `target\debug\app.exe`. Direct Windows inspection observed exactly one
+native ModelMix window displaying the real Worker A / wider Moderator / Worker
+B cockpit, controls, and honest no-configured-models state. Validation observed:
+`cargo check` passed; frontend **138 passed** / build / lint green; backend
+workspace-temp rerun **460 passed** after the exact command reproduced the
+known default-temp `WinError 5`. Item 34 is started but remains open for the
+Python sidecar, installer, and packaged credential-storage verification.
 
 ## Evidence Rule
 

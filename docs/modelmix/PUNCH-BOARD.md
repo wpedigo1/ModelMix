@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 031: 2026-08-31 CT
+Reconciled through Mission 032: 2026-08-31 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -46,6 +46,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 029 | **PASS (LOCAL)** | Deliver the frontend Compare mode + a no-moderator status fix, closing item 28. Part 1 backend fix: when BOTH workers fail with no moderator, `multiplex_workers` now reaches `run_completed` with `status="failed"` instead of `"partial"` (replaced `failed: bool` with `failed_seats: set`; moderator path `emit_run_completed=False` untouched); point-3 test renamed to `test_no_moderator_both_workers_fail_reaches_run_completed_failed` and asserts `failed`. Part 2 frontend Compare mode: inert top-bar `Mode: Mix` span becomes a real `select.modelmix-mode-select` (Mix / Compare) persisted via new `modelmixMode.js` (`loadSavedMode`/`saveMode`, `localStorage["modelmix.mode"]`, valid values only `mix`/`compare`, NO `solo`); Compare hides the Moderator selector, omits `moderator_model` from the request body, hides-but-keeps-mounted the center moderator panel (`modelmix-panel-hidden`), and uses a 2-column models grid; mode control disables during an active run via existing `modelSelectorsDisabled`. New tests: `modelmixMode.test.js` (6), `ModelMixSendCompare.test.jsx` (6). One existing top-bar test necessarily updated (span became a real control) — sole modified existing test. Validation: backend **448 passed**, `ruff` clean; frontend **130 passed** / build / lint green. Item 28 (Compare) CLOSED | `029-compare-mode-status-fix-and-frontend.md` |
 | 030 | **PASS (LOCAL)** | Backend support for Solo (single-worker) mode. `TwoWorkerRequest.worker_b_model` is now `Optional[str]` (default `None`); the route rejects the worker_b-absent + moderator hybrid with 422 **before** any provider resolver call; `worker_b_model: Optional[str]` threads through `RunRegistry.start`/`_run`/`_run_phase` and `orchestrator.multiplex_workers` (active seats computed locally; removed now-unused `SEATS`). For a Solo run, persisted `models` carry `worker_a` + `moderator: None` with the `worker_b` key absent, never passed to `multiplex_workers`, and no `moderator` events emitted. `persistence._validate` statically relaxes the structural guard from an exact three-key set to a subset-of-{worker_a,worker_b,moderator} with `worker_a` always present non-empty and `worker_b` never None/empty; Mix/Compare/old shapes still validate (proven by tests). Defensive no-hybrid guard in `_run_phase` (`moderator_model` and `worker_b_model` both present required). Zero changes to `history.py` (Solo turns already produce no worker_b message). New `test_modelmix_solo_mode.py` (7 route/orchestration tests: solo completed, solo failed, 422-before-resolver, defaults, solo-then-mix isolation, guardrails, cancellation) + new persistence validator tests. Validation: backend **460 passed**, `ruff` check clean; frontend **130 passed** / build / lint green. Frontend Solo mode out of scope — item 27 remains partially open | `030-solo-mode-backend.md` |
 | 031 | **PASS (LOCAL)** | Frontend Solo delivery, closing item 27 with Mission 030. Adds `solo` to the persisted mode vocabulary and Mix / Compare / Solo control. Solo renders only Worker A's selector, requires only Worker A, and omits `worker_b_model` plus `moderator_model` from the request object. Moderator and Worker B panels stay mounted but CSS-hidden; Worker A uses the existing single-column maximized visual treatment. Mode visibility remains independent from panel-view state, and a maximize target on a hidden seat cannot blank Solo. New `ModelMixSendSolo.test.jsx` (8 tests); Solo persistence tests extended; sole modified existing test is the necessary top-bar three-option assertion. Frontend **138 passed** / build / lint green; backend workspace-temp rerun **460 passed** after the exact command reproduced the known inaccessible default-temp `WinError 5`. Items 27 (Solo) and 28 (Compare) complete end to end | `031-solo-mode-frontend.md` |
+| 032 | **PASS (LOCAL)** | Tauri 2 toolchain check and minimal shell scaffold. Rust/Cargo and Windows C++ Build Tools/WebView2 were present; missing `cargo-tauri` was installed as CLI 2.11.4. Standard `src-tauri/` reuses the existing Vite dev server at `/modelmix` and `frontend/dist`, with no sidecar/backend-launch behavior. `cargo tauri dev` visibly opened the native ModelMix three-panel cockpit against the separately started backend. Frontend **138 passed** / build / lint green; `cargo check` green; backend workspace-temp rerun **460 passed** after the exact command reproduced the known inaccessible default-temp `WinError 5`. Begins item 34; installer, sidecar, and packaged credential re-verification remain open | `032-tauri-toolchain-and-shell.md` |
 
 
 **Mission 008 is present on `main` and its persistence tests pass.**
@@ -372,7 +373,14 @@ assert the old behavior is byte-for-byte unchanged); see `023-cancellation-race-
 
 ## PHASE 8 — Desktop Packaging
 
-### 34. Package single-window app with Tauri 2 — **OPEN**
+### 34. Package single-window app with Tauri 2 — **IN PROGRESS (Mission 032 proves the minimal dev shell)**
+
+Mission 032 added the standard Tauri 2 `src-tauri/` shell and directly observed
+the existing ModelMix cockpit in a native Windows window via `cargo tauri dev`.
+The shell reuses the Vite frontend and separately started backend; it contains
+no Python sidecar or backend-launch configuration. A production installer,
+packaged backend lifecycle, and the deferred Tauri credential-storage
+re-verification remain separate open work.
 
 ### 35. Measure before optimizing — **OPEN**
 

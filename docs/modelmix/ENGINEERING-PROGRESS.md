@@ -10,7 +10,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–024**.
+Completed and locally verified implementation missions: **001–032**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -59,6 +59,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 029 | **PASS (LOCAL)** | Deliver the frontend Compare mode + a no-moderator status fix, closing item 28. Part 1 backend fix in `orchestrator.multiplex_workers`: replaced `failed: bool` with `failed_seats: set`, so when BOTH workers fail with no moderator the run reaches `run_completed` with `status="failed"` (not `"partial"`); moderator path (`emit_run_completed=False`) untouched. Point-3 compare test renamed to `test_no_moderator_both_workers_fail_reaches_run_completed_failed` and now asserts `failed`. Part 2 frontend Compare mode: the inert top-bar `Mode: Mix` `<span>` becomes a real `select.modelmix-mode-select` (Mix / Compare) persisted via new pure module `modelmixMode.js` (`loadSavedMode`/`saveMode`, `localStorage["modelmix.mode"]`, valid values only `mix`/`compare`, default `mix`, NO `solo`); in Compare mode the composer Moderator selector is not rendered, `moderator_model` is omitted from the request body, the center moderator panel is hidden-but-kept-mounted via existing `modelmix-panel-hidden` seam, and the models strip uses a 2-col grid; the mode control disables during an active run via existing `modelSelectorsDisabled`. New tests: `modelmixMode.test.js` (6), `ModelMixSendCompare.test.jsx` (6). One existing top-bar test necessarily updated (the mode span had to become a real control) — sole modified existing test; all others pass unmodified. Validation: combined compare+moderator backend **18 passed**, full **448 passed**, `ruff` clean; frontend **130 passed** (118 prior + 12 net new) / build green / lint green. Item 28 (Compare) CLOSED | `029-compare-mode-status-fix-and-frontend.md` |
 | 030 | **PASS (LOCAL)** | Backend support for Solo: optional `worker_b_model`, pre-provider 422 rejection of the one-worker-plus-Moderator hybrid, active-seat orchestration, persistence validation for the Solo model shape, and isolation/guardrail/cancellation coverage. Backend **460 passed**; frontend baseline **130 passed** / build / lint green. Backend half of item 27 | `030-solo-mode-backend.md` |
 | 031 | **PASS (LOCAL)** | Frontend Solo delivery, closing item 27 with Mission 030. `modelmixMode.js` accepts and persists `solo`; the control is Mix / Compare / Solo and retains active-run locking. Solo renders only Worker A's selector, requires only Worker A, and omits both unused model keys. Moderator and Worker B panels remain mounted but CSS-hidden; Worker A uses the existing single-column visual treatment. Mode visibility stays independent from panel-view state, preventing a hidden-seat maximize target from blanking Solo. Eight new Solo tests; sole modified existing test is the necessary top-bar option assertion. Frontend **138 passed** / build / lint green; backend workspace-temp rerun **460 passed** | `031-solo-mode-frontend.md` |
+| 032 | **PASS (LOCAL)** | Tauri 2 toolchain check and minimal native shell: observed Rust/Cargo 1.98.0, MSVC C++ tools, and WebView2 151.0.4129.107; installed the missing `tauri-cli 2.11.4`; added standard `src-tauri/` pointing development at the existing `/modelmix` Vite route and production assets at `frontend/dist`, with no sidecar/backend launch. Direct Windows inspection observed the real three-panel cockpit in the native `target\debug\app.exe` window against the separately started backend. `cargo check` green; frontend **138 passed** / build / lint green; backend workspace-temp rerun **460 passed** after the exact command reproduced the known default-temp `WinError 5`. Item 34 remains in progress for sidecar and installer work | `032-tauri-toolchain-and-shell.md` |
 
 
 ## Current Verified Product Slice
@@ -964,3 +965,30 @@ backend command reproduced the known default-temp `WinError 5` (**246 passed,
 214 setup errors**); a workspace-temp rerun completed with **460 passed in
 35.32s**. Items 27 (Solo) and 28 (Compare) are complete end to end, and the
 mode-control remainder of item 24 is complete.
+
+## Mission 032 Result
+
+Mission 032 begins Punch Board item 34 with the smallest verified desktop
+slice. The Windows host had Rust/Cargo 1.98.0, the MSVC C++ build tools, and
+WebView2 Runtime 151.0.4129.107. `cargo tauri` was initially absent and was
+installed as `tauri-cli 2.11.4` after approval.
+
+The new standard `src-tauri/` shell reuses the existing Vite app through
+`devUrl: http://localhost:5173/modelmix` and `frontendDist:
+../frontend/dist`; its hooks are `npm run dev` and `npm run build`. There is no
+sidecar, external binary, backend-launch command, backend/CORS change, or
+`frontend/src` change.
+
+Observed runtime evidence: a separately started backend returned HTTP 200 from
+its health endpoint; corrected `cargo tauri dev` reached Vite ready, completed
+the Rust build, and ran `target\debug\app.exe`; direct Windows inspection found
+exactly one native `ModelMix` window and showed the actual Worker A / wider
+Moderator / Worker B cockpit, prompt and model controls, separate Send/Stop,
+Ready state, and honest no-configured-models message. `cargo check` passed;
+frontend **138 passed** / build / lint green; backend workspace-temp rerun
+**460 passed in 38.91s** after the exact command reproduced the known
+default-temp `WinError 5` (**246 passed, 214 setup errors**).
+
+Item 34 remains **IN PROGRESS**. Python sidecar packaging/lifecycle, a real
+installer build, and Tauri-specific credential-storage re-verification remain
+separate later work.
