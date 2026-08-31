@@ -9,7 +9,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–023**.
+Completed and locally verified implementation missions: **001–024**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -50,6 +50,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 021 | **PASS (LOCAL)** | Guardrails settings + visibility (frontend): new `guardrailSettings.js` pure module (validate/load/save/clear + `MIN=100`/`MAX=200_000` bounds) powers a 4th **Guardrails** section in the Settings overlay (after Defaults) that saves/clears a local `modelmix.guardrails` override; `send()` injects `warning_threshold_chars`/`hard_cap_chars` only when a valid override exists; `seat_output_warning`/`moderator_output_warning` are recorded as live-only `outputWarning` (never persisted to history/hydration) and rendered in every seat footer (`Approaching output limit: 22,451 / 20,000 chars`); worker seats gain the Moderator's `finish_reason` capture and finish captions now render on all seats with `modelmix_output_cap` → "Output capped by ModelMix" and every other value verbatim; `buildSeatTelemetry` drops the now-obsolete `seatKey` param. Frontend-only — no backend, API, or persistence changes | `021-guardrails-settings-and-visibility.md` |
 | 022 | **PASS (LOCAL)** | Alpha acceptance integration tests, backend (verify-only): new `test_modelmix_alpha_acceptance.py` proves Punch Board item-33 checklist items 4–11 through the real routes — ordered stream of both workers then the Moderator, cancel via the real route (one `run_cancel_requested` after all deltas, terminal `run_cancelled`, no post-cancel deltas, persisted `cancelled`, both providers terminated), worker-failure survival (run ends `partial`; failed worker's partial output stays persisted but is excluded from the Moderator handoff, replaced by the honest unavailable line), session reopen reconstructing the full 7-message transcript, multi-turn seat isolation across a real second POST (no cross-seat leakage), provider-faithful telemetry on reopen, and no credential leak into stream/journal/persisted session. One deliberate async-httpx single-loop deviation only for the two-in-flight cancel test — everything else reuses the sync TestClient pattern. Discloses an observed cancel-path race: a sub-ms cancel window can hang the run `active` until the 600s run timeout, with `_run_phase` stuck in the `multiplex_workers` generator-`finally` gather and one seat's provider generator never receiving `CancelledError`; reported as a real gap, not patched (verify-only) | `022-alpha-acceptance-integration-test.md` |
 | 023 | **PASS (LOCAL)** | Deterministic cancellation-race fix on `main @ b82505d`: `multiplex_workers`' generator `finally` replaces the unbounded `asyncio.gather` with `await_cancellation_grace(tasks)` (new `CANCEL_GRACE_SECONDS = 5.0` in `timeouts.py`), so a seat task that absorbs cancellation can no longer block the `CancelledError` from reaching `run_cancelled`; the Moderator phase awaits its task via `asyncio.shield` because a direct task await was proven to leave `_run_phase` un-woken forever when the moderator task absorbs the cancel. Deterministically proven by `backend/tests/test_modelmix_cancel_race.py` (8 tests constructing the stall with a holding fake — abandoned-mid-stream structure asserts, no-fast-path change, never `"timeout"`); full backend **403 passed**, frontend unchanged at **118 passed** / build / lint green | `023-cancellation-race-fix.md` |
+| 024 | **PASS (LOCAL)** | Cancel-before-start terminal state fix: `start()` adds `await asyncio.sleep(0)` after `asyncio.create_task(...)` to guarantee `_run` has entered its `try` block before the caller can cancel; `mark_status("active")` moved inside `try` so the except handler covers the earliest cancel point. Root cause: CPython 3.10 `coro.throw(CancelledError)` on a never-started coroutine skips the body entirely. Deterministically proven by `test_cancel_before_run_starts_reaches_terminal_cancelled`; full backend **404 passed**, `ruff check` clean, no existing test modified | `024-cancel-before-start-terminal-fix.md` |
 
 ## Current Verified Product Slice
 
@@ -597,3 +598,30 @@ passed in 16.54s**; full `uv run pytest backend/tests -q` → **403 passed in
 re-asserted `npm test` → **118 passed (12 files)**, `npm run build` → green
 (1.70s), `npm run lint` → clean. The alpha gate is **not** declared met here;
 the next verification pass owns that declaration.
+
+## Mission 024 Result
+
+Mission 024 closes the synthetic edge case where a run cancelled before
+`_run`'s first `await` stays `"created"` forever instead of reaching terminal
+`"cancelled"` with a `run_cancelled` event. The root cause was confirmed
+empirically against CPython 3.10.20: `coro.throw(CancelledError)` on a
+never-started coroutine skips the coroutine body entirely — no `try/except`
+inside `_run` catches it.
+
+Fix: `await asyncio.sleep(0)` added after `asyncio.create_task(...)` in
+`RunRegistry.start()` so `_run` reliably enters its `try` block and suspends at
+a real `await` before `start()` returns. Additionally, `await
+run.mark_status("active")` moved inside the `try:` block in `_run` so the
+except handler covers the earliest cancel point after body entry. Both changes
+are needed: `sleep(0)` guarantees the body is entered; `mark_status` inside
+`try` ensures the handler covers the first await.
+
+Deterministic proof: new test `test_cancel_before_run_starts_reaches_terminal_cancelled`
+in `backend/tests/test_modelmix_cancel_race.py` — creates a run, immediately
+cancels the task, uses `asyncio.wait` (not `wait_for`, which re-cancels the
+task) and asserts `run.status == "cancelled"` + last event `"run_cancelled"`.
+
+Validation observed: new test **1 passed in 0.82s**; full `uv run pytest
+backend/tests -q` → **404 passed in 27.16s** (403 prior + 1 new, no existing
+test modified); `ruff check` clean on both changed Python files. The alpha gate
+is **not** declared here; the next verification pass owns that declaration.

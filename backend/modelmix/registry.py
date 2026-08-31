@@ -101,6 +101,7 @@ class RunRegistry:
                 hard_cap_chars,
             )
         )
+        await asyncio.sleep(0)
         return run
 
     async def restore(self, run_id: str, session: Dict[str, object]) -> Optional[RunEventJournal]:
@@ -162,9 +163,9 @@ class RunRegistry:
         warning_threshold_chars: Optional[int] = None,
         hard_cap_chars: Optional[int] = None,
     ) -> None:
-        await run.mark_status("active")
         bound = timeouts.RUN_TIMEOUT_SECONDS if self.run_timeout is None else self.run_timeout
         try:
+            await run.mark_status("active")
             await asyncio.wait_for(
                 self._run_phase(
                     run,

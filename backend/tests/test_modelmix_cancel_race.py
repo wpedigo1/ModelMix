@@ -344,3 +344,20 @@ async def test_moderator_prompt_cancel_regression(tmp_path):
     assert run.status == "cancelled"
     assert moderator.cancelled
     assert moderator.stream_finished.is_set()
+
+
+async def test_cancel_before_run_starts_reaches_terminal_cancelled(tmp_path):
+    """Cancelling before _run's first await still yields run_cancelled."""
+    providers = {"a": InstantProvider("alpha"), "b": InstantProvider("beta")}
+    registry = RunRegistry(
+        persistence=AtomicJsonModelMixPersistence(tmp_path),
+        seat_timeout=3.0,
+        run_timeout=60,
+    )
+    run = await registry.start("cancel-before-start", "a", "b", providers.__getitem__)
+    run.task.cancel()
+    done, pending = await asyncio.wait({run.task}, timeout=5.0)
+    assert not pending, "run.task did not complete within timeout"
+    assert run.status == "cancelled"
+    events = await run.events_after(0)
+    assert events[-1]["type"] == "run_cancelled"

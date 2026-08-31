@@ -36,6 +36,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 021 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `021-guardrails-settings-and-visibility.md` |
 | 022 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `022-alpha-acceptance-integration-test.md` |
 | 023 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `023-cancellation-race-fix.md` |
+| 024 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `024-cancel-before-start-terminal-fix.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -424,6 +425,22 @@ passed in 27.94s** (395 prior + 8 new, no existing test modified); frontend
 unchanged, re-asserted **118 passed**, build green (1.70s), lint clean. The
 alpha gate is **not** declared met here; that declaration is left to the next
 verification pass.
+
+## Mission 024 Result
+
+**Mission 024 is implemented and verified locally.**
+
+Mission 024 closes the synthetic edge case where a run cancelled before
+`_run`'s first `await` stays `"created"` forever instead of reaching terminal
+`"cancelled"`. Root cause: CPython 3.10 `coro.throw(CancelledError)` on a
+never-started coroutine skips the coroutine body entirely — no `try/except`
+inside `_run` catches it. Fix: `await asyncio.sleep(0)` in `start()` after
+`create_task` guarantees `_run` has entered its `try` block and suspended at a
+real `await` before the caller can cancel; `await run.mark_status("active")`
+moved inside `try` so the except handler covers the earliest cancel point.
+Deterministically proven by `test_cancel_before_run_starts_reaches_terminal_cancelled`
+in `test_modelmix_cancel_race.py`. Full backend **404 passed**, no existing
+test modified, `ruff check` clean.
 
 ## Evidence Rule
 

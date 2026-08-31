@@ -58,7 +58,7 @@ Do not silently promote an older proposal into a current architecture decision.
 
 As of 2026-08-30 CT:
 
-- Missions **001–023** are recorded as implemented (007.5 interlock included); Mission 008 is present on current `main`.
+- Missions **001–024** are recorded as implemented (007.5 interlock included); Mission 008 is present on current `main`.
 - Mission **007.5** closed the MCP 2.x security/compatibility interlock.
 - Accepted Mission 007.5 implementation commit: `e018ed06807beda2c11531f065b2d4181c346ca8`.
 - MCP remains at **2.1.1**; Python and frontend dependency audits were recorded clean.
