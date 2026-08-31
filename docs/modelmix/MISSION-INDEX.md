@@ -39,6 +39,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 024 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `024-cancel-before-start-terminal-fix.md` |
 | 025 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `025-harden-local-backend-boundary.md` |
 | 026 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `026-windows-credential-file-hardening.md` |
+| 027 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `027-credentials-file-startup-remediation.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -485,6 +486,28 @@ plaintext files on Windows. Default `file` storage mode and
 passed** / build / lint green. Punch Board item 30 advanced (current-model
 half); a separate later re-verification of credential storage is required once
 Tauri packaging (item 34) exists.
+
+## Mission 027 Result
+
+**Mission 027 is implemented and verified locally.**
+
+Mission 027 turns Mission 026's detection-only warning into automatic
+remediation for a pre-existing, unhardened credentials file. Scoped to
+`_warn_if_unhardened()` in `backend/credentials/file_backend.py` only; the
+`_harden_credentials_file()` logic is reused exactly as Mission 026 built it.
+On the first touch (read or write) of an existing file on Windows that is not
+already hardened this session, the function now attempts
+`_harden_credentials_file()` directly, then logs INFO "Restricted..." on
+success or the existing warning on failure — a single, one-time, automatic
+remediation (a user who upgrades and just opens the app gets their existing
+file protected). Never raises; a failed attempt logs and continues. Extends
+`test_credentials_file_hardening.py` to 10 tests (reconciling the one Mission
+026 test whose "reads never invoke icacls / always warn" assertion is directly
+contradicted by Mission 027's remediation-on-read requirement; flagged
+explicitly). Full backend **441 passed**, `ruff` clean; frontend **118 passed**
+/ build / lint green. Punch Board item 30 current-model half is now closeable;
+the Tauri-specific re-verification (item 34) is carried forward exactly as
+Mission 026 stated it.
 
 ## Evidence Rule
 

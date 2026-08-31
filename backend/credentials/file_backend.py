@@ -92,11 +92,13 @@ def _harden_credentials_file() -> bool:
 def _warn_if_unhardened() -> None:
     """Log (once per process) if the credentials file is not user-restricted.
 
-    Catches the case of a pre-existing plaintext file created before this
-    hardening existed, or a previous hardening failure within this process.
+    Runs once per process on the first touch (read or write) of an existing
+    file on Windows. Rather than only detecting an unhardened file, it attempts
+    to actually harden it (remediation, not just detection): a success is
+    logged at INFO; a failure preserves the warning so an operator can act.
     A file is considered unhardened unless our own hardening step succeeded
     this session; a file created before this process started has unknown
-    history, so it is treated as unhardened and surfaces one warning.
+    history, so it is treated as unhardened and remediated once.
     """
     global _startup_warned
     if _startup_warned:
@@ -106,7 +108,13 @@ def _warn_if_unhardened() -> None:
         return
     if not CREDENTIALS_FILE.exists():
         return
-    if not _hardened:
+    if _hardened:
+        return
+    if _harden_credentials_file():
+        logger.info(
+            "Restricted %s to the current user account.", CREDENTIALS_FILE
+        )
+    else:
         logger.warning(
             "The credentials file %s is not restricted to the current user account."
             " Restrict it to the current user (e.g. icacls %s /inheritance:r"

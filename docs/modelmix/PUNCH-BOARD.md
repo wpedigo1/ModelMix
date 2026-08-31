@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 026: 2026-08-31 CT
+Reconciled through Mission 027: 2026-08-31 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -41,6 +41,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 024 | **PASS (LOCAL)** | Cancel-before-start terminal state fix: a run cancelled before `_run`'s first `await` now reliably reaches `run.status == "cancelled"` with a `run_cancelled` event. Root cause: CPython 3.10 `coro.throw(CancelledError)` on a never-started coroutine skips the entire body — no `try/except` inside the coroutine catches it. Fix: `await asyncio.sleep(0)` in `start()` after `create_task` guarantees `_run` has entered its `try` block and suspended at a real `await` before the caller can cancel; `mark_status("active")` moved inside `try` so the except handler covers the earliest cancel point. Proven deterministically by `test_cancel_before_run_starts_reaches_terminal_cancelled` in `test_modelmix_cancel_race.py`; full backend **404 passed**, no existing test modified, `ruff check` clean | `024-cancel-before-start-terminal-fix.md` |
 | 025 | **PASS (LOCAL)** | Harden the local backend boundary: `_require_admin` (reused exactly as-is) required on every endpoint that reads/writes/uses stored credentials or makes a server outbound request with a client-influenced target/credential - 20 endpoints in `backend/main.py` (16 required + 4 judgment extensions: `GET /api/models`, `GET /api/models/direct`, `GET /api/ollama/tags`, `GET /api/custom-endpoint/models`). Closes the `test-custom-endpoint` blind SSRF-to-stored-key path before any outbound call. Three existing tests (font-size, advisor presets, council presets) switched to loopback peers as the legitimate local-operator case. New `test_admin_guard_credential_endpoints.py` (27 tests) proves non-loopback rejection without token, loopback/token success, and outbound-never-invoked for the SSRF path. Full backend **431 passed**, `ruff` clean; frontend **118 passed**, build green, lint clean. Flagged follow-ups: CORS regex matches any dotted-IPv4 origin; custom-endpoint URL allow-listing for a local loopback attacker | `025-harden-local-backend-boundary.md` |
 | 026 | **PASS (LOCAL)** | Real Windows ACL hardening for credential file storage: `os.chmod(0o600)` is a no-op on Windows, so `file_backend` now runs `icacls "<path>" /inheritance:r /grant:r "<current-user>":F` via `subprocess` (no pywin32) after each atomic credential write, gated behind `sys.platform == "win32"`; current user resolved from `USERNAME`/`USERDOMAIN` env vars (fallback `os.getlogin()`); failures log a warning and never crash a write (mirrors the `except OSError: pass` philosophy but logs); a once-per-process startup warning surfaces pre-existing/never-hardened plaintext files on Windows. Scoped to `file_backend.py` only; default `file` mode and `get_effective_mode()` unchanged by declared boundary; no credential-value changes. New `test_credentials_file_hardening.py` (7 tests) mocks `subprocess.run`/`sys.platform`. Full backend **438 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Advances Punch Board item 30 (current-model half); a separate later re-verification of credential storage is required once Tauri (item 34) exists | `026-windows-credential-file-hardening.md` |
+| 027 | **PASS (LOCAL)** | Auto-remediate an unhardened credentials file on startup: `_warn_if_unhardened()` in `file_backend.py` now attempts `_harden_credentials_file()` directly on the first touch (read or write) of an existing, unhardened Windows file, then logs INFO "Restricted..." on success or the existing warning on failure — a single, one-time, automatic remediation (no new key write or manual icacls needed to protect a pre-existing file). `_harden_credentials_file()` logic reused exactly; never raises. Extends `test_credentials_file_hardening.py` to 10 tests (one Mission 026 test necessarily reconciled, flagged). Full backend **441 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Item 30 current-model half closeable; Tauri re-check (item 34) carried forward | `027-credentials-file-startup-remediation.md` |
 
 **Mission 008 is present on `main` and its persistence tests pass.**
 
@@ -257,7 +258,17 @@ Independent bounded seat histories, Moderator history, hot-swap continuity, and 
 
 ## PHASE 7 — Security Hardening for Alpha
 
-### 30. Verify credential storage in actual packaging model — **OPEN**
+### 30. Verify credential storage in actual packaging model — **OPEN (current-model half closes with Mission 027; Tauri half deferred to item 34)**
+
+Missions 026/027 implemented and verified the current-model (local Python
+server) half: real Windows per-user ACL hardening of `data/credentials.json`
+via `icacls` on write, plus automatic once-per-process remediation of a
+pre-existing unhardened file on first touch (read or write); Unix `0o600`
+unchanged; `file` default mode and `get_effective_mode()` unchanged by declared
+boundary. The remaining, explicitly-deferred half is a SEPARATE later
+re-verification of credential storage once Tauri 2 packaging (item 34) actually
+exists, since Tauri's own storage/IPC model cannot be assumed to inherit these
+guarantees.
 
 ### 31. Harden local backend boundary — **OPEN**
 

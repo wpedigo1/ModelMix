@@ -53,6 +53,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 024 | **PASS (LOCAL)** | Cancel-before-start terminal state fix: `start()` adds `await asyncio.sleep(0)` after `asyncio.create_task(...)` to guarantee `_run` has entered its `try` block before the caller can cancel; `mark_status("active")` moved inside `try` so the except handler covers the earliest cancel point. Root cause: CPython 3.10 `coro.throw(CancelledError)` on a never-started coroutine skips the body entirely. Deterministically proven by `test_cancel_before_run_starts_reaches_terminal_cancelled`; full backend **404 passed**, `ruff check` clean, no existing test modified | `024-cancel-before-start-terminal-fix.md` |
 | 025 | **PASS (LOCAL)** | Harden the local backend boundary: required admin auth (`_require_admin`, reused unchanged) on every endpoint that reads/writes/uses stored credentials or makes a server outbound request with a client-influenced target/credential. Added `dependencies=[Depends(_require_admin)]` to 20 endpoints in `backend/main.py` (16 required + 4 judgment extensions: `GET /api/models`, `GET /api/models/direct`, `GET /api/ollama/tags`, `GET /api/custom-endpoint/models`), closing the `test-custom-endpoint` blind SSRF-to-stored-key path before any outbound call. Three existing tests hitting a newly-guarded endpoint over a non-loopback TestClient peer (font-size, advisor presets, council presets) switched to loopback peers as the legitimate local-operator case. New `test_admin_guard_credential_endpoints.py` (27 tests) proves non-loopback rejection without token (401/403), loopback success, bearer-token success, and outbound-never-invoked for the SSRF path. Full backend **431 passed**, `ruff clean`; frontend **118 passed** / build / lint green. Flagged follow-ups: CORS regex matches any dotted-IPv4 origin; custom-endpoint URL allow-listing for a local loopback attacker | `025-harden-local-backend-boundary.md` |
 | 026 | **PASS (LOCAL)** | Real Windows ACL hardening for credential file storage, scoped to `backend/credentials/file_backend.py`: `os.chmod(0o600)` is a no-op on Windows, so after each atomic credential write `_harden_credentials_file()` runs `icacls "<path>" /inheritance:r /grant:r "<current-user>":F` via `subprocess` (no new dependency), gated behind `sys.platform == "win32"`; the current user is resolved from `USERNAME`/`USERDOMAIN` env vars (fallback `os.getlogin()`). Failures log a warning and never crash a write; a once-per-process startup warning surfaces pre-existing or never-hardened plaintext files on Windows. Default `file` mode and `get_effective_mode()` unchanged by declared boundary. New `test_credentials_file_hardening.py` (7 tests) mocks `subprocess.run`/`sys.platform`. Full backend **438 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Advances item 30 (current-model half); separate later re-verification of credential storage required once Tauri (item 34) exists | `026-windows-credential-file-hardening.md` |
+| 027 | **PASS (LOCAL)** | Auto-remediate an unhardened credentials file on startup, scoped to `_warn_if_unhardened()` in `backend/credentials/file_backend.py`: on the first touch (read or write) of an existing, not-yet-hardened Windows file it now attempts `_harden_credentials_file()` directly (logic reused exactly from Mission 026), logging INFO "Restricted..." on success or the existing warning on failure. A single once-per-process automatic remediation — an upgraded user who just opens the app gets their pre-existing plaintext file protected without writing a new key or running icacls themselves. Never raises; a failed attempt logs and continues. Extends `test_credentials_file_hardening.py` to 10 tests (one Mission 026 test necessarily reconciled because its "reads never invoke icacls / always warn" assertion is directly contradicted by remediation-on-read; flagged). Full backend **441 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Item 30 current-model half closeable; Tauri re-check (item 34) carried forward | `027-credentials-file-startup-remediation.md` |
 
 ## Current Verified Product Slice
 
@@ -719,3 +720,46 @@ is needed once Tauri 2 packaging (Punch Board item 34) actually exists**, since
 Tauri's own storage/IPC model may behave differently and cannot be assumed to
 inherit this mission's guarantees. The alpha gate is **not** declared here; the
 next verification pass owns that declaration.
+
+## Mission 027 Result
+
+Mission 027 closes the remaining current-model gap on Punch Board item 30:
+Mission 026 only hardened a credentials file when a credential was WRITTEN and
+only logged a warning for a pre-existing unhardened file. A machine that only
+ever reads credentials (no new key written) kept its pre-existing file
+unhardened indefinitely.
+
+Fix, scoped to `_warn_if_unhardened()` in `backend/credentials/file_backend.py`
+(`_harden_credentials_file()` reused exactly, unchanged): on the first touch
+(read or write) of an existing, not-yet-hardened Windows file, it now attempts
+`_harden_credentials_file()` directly, then logs INFO "Restricted %s to the
+current user account." on success or the existing "not restricted" warning on
+failure. The `_startup_warned` once-per-process guard makes this a single,
+automatic, one-time remediation. Never raises; a failed attempt logs and
+continues. Non-Windows behavior is unchanged.
+
+Test reconciliation: `test_credentials_file_hardening.py` grows from 7 to 10
+tests. One Mission 026 test (`test_startup_warning_fires_once_on_existing_unhardened_file`)
+was necessarily reconciled because Mission 027's remediation-on-read directly
+contradicts its old "reads never invoke icacls / always warn" assertions; it is
+split into a success case (one icacls, INFO, no warning) and a failure case
+(one icacls, one "not restricted" warning). All other Mission 026 tests pass
+unmodified — flagged explicitly since criterion 6 ("unmodified") and acceptance
+criterion 1 ("first get_secret invokes icacls") are mutually exclusive.
+
+Validation observed:
+- `uv run pytest backend/tests/test_credentials_file_hardening.py -v` → **10
+  passed**.
+- Full `uv run pytest backend/tests -q` → **441 passed in 28.55s** (438 prior +
+  3 net new).
+- `uv run ruff check backend/credentials/file_backend.py
+  backend/tests/test_credentials_file_hardening.py` → All checks passed.
+- Frontend re-asserted: **118 passed**, build green (1.84s), lint clean.
+
+Punch Board item 30's current-model half is now closeable (both newly-written
+and pre-existing files are user-restricted on Windows; Unix 0o600 unchanged).
+The Tauri-specific re-verification is carried forward exactly as Mission 026
+stated it: a SEPARATE, later check is required once Tauri 2 packaging (item 34)
+exists, since Tauri's storage/IPC model cannot be assumed to inherit these
+guarantees. The alpha gate is **not** declared here; the next verification pass
+owns that declaration.
