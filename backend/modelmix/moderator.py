@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from ..providers.base import LLMProvider
-from . import timeouts
+from . import guardrails, timeouts
 from .orchestrator import EventFactory
 from .timeouts import aiter_with_deadline
 
@@ -99,10 +99,31 @@ async def run_moderator(
         if provider.supports_streaming:
             usage = None
             finish_reason = None
+            emitted = 0
+            warned = False
+            capped = False
             stream = provider.stream_query(model_id, moderator_input.messages)
             async for item in aiter_with_deadline(stream, bound):
                 if item.type == "text_delta" and item.delta:
-                    await create_event("moderator_delta", actor="moderator", delta=item.delta)
+                    delta, capped = guardrails.clip_delta(
+                        item.delta, emitted, guardrails.HARD_OUTPUT_CAP_CHARS
+                    )
+                    if delta:
+                        emitted += len(delta)
+                        await create_event("moderator_delta", actor="moderator", delta=delta)
+                    if (
+                        not warned
+                        and emitted >= guardrails.WARNING_OUTPUT_THRESHOLD_CHARS
+                    ):
+                        warned = True
+                        await create_event(
+                            "moderator_output_warning",
+                            actor="moderator",
+                            chars=emitted,
+                            threshold=guardrails.WARNING_OUTPUT_THRESHOLD_CHARS,
+                        )
+                    if capped:
+                        break
                 elif item.type == "completed":
                     usage = item.usage or (item.result or {}).get("usage")
                     finish_reason = item.finish_reason
@@ -115,6 +136,9 @@ async def run_moderator(
             if result.get("error"):
                 raise RuntimeError(result.get("error_message") or "Moderator query failed")
             content = str(result.get("content") or "")
+            capped = len(content) > guardrails.HARD_OUTPUT_CAP_CHARS
+            if capped:
+                content = content[:guardrails.HARD_OUTPUT_CAP_CHARS]
             if content:
                 await create_event("moderator_delta", actor="moderator", delta=content)
             usage = result.get("usage")
@@ -123,6 +147,7 @@ async def run_moderator(
         payload: Dict[str, Any] = {"actor": "moderator"}
         if usage is not None:
             payload["usage"] = usage
+        finish_reason = "modelmix_output_cap" if capped else finish_reason
         if finish_reason is not None:
             payload["finish_reason"] = finish_reason
         await create_event("moderator_completed", **payload)

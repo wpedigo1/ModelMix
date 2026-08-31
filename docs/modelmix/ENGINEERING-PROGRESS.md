@@ -9,7 +9,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–018**.
+Completed and locally verified implementation missions: **001–019**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -45,6 +45,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 016 | **PASS (LOCAL)** | Compact top bar + panel view controls (frontend-only): one thin persistent top strip (brand, inert `Mode: Mix` label, session status, New Session moved from `.modelmix-actions`, Details-hidden run metadata, Back to Council; no Settings), and CSS-driven per-panel Collapse/Maximize/Reset controls that hide panels from layout without unmounting them, with view state confined to local component state + pure `panelView.js` helpers and `modelmixState.js`/backend untouched | `016-compact-top-bar-and-panel-controls.md` |
 | 017 | **PASS (LOCAL)** | Settings shell (frontend-only): a gear entry in the compact top bar opens a conditionally-rendered overlay — About (real `pkg.version` from an imported `../../package.json`, MIT/copyright, text-only AI Counsel attribution, repo URL), Providers (read-only Connected/Not-connected rows computed from the now-exported `configuredSources` with zero credential values and an honest unavailable state), Defaults (`modelmix.defaultSeatModels` localStorage trio saved/cleared and applied at initial mount, with frozen `FALLBACK_SEAT_MODELS` preserving the exact built-in defaults) | `017-settings-shell.md` |
 | 018 | **PASS (LOCAL)** | Telemetry rendering (frontend-only): `seatTelemetry.js` builds honest per-seat footers — usage labeled `authoritative (provider-reported)` via `describeUsage` showing the provider-reported total token count (`total_tokens`/`totalTokenCount`, `<n> tokens`) when finite, else the raw key names, or `unavailable`, Moderator-only `finish_reason` (`stop`/`not reported`), ModelMix-calculated elapsed labeled `(calculated)` with the raw wall-clock `HH:MM:SS → HH:MM:SS` range (running seats show `Started:`), rendered only for the live turn | `018-telemetry-rendering.md` |
+| 019 | **PASS (LOCAL)** | Output guardrails (backend enforcement): new `guardrails.py` owns provisional `WARNING_OUTPUT_THRESHOLD_CHARS = 20_000` / `HARD_OUTPUT_CAP_CHARS = 40_000` and an exact-boundary `clip_delta`; `run_seat`/`run_moderator` emit a one-shot `seat_output_warning`/`moderator_output_warning` on first crossing, then at the hard cap stop consuming the provider stream and terminate as `seat_completed`/`moderator_completed` with `finish_reason: "modelmix_output_cap"` — an honest terminal outcome distinct from completion, cancellation, provider termination, failure, and timeout; non-streaming paths are capped with no warning; no `events.py`/`persistence.py`/`journal.py`/`timeouts.py`/`history.py`/`registry.py`/frontend changes | `019-output-guardrails-backend.md` |
 
 ## Current Verified Product Slice
 
@@ -121,7 +122,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **12 — Provider capability matrix:** streaming capability/fallback and configured discovery exist; the full capability matrix remains open.
 - **14 — Deterministic mock provider:** current tests use deterministic fakes/mocks, but the full locked failure/timeout/rate-limit fixture matrix remains open.
 - **29 — Finalized Mix multi-turn behavior:** seat histories, Moderator history, hot-swap continuity, deterministic context bounding, and completed-turn cockpit display are implemented; retention/delete UX remains open.
-- **17 — Spend/runtime guardrails:** explicit Stop, the turn cap, seat-history per-message/per-seat character budgets (Mission 010), wall-clock run (600s) / seat-Moderator (300s) timeouts (Mission 013), and persisted `started_at`/`completed_at` timing truth (Mission 015) now surfaced as calculated elapsed in the cockpit (Mission 018); cost/token ceilings and output warning/hard-cap work remain open.
+- **17 — Spend/runtime guardrails:** explicit Stop, the turn cap, seat-history per-message/per-seat character budgets (Mission 010), wall-clock run (600s) / seat-Moderator (300s) timeouts (Mission 013), persisted `started_at`/`completed_at` timing truth (Mission 015) surfaced as calculated elapsed in the cockpit (Mission 018), and — new in Mission 019 — a hard output cap plus one-shot output warning for every worker seat and the Moderator with an honest `modelmix_output_cap` terminal outcome; cost/token ceilings and configurable threshold settings remain open.
 - **26 — Provider/settings UX:** searchable configured selectors are complete; the visible ModelMix sidebar navigation entry point exists (Mission 014); the cockpit Settings surface is now a real entry (Mission 017) with read-only provider status from the exported `configuredSources` and saved default seat models; full alpha provider/settings entry flow remains open.
 - **4 — License and provenance — PARTIAL — MISSION 017** (the cockpit About section surfaces the MIT license, the copyright holder, the real version, the text-only AI Counsel attribution, and the repo URL; the `OPEN_SOURCE_CREDITS.md`, inherited-module provenance, and dependency-license inventory remain open)
 - **24 — Thin top controls — PARTIAL — MISSIONS 012/016/017** (Mission 012: separate New Session control; Mission 016: compact persistent top strip — brand, inert `Mode: Mix` label, session status, moved New Session, Details-hidden debug line, Back to Council, no Settings — plus CSS-driven panel Collapse/Maximize/Reset; Mission 017: the Settings surface ships as a gear entry opening the Settings overlay; only an interactive Mode selector remains open)
@@ -141,10 +142,10 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 
 The Punch Board safeguards remain active requirements:
 
-- provider/account usage warning where authoritative data exists, otherwise clearly labeled ModelMix-tracked/estimated data;
-- excessive output-token warning;
-- configurable hard output cap at the closest enforceable boundary;
-- terminal state must distinguish normal completion, user cancellation, provider/model termination, and ModelMix hard-cap termination.
+- provider/account usage warning where authoritative data exists, otherwise clearly labeled ModelMix-tracked/estimated data — **Mission 019 codes this as explicitly deferred**: no authoritative quota/rate-limit data exists in this codebase to compare against, so it is not honestly buildable;
+- excessive output-token warning — **implemented (Mission 019)** as a one-shot `seat_output_warning`/`moderator_output_warning` at the provisional 20k-char threshold;
+- configurable hard output cap at the closest enforceable boundary — **implemented (Mission 019)** as an exact 40k-char deterministic cap in `guardrails.py`, with thresholds still provisional module defaults pending a configurability mission;
+- terminal state must distinguish normal completion, user cancellation, provider/model termination, and ModelMix hard-cap termination — **implemented (Mission 019)**: capped participants terminate as `seat_completed`/`moderator_completed` with `finish_reason: "modelmix_output_cap"`, never as failed or timed out.
 
 These safeguards are not to be implemented prematurely in unrelated missions, but they are **not post-alpha by default** and must be wired when the settings/run-control layer reaches them.
 
@@ -384,3 +385,70 @@ build` green (437 modules), backend **360 passed** unchanged. Closes Punch
 Board item **25** (SUBSTANTIALLY SATISFIED — MISSIONS 015/018 with the two
 deferrals noted) and verifies items **10** (order/timing contract) and **17**
 (timing guardrail input) as visible.
+
+## Mission 019 Result
+
+Mission 019 enforces the output guardrails at the backend live streaming loop
+— the same loop as Mission 013's timeouts, so the exact-cap truncation and
+event-order tests were the critical parts. New module
+`backend/modelmix/guardrails.py` owns the provenance of the bounds:
+`WARNING_OUTPUT_THRESHOLD_CHARS = 20_000`, `HARD_OUTPUT_CAP_CHARS = 40_000`
+(provisional module-constant defaults; configurability is a later Settings
+mission), and `clip_delta(delta, emitted, cap)` which clips one stream delta so
+the cumulative emitted characters land exactly on `cap` when the producer
+would exceed it and reports when the budget is exhausted.
+
+`run_seat` and `run_moderator` now track cumulative emitted characters and:
+
+- emit exactly one `seat_output_warning` / `moderator_output_warning` (payload
+  `chars`/`threshold`, emitted after the crossing delta so `chars` is the live
+  cumulative total) the first time the warning threshold is reached — purely
+  informational, no stream interruption, no effect on multiplexer terminal
+  bookkeeping;
+- at the hard cap, clip the crossing delta deterministically so the persisted
+  visible output is exactly the cap length, stop consuming the provider
+  stream immediately (`break`), and terminate the participant as
+  `seat_completed` / `moderator_completed` — never `seat_failed` — with
+  `finish_reason: "modelmix_output_cap"`. Provider `finish_reason`/`usage`
+  after the break are not collected, so `modelmix_output_cap` can never
+  collide with real provider reasons and no fake usage is recorded. A capped
+  seat/moderator completing means a capped run still finishes `completed`, not
+  `partial` (the cap is a clean ModelMix termination, not a failure);
+- cap the non-streaming (`provider.query`) path identically with no warning.
+
+Interactions: the output cap and wall-clock timeouts are independent bounds —
+whichever is reached first governs, and a capped seat is never also reported
+timed out. User cancellation (`seat_cancelled`/`run_cancelled`) is untouched.
+Under-threshold turns are byte-identical to the pre-guardrail path.
+
+Boundaries: `events.py`, `persistence.py`, `journal.py`, `timeouts.py`,
+`history.py`, `registry.py`, and every frontend file are untouched. The new
+event types flow through the existing `EventSequencer.create`/`RunEventJournal
+.append` constructors (arbitrary type strings), `_apply_event` ignores the
+unrecognized warning events without mutating content/status/finish_reason, and
+the cockpit's `applyModelMixEvent` already advances `lastSeq` for any
+well-formed event and ignores unknown types — so no replay, persistence, SSE,
+or frontend work was required. The pre-existing `ModeratorOutputLimits`
+(token-shaped preview dataclass with an "unsupported hard cap → ValueError"
+contract) is deliberately untouched; enforcement uses module constants.
+
+Coverage: 13 new tests in `backend/tests/test_modelmix_guardrails.py` using
+the Mission 013 small-threshold monkeypatch pattern (40/80 chars), one per
+acceptance criterion: exact one-shot warning payload (criterion 1); zero
+warnings below threshold (2); exact-cap truncation asserting the literal
+character count (3); terminal `seat_completed` with `modelmix_output_cap`, no
+`seat_failed` (4); unchanged under-threshold behavior (5); full Moderator
+equivalence — warning, cap, ordering, finish reason (6); warning-then-cap
+ordering with the cap event terminal (7); timeout-before-threshold →
+`seat_failed` `reason: "timeout"` and no guardrail events (8);
+cancel-before-threshold → `seat_cancelled` and no guardrail events (9);
+non-streaming over-cap exact truncation plus under-cap unaffected, no warning
+(10). Validation: full backend suite **373 passed** (360 pre-existing + 13
+new; no existing test modified); frontend unchanged with `npm test` **86
+passed**, `npm run lint` clean, `npm run build` green (437 modules). Advances
+Punch Board item **17**: the hard output cap, the output warning, and the
+distinct `modelmix_output_cap` terminal outcome are no longer open; remaining
+item-17 openings are the configurable thresholds and the provider/account
+usage warning (deferred as not honestly buildable — no authority-quota data
+exists to compare against). The provisional thresholds themselves are a noted
+follow-up for a settings/configurability mission.

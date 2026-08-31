@@ -7,7 +7,7 @@ import uuid
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 
 from ..providers.base import LLMProvider
-from . import timeouts
+from . import guardrails, timeouts
 from .events import EventSequencer
 from .timeouts import aiter_with_deadline
 
@@ -55,10 +55,33 @@ async def multiplex_workers(
             if provider.supports_streaming:
                 usage = None
                 finish_reason = None
+                emitted = 0
+                warned = False
+                capped = False
                 stream = provider.stream_query(model_id, messages)
                 async for item in aiter_with_deadline(stream, bound):
                     if item.type == "text_delta" and item.delta:
-                        await queue.put((seat_id, "seat_delta", {"delta": item.delta}))
+                        delta, capped = guardrails.clip_delta(
+                            item.delta, emitted, guardrails.HARD_OUTPUT_CAP_CHARS
+                        )
+                        if delta:
+                            emitted += len(delta)
+                            await queue.put((seat_id, "seat_delta", {"delta": delta}))
+                        if (
+                            not warned
+                            and emitted >= guardrails.WARNING_OUTPUT_THRESHOLD_CHARS
+                        ):
+                            warned = True
+                            await queue.put((
+                                seat_id,
+                                "seat_output_warning",
+                                {
+                                    "chars": emitted,
+                                    "threshold": guardrails.WARNING_OUTPUT_THRESHOLD_CHARS,
+                                },
+                            ))
+                        if capped:
+                            break
                     elif item.type == "completed":
                         usage = item.usage or (item.result or {}).get("usage")
                         finish_reason = item.finish_reason
@@ -67,6 +90,7 @@ async def multiplex_workers(
                 payload: Dict[str, Any] = {}
                 if usage is not None:
                     payload["usage"] = usage
+                finish_reason = "modelmix_output_cap" if capped else finish_reason
                 if finish_reason is not None:
                     payload["finish_reason"] = finish_reason
                 await queue.put((seat_id, "seat_completed", payload))
@@ -77,11 +101,16 @@ async def multiplex_workers(
                 if result.get("error"):
                     raise RuntimeError(result.get("error_message") or "Provider query failed")
                 content = str(result.get("content") or "")
+                capped = len(content) > guardrails.HARD_OUTPUT_CAP_CHARS
+                if capped:
+                    content = content[:guardrails.HARD_OUTPUT_CAP_CHARS]
                 if content:
                     await queue.put((seat_id, "seat_delta", {"delta": content}))
                 payload = {}
                 if result.get("usage") is not None:
                     payload["usage"] = result["usage"]
+                if capped:
+                    payload["finish_reason"] = "modelmix_output_cap"
                 await queue.put((seat_id, "seat_completed", payload))
         except asyncio.CancelledError:
             await queue.put((seat_id, "seat_cancelled", {}))

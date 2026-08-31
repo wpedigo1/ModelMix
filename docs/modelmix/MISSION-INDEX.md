@@ -31,6 +31,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 016 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `016-compact-top-bar-and-panel-controls.md` |
 | 017 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `017-settings-shell.md` |
 | 018 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `018-telemetry-rendering.md` |
+| 019 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `019-output-guardrails-backend.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -270,6 +271,50 @@ Backend, `modelmixState.js`, and `modelmixApi.js` are untouched. It closes Punch
 Board item **25** (SUBSTANTIALLY SATISFIED — MISSIONS 015/018, with the two
 deferrals noted) and verifies items **10** (ordering/timing contract) and
 **17** (timing guardrail input) as visible.
+
+## Mission 019 Result
+
+**Mission 019 is implemented and verified locally.**
+
+Mission 019 enforces the output guardrails in the backend run path at the
+live streaming loop. New module `backend/modelmix/guardrails.py` owns the
+provisional char bounds — `WARNING_OUTPUT_THRESHOLD_CHARS = 20_000` and
+`HARD_OUTPUT_CAP_CHARS = 40_000` — plus `clip_delta`, which clips one stream
+delta so the cumulative emitted length lands *exactly* on the cap and reports
+when the budget is exhausted. `run_seat` and `run_moderator` both track
+cumulative emitted characters over `text_delta`/`moderator_delta`, emit exactly
+one `seat_output_warning`/`moderator_output_warning` (`chars`/`threshold`) on
+the first crossing (informational only; does not affect multiplexer terminal
+bookkeeping), and at the hard cap clip the crossing delta deterministically,
+stop consuming the provider stream, and terminate the participant as
+`seat_completed`/`moderator_completed` — NOT failed — with `finish_reason:
+"modelmix_output_cap"`, which never collides with real provider reasons and
+stays honestly distinct from normal completion, user cancellation,
+provider/model termination, failure, and timeout. The non-streaming
+(`provider.query`) paths are capped with the same exact truncation and no
+warning. Timeouts and the output cap are independent; whichever is reached
+first governs. The two constants are provisional defaults pending a
+configurability (Settings) mission; the provider-quota usage warning is
+explicitly deferred as not honestly buildable — no quota/rate-limit data
+exists anywhere in this codebase. No changes to `events.py`, `persistence.py`,
+`journal.py`, `timeouts.py`, `history.py`, `registry.py`, or any frontend
+file: the new events flow through the existing constructors and
+`_apply_event`'s unrecognized-event no-op, and the cockpit's
+`applyModelMixEvent` already ignores unknown types, so no replay/persistence/
+frontend work was required. Coverage: 13 new tests in
+`backend/tests/test_modelmix_guardrails.py` using the Mission 013
+small-threshold monkeypatch pattern, covering every acceptance criterion
+(warning one-shot payload, zero warning below threshold, exact-cap truncation,
+`seat_completed`/`modelmix_output_cap` terminal, unchanged under-threshold
+behavior, full Moderator equivalence, warning-then-cap ordering with cap
+terminal, timeout-before-threshold no-guardrail-events, cancel no-guardrail
+events, non-streaming over/under cap). Validation: full backend suite **373
+passed** (360 pre-existing + 13 new, no existing test modified); frontend
+unchanged with `npm test` **86 passed**, `npm run lint` clean, `npm run build`
+green (437 modules). It advances Punch Board item **17** (hard output cap,
+output warning, and the `modelmix_output_cap` terminal outcome are no longer
+open; the configurable thresholds and the provider/account usage warning
+remain open).
 
 ## Evidence Rule
 
