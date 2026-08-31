@@ -1,6 +1,7 @@
 # ModelMix Engineering Progress
 
-Updated: 2026-08-30 CT
+Updated: 2026-08-31 CT
+
 
 This is the current implementation-state overlay for the locked ModelMix Punch Board. It records observed implementation progress without silently reordering or deleting locked board items.
 
@@ -54,6 +55,8 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 025 | **PASS (LOCAL)** | Harden the local backend boundary: required admin auth (`_require_admin`, reused unchanged) on every endpoint that reads/writes/uses stored credentials or makes a server outbound request with a client-influenced target/credential. Added `dependencies=[Depends(_require_admin)]` to 20 endpoints in `backend/main.py` (16 required + 4 judgment extensions: `GET /api/models`, `GET /api/models/direct`, `GET /api/ollama/tags`, `GET /api/custom-endpoint/models`), closing the `test-custom-endpoint` blind SSRF-to-stored-key path before any outbound call. Three existing tests hitting a newly-guarded endpoint over a non-loopback TestClient peer (font-size, advisor presets, council presets) switched to loopback peers as the legitimate local-operator case. New `test_admin_guard_credential_endpoints.py` (27 tests) proves non-loopback rejection without token (401/403), loopback success, bearer-token success, and outbound-never-invoked for the SSRF path. Full backend **431 passed**, `ruff clean`; frontend **118 passed** / build / lint green. Flagged follow-ups: CORS regex matches any dotted-IPv4 origin; custom-endpoint URL allow-listing for a local loopback attacker | `025-harden-local-backend-boundary.md` |
 | 026 | **PASS (LOCAL)** | Real Windows ACL hardening for credential file storage, scoped to `backend/credentials/file_backend.py`: `os.chmod(0o600)` is a no-op on Windows, so after each atomic credential write `_harden_credentials_file()` runs `icacls "<path>" /inheritance:r /grant:r "<current-user>":F` via `subprocess` (no new dependency), gated behind `sys.platform == "win32"`; the current user is resolved from `USERNAME`/`USERDOMAIN` env vars (fallback `os.getlogin()`). Failures log a warning and never crash a write; a once-per-process startup warning surfaces pre-existing or never-hardened plaintext files on Windows. Default `file` mode and `get_effective_mode()` unchanged by declared boundary. New `test_credentials_file_hardening.py` (7 tests) mocks `subprocess.run`/`sys.platform`. Full backend **438 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Advances item 30 (current-model half); separate later re-verification of credential storage required once Tauri (item 34) exists | `026-windows-credential-file-hardening.md` |
 | 027 | **PASS (LOCAL)** | Auto-remediate an unhardened credentials file on startup, scoped to `_warn_if_unhardened()` in `backend/credentials/file_backend.py`: on the first touch (read or write) of an existing, not-yet-hardened Windows file it now attempts `_harden_credentials_file()` directly (logic reused exactly from Mission 026), logging INFO "Restricted..." on success or the existing warning on failure. A single once-per-process automatic remediation — an upgraded user who just opens the app gets their pre-existing plaintext file protected without writing a new key or running icacls themselves. Never raises; a failed attempt logs and continues. Extends `test_credentials_file_hardening.py` to 10 tests (one Mission 026 test necessarily reconciled because its "reads never invoke icacls / always warn" assertion is directly contradicted by remediation-on-read; flagged). Full backend **441 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Item 30 current-model half closeable; Tauri re-check (item 34) carried forward | `027-credentials-file-startup-remediation.md` |
+| 028 | **PASS (LOCAL)** | Verify and harden the existing Compare (no-moderator) backend path. `TwoWorkerRequest.moderator_model` optional and `registry._run_phase` / `orchestrator.multiplex_workers` already support a two-worker run with no moderator phase, but had ZERO test coverage. Driven through the REAL HTTP route (`POST /api/modelmix/runs/stream` with `moderator_model` omitted) in new `test_modelmix_compare_mode_backend.py` (7 tests, alpha-acceptance harness): (1) both workers stream fully with ZERO moderator events and `run_completed "completed"`; (2) one worker fails -> `run_completed "partial"` + persisted session reflects the failed seat via `GET /sessions/{id}`; (3) both workers fail -> OBSERVED as-shipped `run_completed "partial"` (not `failed`; product-semantics note, not a defect); (4) multi-turn isolation holds moderator-less and the dead `seat_histories["moderator"]` key never leaks to either worker; (5) per-worker guardrails (warning/hard cap) still apply; (6) cancellation reaches `run_cancelled` mid-stream; (7) reopening a moderator-less session reconstructs with no moderator message and nothing chokes on the moderator's absence (`models["moderator"]` persists as `None`, tolerated by `_validate`). No real defect found; NO production code changed; no `mode` concept added; no frontend change. Full backend **448 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Backend half of item 28 deliverable; frontend Compare half is the next mission | `028-compare-backend-verification.md` |
+
 
 ## Current Verified Product Slice
 
@@ -140,7 +143,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 
 - **13 — Privacy/data-routing rules**
 - **27 — Solo**
-- **28 — Compare**
+- **28 — Compare** — backend verification half complete (Mission 028); frontend Compare mode selector/panel work remains the next mission
 - **30 — Credential verification in actual packaging model**
 - **31 — Local backend hardening**
 - **32 — Basic structured observability**
@@ -763,3 +766,54 @@ stated it: a SEPARATE, later check is required once Tauri 2 packaging (item 34)
 exists, since Tauri's storage/IPC model cannot be assumed to inherit these
 guarantees. The alpha gate is **not** declared here; the next verification pass
 owns that declaration.
+
+## Mission 028 Result
+
+Mission 028 verifies and hardens the existing Compare (no-moderator) backend
+path — Punch Board item 28's backend verification half. Before writing any new
+Compare orchestration code, it determines whether the already-shipped,
+completely-unexercised capability (optional `moderator_model`;
+`registry._run_phase` / `orchestrator.multiplex_workers` already supporting a
+two-worker run with no moderator phase) is actually correct. It was: **no real
+defect was found**, and the path now has real evidence-backed coverage.
+
+New `backend/tests/test_modelmix_compare_mode_backend.py` (7 tests), all driven
+through the REAL HTTP route (`POST /api/modelmix/runs/stream` with
+`moderator_model` omitted) using the alpha-acceptance harness, one test per
+investigation point:
+1. both workers stream fully with ZERO moderator events of any kind, then
+   `run_completed "completed"`, contiguous `1..N` sequence;
+2. one worker fails -> `run_completed "partial"`, and `GET /sessions/{id}`
+   reflects worker_a `failed` + worker_b `completed`, no moderator message;
+3. both workers fail -> OBSERVED as-shipped `run_completed "partial"` (not
+   `failed`). This differs from the moderator path (which yields `failed`).
+   Reported as a product-semantics observation, not a defect; changing it is
+   product work outside this verify mission's scope;
+4. multi-turn isolation holds moderator-less; the dead
+   `seat_histories["moderator"]` key (always built, never run) is never
+   forwarded to either worker (poison-sentinel never reaches a payload);
+5. per-worker guardrails still apply (warning + hard cap respected
+   independently for each worker, `modelmix_output_cap` finish_reason);
+6. cancellation mid-stream reaches terminal `run_cancelled`, no post-cancel
+   deltas, both providers cancelled;
+7. reopening a moderator-less session reconstructs with no moderator message at
+   all; `models["moderator"]` persists as `None` and `_validate` tolerates it;
+   nothing downstream assumes a moderator message exists.
+
+No production code was changed; no `mode` concept added; no frontend change.
+The only test failures during development were bugs in my own test assertions,
+fixed in the test file.
+
+Validation observed:
+- `uv run pytest backend/tests/test_modelmix_alpha_acceptance.py -v` → **7
+  passed in 1.81s** (moderator-full path undisturbed).
+- `uv run pytest backend/tests/test_modelmix_compare_mode_backend.py -v` →
+  **7 passed in 1.61s**.
+- Full `uv run pytest backend/tests -q` → **448 passed in 28.58s** (441 prior +
+  7 net new).
+- `uv run ruff check backend` → All checks passed.
+- Frontend (`cd frontend && npm test && npm run build && npm run lint`): **118
+  passed**, build green (1.61s), lint clean.
+
+Punch Board item 28's backend verification half is now complete; the remaining
+half — the frontend Compare mode selector/panel work — is the next mission.

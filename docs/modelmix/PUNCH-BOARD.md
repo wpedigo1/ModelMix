@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 027: 2026-08-31 CT
+Reconciled through Mission 028: 2026-08-31 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -42,6 +42,8 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 025 | **PASS (LOCAL)** | Harden the local backend boundary: `_require_admin` (reused exactly as-is) required on every endpoint that reads/writes/uses stored credentials or makes a server outbound request with a client-influenced target/credential - 20 endpoints in `backend/main.py` (16 required + 4 judgment extensions: `GET /api/models`, `GET /api/models/direct`, `GET /api/ollama/tags`, `GET /api/custom-endpoint/models`). Closes the `test-custom-endpoint` blind SSRF-to-stored-key path before any outbound call. Three existing tests (font-size, advisor presets, council presets) switched to loopback peers as the legitimate local-operator case. New `test_admin_guard_credential_endpoints.py` (27 tests) proves non-loopback rejection without token, loopback/token success, and outbound-never-invoked for the SSRF path. Full backend **431 passed**, `ruff` clean; frontend **118 passed**, build green, lint clean. Flagged follow-ups: CORS regex matches any dotted-IPv4 origin; custom-endpoint URL allow-listing for a local loopback attacker | `025-harden-local-backend-boundary.md` |
 | 026 | **PASS (LOCAL)** | Real Windows ACL hardening for credential file storage: `os.chmod(0o600)` is a no-op on Windows, so `file_backend` now runs `icacls "<path>" /inheritance:r /grant:r "<current-user>":F` via `subprocess` (no pywin32) after each atomic credential write, gated behind `sys.platform == "win32"`; current user resolved from `USERNAME`/`USERDOMAIN` env vars (fallback `os.getlogin()`); failures log a warning and never crash a write (mirrors the `except OSError: pass` philosophy but logs); a once-per-process startup warning surfaces pre-existing/never-hardened plaintext files on Windows. Scoped to `file_backend.py` only; default `file` mode and `get_effective_mode()` unchanged by declared boundary; no credential-value changes. New `test_credentials_file_hardening.py` (7 tests) mocks `subprocess.run`/`sys.platform`. Full backend **438 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Advances Punch Board item 30 (current-model half); a separate later re-verification of credential storage is required once Tauri (item 34) exists | `026-windows-credential-file-hardening.md` |
 | 027 | **PASS (LOCAL)** | Auto-remediate an unhardened credentials file on startup: `_warn_if_unhardened()` in `file_backend.py` now attempts `_harden_credentials_file()` directly on the first touch (read or write) of an existing, unhardened Windows file, then logs INFO "Restricted..." on success or the existing warning on failure — a single, one-time, automatic remediation (no new key write or manual icacls needed to protect a pre-existing file). `_harden_credentials_file()` logic reused exactly; never raises. Extends `test_credentials_file_hardening.py` to 10 tests (one Mission 026 test necessarily reconciled, flagged). Full backend **441 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Item 30 current-model half closeable; Tauri re-check (item 34) carried forward | `027-credentials-file-startup-remediation.md` |
+| 028 | **PASS (LOCAL)** | Verify and harden the existing Compare (no-moderator) backend path: `TwoWorkerRequest.moderator_model` optional and `registry._run_phase` / `orchestrator.multiplex_workers` already support a two-worker run with no moderator phase, but had zero test coverage. Driven through the REAL HTTP route (`POST /runs/stream` with `moderator_model` omitted) in new `test_modelmix_compare_mode_backend.py` (7 tests), proving: both workers stream with ZERO moderator events and `run_completed "completed"`; one worker fails -> `"partial"` + persisted session reflects the failed seat via `GET /sessions/{id}`; both workers fail -> observed as-shipped `run_completed "partial"` (not `failed`; product-semantics note, not a defect); multi-turn isolation holds moderator-less and the dead `seat_histories["moderator"]` key never leaks; per-worker guardrails (warning/hard cap) apply; cancellation reaches `run_cancelled` mid-stream; reopening a moderator-less session reconstructs with no moderator message and nothing chokes on the moderator's absence (`models["moderator"]` persists as `None`, tolerated). NO production code changed; no `mode` concept added; no frontend change. Full backend **448 passed**, `ruff` clean; frontend **118 passed** / build / lint green. Backend half of item 28 deliverable | `028-compare-backend-verification.md` |
+
 
 **Mission 008 is present on `main` and its persistence tests pass.**
 
@@ -250,7 +252,22 @@ Mission 007 completed searchable configured selectors. Mission 017 adds the cock
 
 ### 27. Add Solo — **OPEN**
 
-### 28. Add Compare — **OPEN**
+### 28. Add Compare — **OPEN (backend verification half complete — Mission 028; frontend half remains)**
+
+Mission 028 verified the existing no-moderator two-worker backend path end to
+end through the real HTTP route (`POST /api/modelmix/runs/stream` with
+`moderator_model` omitted): both workers stream with zero moderator events,
+`run_completed "completed"`; one worker fails -> `"partial"` with the persisted
+session reflecting the failed seat; both workers fail -> observed as-shipped
+`run_completed "partial"` (product-semantics note: not `failed`); multi-turn
+isolation holds moderator-less with the dead `seat_histories["moderator"]` key
+never leaking; per-worker guardrails apply; cancellation reaches
+`run_cancelled` mid-stream; and reopening a moderator-less session reconstructs
+with no moderator message (`models["moderator"]` persists as `None`, tolerated).
+New `test_modelmix_compare_mode_backend.py` (7 tests); NO production code
+changed; full backend **448 passed**, `ruff` clean; frontend **118 passed** /
+build / lint green. The remaining half of item 28 — the frontend Compare mode
+selector/panel work — is the next mission. Report: `028-compare-backend-verification.md`.
 
 ### 29. Finalize Mix multi-turn session behavior — **PARTIAL — MISSIONS 009/011/012**
 

@@ -40,6 +40,8 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 025 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `025-harden-local-backend-boundary.md` |
 | 026 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `026-windows-credential-file-hardening.md` |
 | 027 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `027-credentials-file-startup-remediation.md` |
+| 028 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `028-compare-backend-verification.md` |
+
 
 ## Mission 007 Provenance Clarification
 
@@ -508,6 +510,43 @@ explicitly). Full backend **441 passed**, `ruff` clean; frontend **118 passed**
 / build / lint green. Punch Board item 30 current-model half is now closeable;
 the Tauri-specific re-verification (item 34) is carried forward exactly as
 Mission 026 stated it.
+
+## Mission 028 Result
+
+**Mission 028 is implemented and verified locally.**
+
+Mission 028 verifies and hardens the existing Compare (no-moderator) backend
+path — Punch Board item 28's backend verification half. Before writing any new
+Compare orchestration code it determines, with real evidence, whether the
+already-shipped, completely-unexercised capability (optional
+`moderator_model`; `registry._run_phase` / `orchestrator.multiplex_workers`
+already support a two-worker run with no moderator phase) is correct end to
+end. It is: **no real defect was found**, and the path now has real
+evidence-backed coverage.
+
+New `test_modelmix_compare_mode_backend.py` (7 tests), all through the REAL
+HTTP route (`POST /api/modelmix/runs/stream` with `moderator_model` omitted)
+using the alpha-acceptance harness, one test per investigation point:
+1. both workers stream fully with ZERO moderator events of any kind, then
+   `run_completed "completed"`;
+2. one worker fails -> `"partial"`, and `GET /sessions/{id}` reflects worker_a
+   `failed` + worker_b `completed`, no moderator message;
+3. both workers fail -> OBSERVED as-shipped `run_completed "partial"` (not
+   `failed`), differing from the moderator path (which yields `failed`); a
+   product-semantics note, not a defect, and any change to it is out of scope;
+4. multi-turn isolation holds moderator-less; the dead
+   `seat_histories["moderator"]` key never leaks to either worker;
+5. per-worker guardrails (warning/hard cap) still apply;
+6. cancellation mid-stream reaches terminal `run_cancelled`;
+7. reopening a moderator-less session reconstructs with no moderator message;
+   `models["moderator"]` persists as `None` and `_validate` tolerates it; nothing
+   chokes on the moderator's absence.
+
+No production code was changed; no `mode` concept added; no frontend change.
+Full backend **448 passed** (441 prior + 7 net new), `ruff` clean; frontend
+**118 passed** / build / lint green. Punch Board item 28's backend verification
+half is complete; the frontend Compare mode selector/panel work is the next
+mission.
 
 ## Evidence Rule
 
