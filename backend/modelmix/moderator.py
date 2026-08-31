@@ -123,6 +123,7 @@ async def run_moderator(
                             threshold=guardrails.WARNING_OUTPUT_THRESHOLD_CHARS,
                         )
                     if capped:
+                        await guardrails.close_stream(stream)
                         break
                 elif item.type == "completed":
                     usage = item.usage or (item.result or {}).get("usage")

@@ -81,6 +81,7 @@ async def multiplex_workers(
                                 },
                             ))
                         if capped:
+                            await guardrails.close_stream(stream)
                             break
                     elif item.type == "completed":
                         usage = item.usage or (item.result or {}).get("usage")

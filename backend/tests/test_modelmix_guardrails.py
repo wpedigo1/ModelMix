@@ -81,6 +81,91 @@ class QueryProvider(LLMProvider):
         return {"success": True}
 
 
+class FakeStream:
+    """Async provider stream recording aclose calls and optionally raising on close."""
+
+    def __init__(self, deltas, *, finish_reason="stop", close_error=None):
+        self.deltas = tuple(deltas)
+        self.finish_reason = finish_reason
+        self.close_error = close_error
+        self.close_calls = 0
+        self.closed = False
+        self._i = 0
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._i < len(self.deltas):
+            event = ProviderStreamEvent(type="text_delta", delta=self.deltas[self._i])
+            self._i += 1
+            return event
+        if self._i == len(self.deltas):
+            self._i += 1
+            return ProviderStreamEvent(
+                type="completed",
+                result={"content": "".join(self.deltas)},
+                finish_reason=self.finish_reason,
+            )
+        raise StopAsyncIteration
+
+    async def aclose(self):
+        self.close_calls += 1
+        self.closed = True
+        if self.close_error is not None:
+            raise self.close_error
+
+
+class BareStream:
+    """Async provider stream with no `aclose` attribute at all."""
+
+    def __init__(self, deltas):
+        self.deltas = tuple(deltas)
+        self._i = 0
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._i < len(self.deltas):
+            event = ProviderStreamEvent(type="text_delta", delta=self.deltas[self._i])
+            self._i += 1
+            return event
+        if self._i == len(self.deltas):
+            self._i += 1
+            return ProviderStreamEvent(
+                type="completed",
+                result={"content": "".join(self.deltas)},
+                finish_reason="stop",
+            )
+        raise StopAsyncIteration
+
+
+class FakeStreamProvider(LLMProvider):
+    """Streaming provider whose stream_query returns an injected stream object."""
+
+    def __init__(self, stream):
+        self.stream = stream
+        self.messages = []
+
+    @property
+    def supports_streaming(self):
+        return True
+
+    def stream_query(self, model_id, messages, timeout=120.0, temperature=0.7):
+        self.messages.append(messages)
+        return self.stream
+
+    async def query(self, model_id, messages, timeout=120.0, temperature=0.7):
+        raise AssertionError("FakeStreamProvider is streaming-only")
+
+    async def get_models(self):
+        return []
+
+    async def validate_key(self, api_key):
+        return {"success": True}
+
+
 async def collect(provider_a, provider_b, **kwargs):
     providers = {"model-a": provider_a, "model-b": provider_b}
     return [
@@ -345,3 +430,57 @@ async def test_moderator_under_thresholds_behaves_unchanged(monkeypatch):
     assert "".join(
         event["delta"] for event in events if event["type"] == "moderator_delta"
     ) == "final answer"
+
+
+# Follow-up (Mission 019): the capped seat closes its provider stream; a stream
+# without aclose, or one that errors on close, must not disturb the outcome.
+async def test_capped_seat_closes_provider_stream(monkeypatch):
+    set_thresholds(monkeypatch, warning=40, cap=80)
+
+    stream = FakeStream(("a" * 60, "b" * 60))
+    events = await collect(FakeStreamProvider(stream), DeltasProvider(("ok",)))
+    seat_a = [event for event in events if event.get("seat_id") == "worker_a"]
+    assert seat_a[-1]["type"] == "seat_completed"
+    assert seat_a[-1]["finish_reason"] == "modelmix_output_cap"
+    assert stream.close_calls == 1
+    assert stream.closed
+
+    stream = BareStream(("a" * 60, "b" * 60))
+    events = await collect(FakeStreamProvider(stream), DeltasProvider(("ok",)))
+    seat_a = [event for event in events if event.get("seat_id") == "worker_a"]
+    assert seat_a[-1]["type"] == "seat_completed"
+    assert seat_a[-1]["finish_reason"] == "modelmix_output_cap"
+
+    stream = FakeStream(("a" * 60, "b" * 60), close_error=RuntimeError("already closed"))
+    events = await collect(FakeStreamProvider(stream), DeltasProvider(("ok",)))
+    seat_a = [event for event in events if event.get("seat_id") == "worker_a"]
+    assert seat_a[-1]["type"] == "seat_completed"
+    assert seat_a[-1]["finish_reason"] == "modelmix_output_cap"
+    assert stream.close_calls == 1
+
+
+# Follow-up (Mission 019): the capped Moderator closes its provider stream; a
+# stream without aclose, or one that errors on close, must not disturb it.
+async def test_capped_moderator_closes_provider_stream(monkeypatch):
+    set_thresholds(monkeypatch, warning=40, cap=80)
+
+    stream = FakeStream(("a" * 60, "b" * 60))
+    ok, events = await run_moderator_events(FakeStreamProvider(stream))
+    assert ok is True
+    assert events[-1]["type"] == "moderator_completed"
+    assert events[-1]["finish_reason"] == "modelmix_output_cap"
+    assert stream.close_calls == 1
+    assert stream.closed
+
+    stream = BareStream(("a" * 60, "b" * 60))
+    ok, events = await run_moderator_events(FakeStreamProvider(stream))
+    assert ok is True
+    assert events[-1]["type"] == "moderator_completed"
+    assert events[-1]["finish_reason"] == "modelmix_output_cap"
+
+    stream = FakeStream(("a" * 60, "b" * 60), close_error=RuntimeError("already closed"))
+    ok, events = await run_moderator_events(FakeStreamProvider(stream))
+    assert ok is True
+    assert events[-1]["type"] == "moderator_completed"
+    assert events[-1]["finish_reason"] == "modelmix_output_cap"
+    assert stream.close_calls == 1

@@ -12,6 +12,8 @@ governs; reaching the output cap is a ModelMix termination
 
 from __future__ import annotations
 
+from typing import Any
+
 WARNING_OUTPUT_THRESHOLD_CHARS = 20_000
 HARD_OUTPUT_CAP_CHARS = 40_000
 
@@ -30,3 +32,19 @@ def clip_delta(delta: str, emitted: int, cap: int) -> tuple[str, bool]:
     if len(delta) > remaining:
         return delta[:remaining], True
     return delta, False
+
+
+async def close_stream(stream: Any) -> None:
+    """Best-effort explicit close of a provider stream after an output cap.
+
+    Breaking out of the wrapped deadline iterator does not deterministically
+    close the provider's own async iterator, so close it directly when it
+    exposes `aclose`. A stream without `aclose`, or one that errors on close
+    (already closed, provider-specific teardown failure), must never disturb
+    the capped terminal outcome.
+    """
+    if hasattr(stream, "aclose"):
+        try:
+            await stream.aclose()
+        except Exception:
+            pass

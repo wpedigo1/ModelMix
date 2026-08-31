@@ -277,10 +277,45 @@ No `data/`, no lockfile, no dependency, no frontend, no `events.py`/
   to compare against); they must never be fabricated.
 - The cap is enforced in the live seat/Moderator loop only; batch/replay and
   future non-Mix paths are out of alpha scope.
-- Stream close on `break` relies on async-generator finalization
-  (`GeneratorExit`) across `aiter_with_deadline`; observed clean on all real
-  and fake providers used here, but no automated assertion exists that a
-  provider's HTTP stream is torn down promptly after a cap break.
+- Stream close on `break` is now explicit: the capped branch calls
+  `guardrails.close_stream(stream)` (best-effort `aclose` when present), so
+  provider streams are torn down deterministically instead of only via
+  async-generator finalization. A stream without `aclose`, or one that errors on
+  close, cannot disturb the capped terminal outcome (see Follow-up Fix below).
 - No frontend rendering of the warning/cap events yet (unknown event types are
   correctly ignored); surfacing them in the cockpit is a deliberate later step
   and was explicitly out of scope for this backend mission.
+
+## Follow-up Fix — explicit provider stream close on output cap
+
+Immediately after the original Mission 019 close. Review pointed out that
+breaking out of `aiter_with_deadline` did not deterministically close the
+provider's own async stream — teardown relied on `GeneratorExit` at the
+suspension point. Change: in `orchestrator.py::run_seat` and
+`moderator.py::run_moderator`, the capped branch now calls a new
+`guardrails.close_stream(stream)` helper before `break`. The helper calls
+`aclose()` only when the stream exposes it, and swallows any close error so an
+already-closed or teardown-failing provider stream never disturbs the
+`modelmix_output_cap` terminal outcome. `except Exception` deliberately does not
+catch `CancelledError`, so task cancellation still propagates.
+
+Test impact: two new tests in `backend/tests/test_modelmix_guardrails.py` (one
+per code file) — `test_capped_seat_closes_provider_stream` (via the seat/run
+path) and `test_capped_moderator_closes_provider_stream` (via `run_moderator`).
+Each drives a recorded `FakeStream`, a `BareStream` with no `aclose` attribute,
+and a `FakeStream` that raises on close, via a `FakeStreamProvider` whose
+`stream_query` returns the injected stream object directly. Validated from the
+repo root:
+
+```text
+.venv\Scripts\python -m pytest backend\tests\test_modelmix_guardrails.py -q
+15 passed in 0.80s
+
+.venv\Scripts\python -m pytest backend\tests -q
+375 passed in 13.11s   (373 prior + 2 new)
+
+.venv\Scripts\ruff check backend\modelmix\guardrails.py backend\modelmix\orchestrator.py backend\modelmix\moderator.py backend\tests\test_modelmix_guardrails.py
+All checks passed!
+```
+
+Frontend unchanged. Committed as a separate follow-up fix on `main`.
