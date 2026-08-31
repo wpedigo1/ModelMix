@@ -1,9 +1,22 @@
-"""Mission 019 cumulative output guardrail coverage (backend enforcement)."""
+"""Mission 019 cumulative output guardrail coverage (backend enforcement).
+
+Mission 020 adds per-request configurability of the two thresholds; the
+route/registry-level tests below cover that contract.
+"""
 
 import asyncio
+import json
 
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from backend.modelmix import guardrails
 from backend.modelmix.moderator import ModeratorInput, run_moderator
 from backend.modelmix.orchestrator import multiplex_workers
+from backend.modelmix.persistence import AtomicJsonModelMixPersistence
+from backend.modelmix.registry import RunRegistry
+from backend.modelmix.routes import router
 from backend.providers.base import LLMProvider, ProviderStreamEvent
 
 
@@ -484,3 +497,311 @@ async def test_capped_moderator_closes_provider_stream(monkeypatch):
     assert events[-1]["type"] == "moderator_completed"
     assert events[-1]["finish_reason"] == "modelmix_output_cap"
     assert stream.close_calls == 1
+
+
+# ------------------------- Mission 020: per-request configurability --------
+
+
+def _route_post(monkeypatch, tmp_path, *, body, providers):
+    resolved = []
+
+    def resolve(model_id):
+        resolved.append(model_id)
+        return providers[model_id]
+
+    monkeypatch.setattr("backend.modelmix.routes.get_provider_for_model", resolve)
+    monkeypatch.setattr(
+        "backend.modelmix.routes.run_registry",
+        RunRegistry(persistence=AtomicJsonModelMixPersistence(tmp_path)),
+    )
+    app = FastAPI()
+    app.include_router(router)
+    with TestClient(app) as client:
+        response = client.post("/api/modelmix/runs/stream", json=body)
+    return response, resolved
+
+
+def _parse_sse(response):
+    return [
+        json.loads(line.removeprefix("data: "))
+        for line in response.text.splitlines()
+        if line.startswith("data: ")
+    ]
+
+
+# Criterion 1: no guardrail fields behaves exactly as Mission 019 defaults.
+def test_route_without_override_fields_enforces_module_defaults(monkeypatch, tmp_path):
+    extra = 5_000
+    response, resolved = _route_post(
+        monkeypatch,
+        tmp_path,
+        body={"prompt": "default", "worker_a_model": "a", "worker_b_model": "b"},
+        providers={
+            "a": QueryProvider("z" * (guardrails.HARD_OUTPUT_CAP_CHARS + extra)),
+            "b": QueryProvider("z" * (guardrails.HARD_OUTPUT_CAP_CHARS + extra)),
+        },
+    )
+
+    assert response.status_code == 200
+    events = _parse_sse(response)
+    assert resolved == ["a", "b"]
+    for seat in ("worker_a", "worker_b"):
+        seat_events = [event for event in events if event.get("seat_id") == seat]
+        assert seat_events[-1]["type"] == "seat_completed"
+        assert seat_events[-1]["finish_reason"] == "modelmix_output_cap"
+        joined = "".join(
+            event["delta"] for event in seat_events if event["type"] == "seat_delta"
+        )
+        assert len(joined) == guardrails.HARD_OUTPUT_CAP_CHARS
+    assert not any(event["type"] == "run_failed" for event in events)
+    assert events[-1]["type"] == "run_completed"
+    assert events[-1]["status"] == "completed"
+
+
+# Criterion 2: a smaller hard_cap than the module default caps the seat earlier.
+def test_route_smaller_cap_than_default_caps_seat(monkeypatch, tmp_path):
+    response, resolved = _route_post(
+        monkeypatch,
+        tmp_path,
+        body={
+            "prompt": "override",
+            "worker_a_model": "a",
+            "worker_b_model": "b",
+            "warning_threshold_chars": 100,
+            "hard_cap_chars": 120,
+        },
+        providers={"a": QueryProvider("z" * 5_000), "b": QueryProvider("z" * 5_000)},
+    )
+
+    assert response.status_code == 200
+    events = _parse_sse(response)
+    for seat in ("worker_a", "worker_b"):
+        seat_events = [event for event in events if event.get("seat_id") == seat]
+        joined = "".join(
+            event["delta"] for event in seat_events if event["type"] == "seat_delta"
+        )
+        assert joined == "z" * 120
+        assert seat_events[-1]["finish_reason"] == "modelmix_output_cap"
+    assert not any(event["type"] == "run_failed" for event in events)
+
+
+# Criterion 3: a smaller warning_threshold fires the warning earlier than default.
+def test_route_smaller_warning_fires_earlier_than_default(monkeypatch, tmp_path):
+    response, resolved = _route_post(
+        monkeypatch,
+        tmp_path,
+        body={
+            "prompt": "override",
+            "worker_a_model": "a",
+            "worker_b_model": "b",
+            "warning_threshold_chars": 100,
+        },
+        providers={
+            "a": DeltasProvider(("a" * 10,) * 15),
+            "b": DeltasProvider(("ok",)),
+        },
+    )
+
+    assert response.status_code == 200
+    events = _parse_sse(response)
+    warnings = [event for event in events if event["type"] == "seat_output_warning"]
+    assert len(warnings) == 1
+    assert warnings[0]["seat_id"] == "worker_a"
+    assert warnings[0]["threshold"] == 100
+    assert warnings[0]["chars"] == 100
+    seat_a = [event for event in events if event.get("seat_id") == "worker_a"]
+    assert seat_a[-1]["type"] == "seat_completed"
+    assert seat_a[-1]["finish_reason"] == "stop"
+
+
+# Criterion 4: cap < warning is rejected with 422 before any provider is called.
+def test_route_rejects_cap_below_warning_before_provider_call(monkeypatch, tmp_path):
+    response, resolved = _route_post(
+        monkeypatch,
+        tmp_path,
+        body={
+            "prompt": "override",
+            "worker_a_model": "a",
+            "worker_b_model": "b",
+            "warning_threshold_chars": 500,
+            "hard_cap_chars": 300,
+        },
+        providers={"a": QueryProvider("x"), "b": QueryProvider("x")},
+    )
+
+    assert response.status_code == 422
+    assert "hard_cap_chars must be >= warning_threshold_chars" in response.text
+    assert resolved == []
+
+
+def test_route_resolves_omitted_warning_to_default_before_cross_check(monkeypatch, tmp_path):
+    response, resolved = _route_post(
+        monkeypatch,
+        tmp_path,
+        body={
+            "prompt": "override",
+            "worker_a_model": "a",
+            "worker_b_model": "b",
+            "hard_cap_chars": 150,
+        },
+        providers={"a": QueryProvider("x"), "b": QueryProvider("x")},
+    )
+
+    assert response.status_code == 422
+    assert "hard_cap_chars must be >= warning_threshold_chars" in response.text
+    assert resolved == []
+
+
+# Criterion 5: values outside the sane bounds are rejected for both fields.
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("warning_threshold_chars", guardrails.MIN_OUTPUT_CHARS_BOUND - 1),
+        ("warning_threshold_chars", guardrails.MAX_OUTPUT_CHARS_BOUND + 1),
+        ("hard_cap_chars", guardrails.MIN_OUTPUT_CHARS_BOUND - 1),
+        ("hard_cap_chars", guardrails.MAX_OUTPUT_CHARS_BOUND + 1),
+    ],
+)
+def test_route_rejects_out_of_bounds_override_before_provider_call(
+    monkeypatch, tmp_path, field, value
+):
+    response, resolved = _route_post(
+        monkeypatch,
+        tmp_path,
+        body={
+            "prompt": "override",
+            "worker_a_model": "a",
+            "worker_b_model": "b",
+            field: value,
+        },
+        providers={"a": QueryProvider("x"), "b": QueryProvider("x")},
+    )
+
+    assert response.status_code == 422
+    assert "must be between" in response.text
+    assert resolved == []
+
+
+# Criterion 6: only hard_cap supplied uses the module default warning in the
+# cross-check and enforces the supplied cap.
+def test_route_only_cap_supplied_uses_default_warning_and_enforces_cap(monkeypatch, tmp_path):
+    response, resolved = _route_post(
+        monkeypatch,
+        tmp_path,
+        body={
+            "prompt": "override",
+            "worker_a_model": "a",
+            "worker_b_model": "b",
+            "hard_cap_chars": 25_000,
+        },
+        providers={"a": QueryProvider("z" * 26_000), "b": QueryProvider("z" * 26_000)},
+    )
+
+    assert response.status_code == 200
+    events = _parse_sse(response)
+    for seat in ("worker_a", "worker_b"):
+        seat_events = [event for event in events if event.get("seat_id") == seat]
+        joined = "".join(
+            event["delta"] for event in seat_events if event["type"] == "seat_delta"
+        )
+        assert joined == "z" * 25_000
+        assert seat_events[-1]["finish_reason"] == "modelmix_output_cap"
+    assert not any(event["type"] == "run_failed" for event in events)
+
+
+# Criterion 7: only warning_threshold supplied uses the module default cap.
+def test_route_only_warning_supplied_uses_default_cap(monkeypatch, tmp_path):
+    response, resolved = _route_post(
+        monkeypatch,
+        tmp_path,
+        body={
+            "prompt": "override",
+            "worker_a_model": "a",
+            "worker_b_model": "b",
+            "warning_threshold_chars": 1_000,
+        },
+        providers={
+            "a": DeltasProvider(("a" * 10,) * 110),
+            "b": DeltasProvider(("ok",)),
+        },
+    )
+
+    assert response.status_code == 200
+    events = _parse_sse(response)
+    warnings = [event for event in events if event["type"] == "seat_output_warning"]
+    assert len(warnings) == 1
+    assert warnings[0]["threshold"] == 1_000
+    seat_a = [event for event in events if event.get("seat_id") == "worker_a"]
+    assert seat_a[-1]["finish_reason"] == "stop"
+    assert not any(
+        event.get("finish_reason") == "modelmix_output_cap" for event in events
+    )
+    assert not any(event["type"] == "run_failed" for event in events)
+
+
+# Criterion 8: the Moderator honors the same per-request override.
+async def test_moderator_honors_per_request_override():
+    ok, events = await run_moderator_events(
+        DeltasProvider(("a" * 20, "b" * 20, "c" * 20)),
+        warning_threshold_chars=10,
+        hard_cap_chars=30,
+    )
+
+    assert ok is True
+    assert [event["type"] for event in events if event["actor"] == "moderator"] == [
+        "moderator_started",
+        "moderator_delta",
+        "moderator_output_warning",
+        "moderator_delta",
+        "moderator_completed",
+    ]
+    joined = "".join(
+        event["delta"] for event in events if event["type"] == "moderator_delta"
+    )
+    assert joined == "a" * 20 + "b" * 10
+    warning = next(event for event in events if event["type"] == "moderator_output_warning")
+    assert warning["chars"] == 20
+    assert warning["threshold"] == 10
+    assert events[-1]["type"] == "moderator_completed"
+    assert events[-1]["finish_reason"] == "modelmix_output_cap"
+
+
+# Criterion 8 threading: the registry delivers the override to both the worker
+# seats and the Moderator through the run-phase chain.
+async def test_registry_threads_override_to_workers_and_moderator(tmp_path):
+    store = AtomicJsonModelMixPersistence(tmp_path)
+    registry = RunRegistry(persistence=store)
+    providers = {
+        "a": DeltasProvider(("w" * 60,)),
+        "b": DeltasProvider(("x" * 60,)),
+        "m": DeltasProvider(("m" * 40, "n" * 40)),
+    }
+    run = await registry.start(
+        "override prompt",
+        "a",
+        "b",
+        providers.__getitem__,
+        "m",
+        warning_threshold_chars=15,
+        hard_cap_chars=35,
+    )
+    await run.task
+
+    events = await run.events_after(0)
+    for seat in ("worker_a", "worker_b"):
+        seat_events = [event for event in events if event.get("seat_id") == seat]
+        joined = "".join(
+            event["delta"] for event in seat_events if event["type"] == "seat_delta"
+        )
+        assert len(joined) == 35
+        assert seat_events[-1]["type"] == "seat_completed"
+        assert seat_events[-1]["finish_reason"] == "modelmix_output_cap"
+    moderator_events = [event for event in events if event["type"].startswith("moderator_")]
+    joined = "".join(
+        event["delta"] for event in moderator_events if event["type"] == "moderator_delta"
+    )
+    assert joined == "m" * 35
+    assert moderator_events[-1]["type"] == "moderator_completed"
+    assert moderator_events[-1]["finish_reason"] == "modelmix_output_cap"
+    assert events[-1]["type"] == "run_completed"
+    assert events[-1]["status"] == "completed"

@@ -28,6 +28,8 @@ async def multiplex_workers(
     emit_run_completed: bool = True,
     seat_histories: Optional[Dict[str, List[Dict[str, str]]]] = None,
     seat_timeout: Optional[float] = None,
+    warning_threshold_chars: Optional[int] = None,
+    hard_cap_chars: Optional[int] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
     """Run exactly two isolated model calls and multiplex their visible output."""
     run_id = run_id or str(uuid.uuid4())
@@ -50,6 +52,16 @@ async def multiplex_workers(
             {"role": "user", "content": prompt},
         ]
         bound = timeouts.SEAT_TIMEOUT_SECONDS if seat_timeout is None else seat_timeout
+        warning_limit = (
+            guardrails.WARNING_OUTPUT_THRESHOLD_CHARS
+            if warning_threshold_chars is None
+            else warning_threshold_chars
+        )
+        cap = (
+            guardrails.HARD_OUTPUT_CAP_CHARS
+            if hard_cap_chars is None
+            else hard_cap_chars
+        )
         try:
             provider = provider_resolver(model_id)
             if provider.supports_streaming:
@@ -62,14 +74,14 @@ async def multiplex_workers(
                 async for item in aiter_with_deadline(stream, bound):
                     if item.type == "text_delta" and item.delta:
                         delta, capped = guardrails.clip_delta(
-                            item.delta, emitted, guardrails.HARD_OUTPUT_CAP_CHARS
+                            item.delta, emitted, cap
                         )
                         if delta:
                             emitted += len(delta)
                             await queue.put((seat_id, "seat_delta", {"delta": delta}))
                         if (
                             not warned
-                            and emitted >= guardrails.WARNING_OUTPUT_THRESHOLD_CHARS
+                            and emitted >= warning_limit
                         ):
                             warned = True
                             await queue.put((
@@ -77,7 +89,7 @@ async def multiplex_workers(
                                 "seat_output_warning",
                                 {
                                     "chars": emitted,
-                                    "threshold": guardrails.WARNING_OUTPUT_THRESHOLD_CHARS,
+                                    "threshold": warning_limit,
                                 },
                             ))
                         if capped:
@@ -102,9 +114,9 @@ async def multiplex_workers(
                 if result.get("error"):
                     raise RuntimeError(result.get("error_message") or "Provider query failed")
                 content = str(result.get("content") or "")
-                capped = len(content) > guardrails.HARD_OUTPUT_CAP_CHARS
+                capped = len(content) > cap
                 if capped:
-                    content = content[:guardrails.HARD_OUTPUT_CAP_CHARS]
+                    content = content[:cap]
                 if content:
                     await queue.put((seat_id, "seat_delta", {"delta": content}))
                 payload = {}

@@ -52,6 +52,8 @@ class RunRegistry:
         provider_resolver: ProviderResolver,
         moderator_model: Optional[str] = None,
         session_id: Optional[str] = None,
+        warning_threshold_chars: Optional[int] = None,
+        hard_cap_chars: Optional[int] = None,
     ) -> RunEventJournal:
         await self._prune()
         session_id = session_id or str(uuid.uuid4())
@@ -95,6 +97,8 @@ class RunRegistry:
                 provider_resolver,
                 moderator_model,
                 seat_histories,
+                warning_threshold_chars,
+                hard_cap_chars,
             )
         )
         return run
@@ -155,6 +159,8 @@ class RunRegistry:
         provider_resolver: ProviderResolver,
         moderator_model: Optional[str],
         seat_histories: Dict[str, List[Dict[str, str]]],
+        warning_threshold_chars: Optional[int] = None,
+        hard_cap_chars: Optional[int] = None,
     ) -> None:
         await run.mark_status("active")
         bound = timeouts.RUN_TIMEOUT_SECONDS if self.run_timeout is None else self.run_timeout
@@ -168,6 +174,8 @@ class RunRegistry:
                     provider_resolver,
                     moderator_model,
                     seat_histories,
+                    warning_threshold_chars,
+                    hard_cap_chars,
                 ),
                 timeout=bound,
             )
@@ -198,6 +206,8 @@ class RunRegistry:
         provider_resolver: ProviderResolver,
         moderator_model: Optional[str],
         seat_histories: Dict[str, List[Dict[str, str]]],
+        warning_threshold_chars: Optional[int] = None,
+        hard_cap_chars: Optional[int] = None,
     ) -> None:
         worker_outputs = {"worker_a": "", "worker_b": ""}
         worker_failures: Dict[str, str] = {}
@@ -210,6 +220,8 @@ class RunRegistry:
             event_factory=run.append,
             emit_run_completed=moderator_model is None,
             seat_timeout=self.seat_timeout,
+            warning_threshold_chars=warning_threshold_chars,
+            hard_cap_chars=hard_cap_chars,
             seat_histories={
                 "worker_a": seat_histories["worker_a"],
                 "worker_b": seat_histories["worker_b"],
@@ -271,6 +283,8 @@ class RunRegistry:
                 moderator_input,
                 run.append,
                 seat_timeout=self.seat_timeout,
+                warning_threshold_chars=warning_threshold_chars,
+                hard_cap_chars=hard_cap_chars,
             )
             if not moderator_ok:
                 await run.append("run_failed", error="Moderator failed")

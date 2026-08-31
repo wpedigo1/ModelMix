@@ -81,12 +81,24 @@ async def run_moderator(
     create_event: EventFactory,
     output_limits: Optional[ModeratorOutputLimits] = None,
     seat_timeout: Optional[float] = None,
+    warning_threshold_chars: Optional[int] = None,
+    hard_cap_chars: Optional[int] = None,
 ) -> bool:
     """Stream or query one Moderator and publish through the canonical event factory."""
     limits = output_limits or ModeratorOutputLimits()
     if limits.hard_cap_tokens is not None:
         raise ValueError("Moderator hard output caps are not supported by the provider contract")
     bound = timeouts.SEAT_TIMEOUT_SECONDS if seat_timeout is None else seat_timeout
+    warning_limit = (
+        guardrails.WARNING_OUTPUT_THRESHOLD_CHARS
+        if warning_threshold_chars is None
+        else warning_threshold_chars
+    )
+    cap = (
+        guardrails.HARD_OUTPUT_CAP_CHARS
+        if hard_cap_chars is None
+        else hard_cap_chars
+    )
 
     await create_event(
         "moderator_started",
@@ -106,21 +118,21 @@ async def run_moderator(
             async for item in aiter_with_deadline(stream, bound):
                 if item.type == "text_delta" and item.delta:
                     delta, capped = guardrails.clip_delta(
-                        item.delta, emitted, guardrails.HARD_OUTPUT_CAP_CHARS
+                        item.delta, emitted, cap
                     )
                     if delta:
                         emitted += len(delta)
                         await create_event("moderator_delta", actor="moderator", delta=delta)
                     if (
                         not warned
-                        and emitted >= guardrails.WARNING_OUTPUT_THRESHOLD_CHARS
+                        and emitted >= warning_limit
                     ):
                         warned = True
                         await create_event(
                             "moderator_output_warning",
                             actor="moderator",
                             chars=emitted,
-                            threshold=guardrails.WARNING_OUTPUT_THRESHOLD_CHARS,
+                            threshold=warning_limit,
                         )
                     if capped:
                         await guardrails.close_stream(stream)
@@ -137,9 +149,9 @@ async def run_moderator(
             if result.get("error"):
                 raise RuntimeError(result.get("error_message") or "Moderator query failed")
             content = str(result.get("content") or "")
-            capped = len(content) > guardrails.HARD_OUTPUT_CAP_CHARS
+            capped = len(content) > cap
             if capped:
-                content = content[:guardrails.HARD_OUTPUT_CAP_CHARS]
+                content = content[:cap]
             if content:
                 await create_event("moderator_delta", actor="moderator", delta=content)
             usage = result.get("usage")

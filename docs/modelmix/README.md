@@ -12,7 +12,7 @@ This directory is the repository home for ModelMix implementation state, mission
 
 ## Mission Reports
 
-Historical engineering evidence through locally verified Mission 019:
+Historical engineering evidence through locally verified Mission 020:
 
 1. [`001-baseline-architecture-spike.md`](001-baseline-architecture-spike.md)
 2. [`002-first-streaming-slice.md`](002-first-streaming-slice.md)
@@ -35,6 +35,7 @@ Historical engineering evidence through locally verified Mission 019:
 19. [`017-settings-shell.md`](017-settings-shell.md) — **PASS (LOCAL)**
 20. [`018-telemetry-rendering.md`](018-telemetry-rendering.md) — **PASS (LOCAL)**
 21. [`019-output-guardrails-backend.md`](019-output-guardrails-backend.md) — **PASS (LOCAL)**
+22. [`020-configurable-output-guardrails-backend.md`](020-configurable-output-guardrails-backend.md) — **PASS (LOCAL)**
 
 Mission reports preserve what was observed or delivered during that slice. They do not automatically override a later locked decision in the Punch Board.
 
@@ -54,7 +55,7 @@ Do not silently promote an older proposal into a current architecture decision.
 
 As of 2026-08-30 CT:
 
-- Missions **001–019** are recorded as implemented (007.5 interlock included); Mission 008 is present on current `main`.
+- Missions **001–020** are recorded as implemented (007.5 interlock included); Mission 008 is present on current `main`.
 - Mission **007.5** closed the MCP 2.x security/compatibility interlock.
 - Accepted Mission 007.5 implementation commit: `e018ed06807beda2c11531f065b2d4181c346ca8`.
 - MCP remains at **2.1.1**; Python and frontend dependency audits were recorded clean.
@@ -65,6 +66,7 @@ As of 2026-08-30 CT:
 - Mission **017** adds the Settings shell: a gear entry in the top bar opens an in-app overlay — About surfaces the real version, MIT license, and text-only AI Counsel attribution; Providers is a read-only Connected/Not-connected list computed from the now-exported `configuredSources`; Defaults saves/clears the `modelmix.defaultSeatModels` localStorage trio and applies saved seat defaults at initial mount with the exact built-in fallbacks preserved.
 - Mission **018** renders the telemetry truth layer honestly in the cockpit: compact per-seat footers (live turn only) show `Usage: authoritative (provider-reported)`/`unavailable`, the Moderator-only `finish_reason`, and ModelMix-calculated elapsed timing labeled `(calculated)`; per-historical-turn footers and cost/pricing wiring remain explicitly deferred follow-ups.
 - Mission **019** enforces the output guardrails in the backend run path: a new `backend/modelmix/guardrails.py` owns the provisional char bounds — `WARNING_OUTPUT_THRESHOLD_CHARS = 20_000`, `HARD_OUTPUT_CAP_CHARS = 40_000` — and `run_seat`/`run_moderator` emit a one-shot `seat_output_warning`/`moderator_output_warning`, then stop consuming the provider stream at the hard cap, truncating to exactly the cap and terminating as `seat_completed`/`moderator_completed` with `finish_reason: "modelmix_output_cap"` (an honest outcome distinct from completion, cancellation, provider termination, failure, and timeout); the provider-quota usage warning stays deferred (no authoritative quota data exists) and the thresholds await a configurability mission.
+- Mission **020** makes those thresholds configurable per request: `TwoWorkerRequest` gains optional `warning_threshold_chars`/`hard_cap_chars`, `routes.py` defaults omissions to the Mission 019 constants, rejects values outside `guardrails.MIN_OUTPUT_CHARS_BOUND = 100` / `MAX_OUTPUT_CHARS_BOUND = 200_000` and any `hard_cap_chars < warning_threshold_chars` as 422 before any provider is resolved or called, and the resolved pair rides the exact `registry.start → _run → _run_phase → multiplex_workers/run_moderator` chain (mirroring `seat_timeout`). Enforcement and event contracts are unchanged, the frontend omits both fields today (byte-for-byte Mission 019 behavior), and no value is persisted server-side.
 - Schema-v1 session files live under `data/modelmix/sessions/` by default and are written atomically behind the ModelMix persistence interface.
 - Alpha persistence remains **versioned atomic JSON behind a ModelMix-owned interface**.
 - **SQLite migration is not part of the alpha plan.**

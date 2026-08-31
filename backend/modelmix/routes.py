@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..council import get_provider_for_model
+from . import guardrails
 from .journal import ReplayUnavailableError, RunEventJournal
 from .persistence import PersistenceError
 from .registry import run_registry
@@ -21,11 +22,64 @@ class TwoWorkerRequest(BaseModel):
     worker_b_model: str = Field(min_length=1)
     moderator_model: Optional[str] = Field(default=None, min_length=1)
     session_id: Optional[str] = Field(default=None, min_length=1)
+    warning_threshold_chars: Optional[int] = Field(default=None, gt=0)
+    hard_cap_chars: Optional[int] = Field(default=None, gt=0)
+
+
+def _resolve_guardrail_overrides(
+    warning_threshold_chars: Optional[int],
+    hard_cap_chars: Optional[int],
+) -> tuple[int, int]:
+    """Resolve optional per-request guardrail overrides to enforced values.
+
+    Omitted fields fall back to the Mission 019 module defaults. Provided
+    values must keep the pair sane and inside the bounded range; any violation
+    raises ValueError so the caller can reject the run before any provider
+    call is made.
+    """
+    warning = (
+        guardrails.WARNING_OUTPUT_THRESHOLD_CHARS
+        if warning_threshold_chars is None
+        else warning_threshold_chars
+    )
+    cap = (
+        guardrails.HARD_OUTPUT_CAP_CHARS
+        if hard_cap_chars is None
+        else hard_cap_chars
+    )
+    if not (
+        guardrails.MIN_OUTPUT_CHARS_BOUND
+        <= warning
+        <= guardrails.MAX_OUTPUT_CHARS_BOUND
+    ):
+        raise ValueError(
+            f"warning_threshold_chars must be between "
+            f"{guardrails.MIN_OUTPUT_CHARS_BOUND} and "
+            f"{guardrails.MAX_OUTPUT_CHARS_BOUND}"
+        )
+    if not (
+        guardrails.MIN_OUTPUT_CHARS_BOUND <= cap <= guardrails.MAX_OUTPUT_CHARS_BOUND
+    ):
+        raise ValueError(
+            f"hard_cap_chars must be between "
+            f"{guardrails.MIN_OUTPUT_CHARS_BOUND} and "
+            f"{guardrails.MAX_OUTPUT_CHARS_BOUND}"
+        )
+    if cap < warning:
+        raise ValueError("hard_cap_chars must be >= warning_threshold_chars")
+    return warning, cap
 
 
 @router.post("/runs/stream")
 async def stream_two_workers(body: TwoWorkerRequest) -> StreamingResponse:
     """Launch two independent witnesses and return one multiplexed SSE feed."""
+    try:
+        warning_threshold_chars, hard_cap_chars = _resolve_guardrail_overrides(
+            body.warning_threshold_chars,
+            body.hard_cap_chars,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     try:
         run = await run_registry.start(
             body.prompt,
@@ -34,6 +88,8 @@ async def stream_two_workers(body: TwoWorkerRequest) -> StreamingResponse:
             get_provider_for_model,
             body.moderator_model,
             body.session_id,
+            warning_threshold_chars=warning_threshold_chars,
+            hard_cap_chars=hard_cap_chars,
         )
     except PersistenceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

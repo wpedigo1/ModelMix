@@ -17,6 +17,9 @@ from typing import Any
 WARNING_OUTPUT_THRESHOLD_CHARS = 20_000
 HARD_OUTPUT_CAP_CHARS = 40_000
 
+MIN_OUTPUT_CHARS_BOUND = 100
+MAX_OUTPUT_CHARS_BOUND = 200_000
+
 
 def clip_delta(delta: str, emitted: int, cap: int) -> tuple[str, bool]:
     """Clip one stream delta so cumulative emitted chars never exceed cap.

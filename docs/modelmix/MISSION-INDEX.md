@@ -32,6 +32,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 017 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `017-settings-shell.md` |
 | 018 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `018-telemetry-rendering.md` |
 | 019 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `019-output-guardrails-backend.md` |
+| 020 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `020-configurable-output-guardrails-backend.md` |
 
 ## Mission 007 Provenance Clarification
 
@@ -315,6 +316,42 @@ green (437 modules). It advances Punch Board item **17** (hard output cap,
 output warning, and the `modelmix_output_cap` terminal outcome are no longer
 open; the configurable thresholds and the provider/account usage warning
 remain open).
+
+## Mission 020 Result
+
+**Mission 020 is implemented and verified locally.**
+
+Mission 020 makes the output guardrails configurable per request. The
+`POST /api/modelmix/runs/stream` body (`TwoWorkerRequest`) gains optional
+`warning_threshold_chars: Optional[int] = Field(default=None, gt=0)` and
+`hard_cap_chars: Optional[int] = Field(default=None, gt=0)`. Before starting a
+run, `routes.py` resolves each omitted field to the Mission 019 module default
+(`guardrails.WARNING_OUTPUT_THRESHOLD_CHARS` = 20_000 /
+`HARD_OUTPUT_CAP_CHARS` = 40_000), rejects values outside the new
+`guardrails.MIN_OUTPUT_CHARS_BOUND = 100` / `MAX_OUTPUT_CHARS_BOUND = 200_000`
+range, and rejects `hard_cap_chars < warning_threshold_chars` — every violation
+surfaces as `HTTPException(status_code=422, detail=...)` **before** the run
+starts, so no provider is ever resolved or called on an invalid request. The
+resolved pair is threaded through the exact existing `seat_timeout` call chain
+(`RunRegistry.start → _run → _run_phase`) into both `multiplex_workers(...)`
+and `run_moderator(...)`, which resolve the two numbers exactly like
+`seat_timeout` and feed them into the existing `clip_delta` and one-shot
+warning check. Mission 019's enforcement, event payloads, and
+`modelmix_output_cap` finish reason are unchanged; the frontend is untouched
+(an omitted pair is byte-for-byte identical to Mission 019); nothing is
+persisted server-side. Coverage: 13 new tests in
+`backend/tests/test_modelmix_guardrails.py` mapping to all nine acceptance
+criteria — including route-level tests over the full routes → registry →
+run-phase chain via `FastAPI TestClient` (a resolver spy proves rejection never
+invokes a provider) and a registry-level test proving `_run_phase` delivers the
+override to both worker seats and the Moderator. Validation: full backend
+suite **388 passed** (375 prior + 13 new, no existing test modified), targeted
+suites **65 passed**, `ruff check` clean on all six changed Python files, and
+frontend unchanged with `npm test` **86 passed**, `npm run build` green (437
+modules), `npm run lint` clean. This advances Punch Board item **17** to the
+per-request configurability level; the remaining item-17 openings are the
+provider/account usage warning (deferred, not honestly buildable) and
+frontend/local-preference wiring of threshold controls.
 
 ## Evidence Rule
 

@@ -9,7 +9,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–019**.
+Completed and locally verified implementation missions: **001–020**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -46,6 +46,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 017 | **PASS (LOCAL)** | Settings shell (frontend-only): a gear entry in the compact top bar opens a conditionally-rendered overlay — About (real `pkg.version` from an imported `../../package.json`, MIT/copyright, text-only AI Counsel attribution, repo URL), Providers (read-only Connected/Not-connected rows computed from the now-exported `configuredSources` with zero credential values and an honest unavailable state), Defaults (`modelmix.defaultSeatModels` localStorage trio saved/cleared and applied at initial mount, with frozen `FALLBACK_SEAT_MODELS` preserving the exact built-in defaults) | `017-settings-shell.md` |
 | 018 | **PASS (LOCAL)** | Telemetry rendering (frontend-only): `seatTelemetry.js` builds honest per-seat footers — usage labeled `authoritative (provider-reported)` via `describeUsage` showing the provider-reported total token count (`total_tokens`/`totalTokenCount`, `<n> tokens`) when finite, else the raw key names, or `unavailable`, Moderator-only `finish_reason` (`stop`/`not reported`), ModelMix-calculated elapsed labeled `(calculated)` with the raw wall-clock `HH:MM:SS → HH:MM:SS` range (running seats show `Started:`), rendered only for the live turn | `018-telemetry-rendering.md` |
 | 019 | **PASS (LOCAL)** | Output guardrails (backend enforcement): new `guardrails.py` owns provisional `WARNING_OUTPUT_THRESHOLD_CHARS = 20_000` / `HARD_OUTPUT_CAP_CHARS = 40_000` and an exact-boundary `clip_delta`; `run_seat`/`run_moderator` emit a one-shot `seat_output_warning`/`moderator_output_warning` on first crossing, then at the hard cap stop consuming the provider stream and terminate as `seat_completed`/`moderator_completed` with `finish_reason: "modelmix_output_cap"` — an honest terminal outcome distinct from completion, cancellation, provider termination, failure, and timeout; non-streaming paths are capped with no warning; no `events.py`/`persistence.py`/`journal.py`/`timeouts.py`/`history.py`/`registry.py`/frontend changes | `019-output-guardrails-backend.md` |
+| 020 | **PASS (LOCAL)** | Configurable output guardrails (backend): `TwoWorkerRequest` gains optional `warning_threshold_chars`/`hard_cap_chars` (`gt=0`); `routes.py::_resolve_guardrail_overrides` defaults omissions to the Mission 019 constants, rejects values outside `guardrails.MIN_OUTPUT_CHARS_BOUND = 100` / `MAX_OUTPUT_CHARS_BOUND = 200_000`, and rejects `hard_cap_chars < warning_threshold_chars` — all surfaced as 422 before any provider is called; the resolved pair rides the exact `registry.start → _run → _run_phase → multiplex_workers/run_moderator` chain (mirroring `seat_timeout`); enforcement logic and event contract byte-for-byte unchanged, frontend zero changes, nothing persisted | `020-configurable-output-guardrails-backend.md` |
 
 ## Current Verified Product Slice
 
@@ -143,8 +144,8 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 The Punch Board safeguards remain active requirements:
 
 - provider/account usage warning where authoritative data exists, otherwise clearly labeled ModelMix-tracked/estimated data — **Mission 019 codes this as explicitly deferred**: no authoritative quota/rate-limit data exists in this codebase to compare against, so it is not honestly buildable;
-- excessive output-token warning — **implemented (Mission 019)** as a one-shot `seat_output_warning`/`moderator_output_warning` at the provisional 20k-char threshold;
-- configurable hard output cap at the closest enforceable boundary — **implemented (Mission 019)** as an exact 40k-char deterministic cap in `guardrails.py`, with thresholds still provisional module defaults pending a configurability mission;
+- excessive output-token warning — **implemented (Mission 019) and configurable per request (Mission 020)** as a one-shot `seat_output_warning`/`moderator_output_warning`, defaulting to the 20k-char threshold;
+- configurable hard output cap at the closest enforceable boundary — **implemented (Missions 019/020)** as an exact 40k-char deterministic cap in `guardrails.py`, with the default now overridable per request (bounded 100–200_000 chars);
 - terminal state must distinguish normal completion, user cancellation, provider/model termination, and ModelMix hard-cap termination — **implemented (Mission 019)**: capped participants terminate as `seat_completed`/`moderator_completed` with `finish_reason: "modelmix_output_cap"`, never as failed or timed out.
 
 These safeguards are not to be implemented prematurely in unrelated missions, but they are **not post-alpha by default** and must be wired when the settings/run-control layer reaches them.
@@ -452,3 +453,39 @@ item-17 openings are the configurable thresholds and the provider/account
 usage warning (deferred as not honestly buildable — no authority-quota data
 exists to compare against). The provisional thresholds themselves are a noted
 follow-up for a settings/configurability mission.
+
+## Mission 020 Result
+
+Mission 020 advances Punch Board item **17** one level deeper: both guardrail
+thresholds are now configurable per request through
+`POST /api/modelmix/runs/stream`. `TwoWorkerRequest` gains optional
+`warning_threshold_chars`/`hard_cap_chars` (`Field(default=None, gt=0)`), and
+`stream_two_workers` resolves both to enforced values through a private
+`routes._resolve_guardrail_overrides`, which defaults an omitted field to the
+Mission 019 module constant, rejects values outside the new
+`guardrails.MIN_OUTPUT_CHARS_BOUND = 100` / `MAX_OUTPUT_CHARS_BOUND = 200_000`
+range, and rejects `hard_cap_chars < warning_threshold_chars`. Every rejection
+is a 422 raised **before** `run_registry.start(...)`, so no provider is ever
+resolved or called on an invalid request.
+
+The override rides the exact existing `seat_timeout` call chain — no parallel
+path: `RunRegistry.start → _run → _run_phase` thread the two optional params
+into both `multiplex_workers(...)` and `run_moderator(...)`, and each resolves
+them exactly like `seat_timeout` into a `warning_limit`/`cap` used by the
+existing `clip_delta` and one-shot warning check. Mission 019's enforcement
+logic, event payloads, and `modelmix_output_cap` finish reason are unchanged —
+only where the two threshold numbers come from.
+
+Boundaries: frontend zero changes (when the request omits both fields the run
+is byte-for-byte identical to Mission 019), `clip_delta` untouched,
+`seat_timeout`/`run_timeout` untouched, `ModeratorOutputLimits` untouched, no
+server-side persistence of a chosen threshold, no new dependencies. Coverage:
+13 new tests in `backend/tests/test_modelmix_guardrails.py` mapping to all nine
+acceptance criteria, including route-level tests over the full
+routes → registry → run-phase chain (via FastAPI `TestClient`) and one
+registry-level test proving `_run_phase` delivers the override to both worker
+seats and the Moderator. Validation: full backend suite **388 passed** (375
+prior + 13 new; no existing test modified), targeted suites **65 passed**,
+`ruff check` clean on all six changed Python files, and frontend unchanged with
+`npm test` **86 passed**, `npm run build` green (437 modules), `npm run lint`
+clean.
