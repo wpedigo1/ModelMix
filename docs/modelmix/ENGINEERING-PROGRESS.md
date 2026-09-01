@@ -10,7 +10,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–032**.
+Completed and locally verified implementation missions: **001–033**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -60,6 +60,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 030 | **PASS (LOCAL)** | Backend support for Solo: optional `worker_b_model`, pre-provider 422 rejection of the one-worker-plus-Moderator hybrid, active-seat orchestration, persistence validation for the Solo model shape, and isolation/guardrail/cancellation coverage. Backend **460 passed**; frontend baseline **130 passed** / build / lint green. Backend half of item 27 | `030-solo-mode-backend.md` |
 | 031 | **PASS (LOCAL)** | Frontend Solo delivery, closing item 27 with Mission 030. `modelmixMode.js` accepts and persists `solo`; the control is Mix / Compare / Solo and retains active-run locking. Solo renders only Worker A's selector, requires only Worker A, and omits both unused model keys. Moderator and Worker B panels remain mounted but CSS-hidden; Worker A uses the existing single-column visual treatment. Mode visibility stays independent from panel-view state, preventing a hidden-seat maximize target from blanking Solo. Eight new Solo tests; sole modified existing test is the necessary top-bar option assertion. Frontend **138 passed** / build / lint green; backend workspace-temp rerun **460 passed** | `031-solo-mode-frontend.md` |
 | 032 | **PASS (LOCAL)** | Tauri 2 toolchain check and minimal native shell: observed Rust/Cargo 1.98.0, MSVC C++ tools, and WebView2 151.0.4129.107; installed the missing `tauri-cli 2.11.4`; added standard `src-tauri/` pointing development at the existing `/modelmix` Vite route and production assets at `frontend/dist`, with no sidecar/backend launch. Direct Windows inspection observed the real three-panel cockpit in the native `target\debug\app.exe` window against the separately started backend. `cargo check` green; frontend **138 passed** / build / lint green; backend workspace-temp rerun **460 passed** after the exact command reproduced the known default-temp `WinError 5`. Item 34 remains in progress for sidecar and installer work | `032-tauri-toolchain-and-shell.md` |
+| 033 | **PASS (LOCAL)** | Standalone Windows PyInstaller `onedir` backend bundle: packaging-only package-context adapter, durable spec, installed keyring hook verification, and narrow bundled project-metadata fallback. The isolated frozen executable ran with a sanitized no-Python/uv/venv environment, served health/session/settings/MCP routes, persisted and cleared fake keyring/file sentinels across restarts, produced a direct non-inherited current-user FullControl ACL, and shut down with no orphan/JSON/temp-file/live-data damage. Backend **461 passed** with workspace-temp after the known default-temp failure; frontend **138 passed** / build / lint green; Rust format/check and focused Ruff green. Item 34 remains open for Tauri sidecar, installer, and final credential packaging | `033-pyinstaller-backend-bundle.md` |
 
 
 ## Current Verified Product Slice
@@ -992,3 +993,36 @@ default-temp `WinError 5` (**246 passed, 214 setup errors**).
 Item 34 remains **IN PROGRESS**. Python sidecar packaging/lifecycle, a real
 installer build, and Tauri-specific credential-storage re-verification remain
 separate later work.
+
+## Mission 033 Result
+
+Mission 033 proves the standalone backend-bundling half of Punch Board item
+34. PyInstaller 6.22.2 with hooks-contrib 2026.7 produced a Windows `onedir`
+bundle through a durable spec and a packaging-only adapter that executes
+`backend.main` with package context. The installed keyring hook was directly
+verified to collect `keyring.backends` and copy keyring metadata. The initial
+spec's `SPECPATH` resolution failed before analysis and was corrected to the
+observed spec-directory behavior; the first frozen launch then disclosed the
+missing project-metadata fallback, fixed narrowly by bundling only
+`pyproject.toml`.
+
+The corrected copied executable ran on `127.0.0.1:8133` with system-only
+`PATH` and empty Python/uv/venv variables, loaded its Python DLLs from its own
+bundle, and had no Python/uv/venv child. Real health, empty-session, redacted
+settings, and MCP SSE responses were retained. Two fixed fake sentinels were
+used: the keyring sentinel survived restart and was cleared; the isolated
+file sentinel survived restart, the generated credential file had a direct
+non-inherited `MSI\wpedigo` FullControl ACL, and it was cleared. The isolated
+credential file and runtime were deleted afterward; repository `data/` hashes
+were unchanged.
+
+Observed validation: the exact backend command reproduced the known Windows
+default-temp `WinError 5` (**247 passed, 214 errors**), then the unchanged suite
+passed **461 tests in 30.69s** with worktree-local `TEMP`/`TMP` and
+`--basetemp`; frontend **138 passed** / production build / lint green; Cargo
+format and check passed; focused Ruff passed. The final bundle measured
+12,629,354 bytes for the executable and 122,797,389 bytes total.
+
+Item 34 remains **IN PROGRESS**. This mission did not add Tauri `externalBin`,
+Rust sidecar spawning/lifecycle, a production installer, or final credential
+packaging in the delivered Tauri application.

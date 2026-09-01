@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 032: 2026-08-31 CT
+Reconciled through Mission 033: 2026-08-31 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -47,6 +47,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 030 | **PASS (LOCAL)** | Backend support for Solo (single-worker) mode. `TwoWorkerRequest.worker_b_model` is now `Optional[str]` (default `None`); the route rejects the worker_b-absent + moderator hybrid with 422 **before** any provider resolver call; `worker_b_model: Optional[str]` threads through `RunRegistry.start`/`_run`/`_run_phase` and `orchestrator.multiplex_workers` (active seats computed locally; removed now-unused `SEATS`). For a Solo run, persisted `models` carry `worker_a` + `moderator: None` with the `worker_b` key absent, never passed to `multiplex_workers`, and no `moderator` events emitted. `persistence._validate` statically relaxes the structural guard from an exact three-key set to a subset-of-{worker_a,worker_b,moderator} with `worker_a` always present non-empty and `worker_b` never None/empty; Mix/Compare/old shapes still validate (proven by tests). Defensive no-hybrid guard in `_run_phase` (`moderator_model` and `worker_b_model` both present required). Zero changes to `history.py` (Solo turns already produce no worker_b message). New `test_modelmix_solo_mode.py` (7 route/orchestration tests: solo completed, solo failed, 422-before-resolver, defaults, solo-then-mix isolation, guardrails, cancellation) + new persistence validator tests. Validation: backend **460 passed**, `ruff` check clean; frontend **130 passed** / build / lint green. Frontend Solo mode out of scope — item 27 remains partially open | `030-solo-mode-backend.md` |
 | 031 | **PASS (LOCAL)** | Frontend Solo delivery, closing item 27 with Mission 030. Adds `solo` to the persisted mode vocabulary and Mix / Compare / Solo control. Solo renders only Worker A's selector, requires only Worker A, and omits `worker_b_model` plus `moderator_model` from the request object. Moderator and Worker B panels stay mounted but CSS-hidden; Worker A uses the existing single-column maximized visual treatment. Mode visibility remains independent from panel-view state, and a maximize target on a hidden seat cannot blank Solo. New `ModelMixSendSolo.test.jsx` (8 tests); Solo persistence tests extended; sole modified existing test is the necessary top-bar three-option assertion. Frontend **138 passed** / build / lint green; backend workspace-temp rerun **460 passed** after the exact command reproduced the known inaccessible default-temp `WinError 5`. Items 27 (Solo) and 28 (Compare) complete end to end | `031-solo-mode-frontend.md` |
 | 032 | **PASS (LOCAL)** | Tauri 2 toolchain check and minimal shell scaffold. Rust/Cargo and Windows C++ Build Tools/WebView2 were present; missing `cargo-tauri` was installed as CLI 2.11.4. Standard `src-tauri/` reuses the existing Vite dev server at `/modelmix` and `frontend/dist`, with no sidecar/backend-launch behavior. `cargo tauri dev` visibly opened the native ModelMix three-panel cockpit against the separately started backend. Frontend **138 passed** / build / lint green; `cargo check` green; backend workspace-temp rerun **460 passed** after the exact command reproduced the known inaccessible default-temp `WinError 5`. Begins item 34; installer, sidecar, and packaged credential re-verification remain open | `032-tauri-toolchain-and-shell.md` |
+| 033 | **PASS (LOCAL)** | Standalone Windows PyInstaller `onedir` backend bundle proven from the frozen executable: sanitized no-Python/uv/venv launch, real health/session/settings/MCP routes, cross-process Windows keyring retrieval and cleanup, file-mode restart plus non-inherited current-user FullControl ACL, clean Ctrl+C/no orphan, valid JSON/no credential temp, and unchanged repository data. Backend **461 passed** with the workspace-temp workaround after the exact command reproduced the known default-temp `WinError 5` (**247 passed, 214 errors**); frontend **138 passed** / build / lint green; Rust format/check and focused Ruff green. Item 34 remains open for Tauri sidecar integration/lifecycle, installer delivery, and final credential packaging | `033-pyinstaller-backend-bundle.md` |
 
 
 **Mission 008 is present on `main` and its persistence tests pass.**
@@ -373,14 +374,22 @@ assert the old behavior is byte-for-byte unchanged); see `023-cancellation-race-
 
 ## PHASE 8 — Desktop Packaging
 
-### 34. Package single-window app with Tauri 2 — **IN PROGRESS (Mission 032 proves the minimal dev shell)**
+### 34. Package single-window app with Tauri 2 — **IN PROGRESS (Missions 032–033 prove the dev shell and standalone backend bundle)**
 
 Mission 032 added the standard Tauri 2 `src-tauri/` shell and directly observed
 the existing ModelMix cockpit in a native Windows window via `cargo tauri dev`.
 The shell reuses the Vite frontend and separately started backend; it contains
-no Python sidecar or backend-launch configuration. A production installer,
-packaged backend lifecycle, and the deferred Tauri credential-storage
-re-verification remain separate open work.
+no Python sidecar or backend-launch configuration. Mission 033 separately
+proved a Windows PyInstaller `onedir` backend launched directly from an
+isolated copy: the frozen executable served the real API/MCP routes, retrieved
+and cleared a fake keyring sentinel across restart, preserved and cleared a
+second fake file sentinel across restart, and produced the required
+non-inherited current-user FullControl ACL. The isolated credential file was
+deleted with the mission runtime and repository data remained unchanged.
+
+Item 34 remains open. Tauri sidecar wiring and lifecycle management, a real
+installer build/delivery, packaged frontend/backend integration, and final
+credential behavior in the delivered Tauri package are not yet proven.
 
 ### 35. Measure before optimizing — **OPEN**
 
