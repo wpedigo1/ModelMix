@@ -1113,3 +1113,25 @@ deliberately-deferred `_dev_cors_regex` finding tracked as sub-item 31a (and
 the custom-endpoint URL allow-list note as 31b). Item 34 relabeled to
 "SUBSTANTIALLY COMPLETE" to stay explicitly open on MSI, code signing, CSP
 hardening, and dynamic ports per Mission 035.
+
+## Mission 037 Result
+
+Open-source credits and dependency-license inventory (Punch Board item 4 closed
+as SATISFIED with Mission 017). Three tool-generated inventory files, each from
+real package metadata and committed as-is under `docs/modelmix/licenses/`:
+`THIRD-PARTY-LICENSES-python.txt` (`uv run pip-licenses --order=name
+--with-authors`, pip-licenses 5.5.5, against the project `.venv`),
+`THIRD-PARTY-LICENSES-frontend.txt` (`npx.cmd --yes license-checker --start .`
+against `frontend/node_modules`), and `THIRD-PARTY-LICENSES-rust.txt`
+(`cargo license --color never`, cargo-license 0.7.0, against
+`src-tauri/Cargo.lock`). `OPEN_SOURCE_CREDITS.md` added at the repo root with the
+already-verified MIT/copyright (Mission 017), the text-only AI Counsel
+attribution matching `README.md`, and all direct dependencies from the three
+ecosystems with licenses quoted exactly from the machine inventories. The
+cockpit About section gained one line linking to `OPEN_SOURCE_CREDITS.md` on the
+real `github.com/wpedigo1/ModelMix` URL. Spot-checked licenses: frontend direct
+deps all MIT (`react`, `react-markdown`, `vite`, `vitest`, `jsdom`, ...); Python
+runtime differs per package (`fastapi` MIT, `uvicorn` BSD-3-Clause, `httpx` BSD
+License, `yake` GPLv3, `python-multipart` Apache-2.0); Rust direct deps all
+`Apache-2.0 OR MIT`. No `pyproject.toml`/`package.json`/`Cargo.toml` changes; no
+runtime-or-permanent tool added to any manifest.

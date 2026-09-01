@@ -138,9 +138,9 @@ Verify provider streaming, SSE/reconnect, process-local run state, and credentia
 
 ## PHASE 1 — Own the Product Boundary
 
-### 4. Lock license and provenance — **PARTIAL — MISSION 017**
+### 4. Lock license and provenance — **SATISFIED — MISSIONS 017 + 037**
 
-Preserve MIT/copyright, add `OPEN_SOURCE_CREDITS.md`, visible credit, inherited-module provenance, and shipped dependency-license inventory. Mission 017 adds the visible credit and copyright/license surface in the cockpit About section; the remaining provenance/inventory artifacts stay open.
+Preserve MIT/copyright, add `OPEN_SOURCE_CREDITS.md`, visible credit, inherited-module provenance, and shipped dependency-license inventory. Mission 017 added the visible credit and copyright/license surface in the cockpit About section. Mission 037 added `OPEN_SOURCE_CREDITS.md` at the repo root (MIT/copyright, text-only AI Counsel attribution, curated direct-dependency licenses), the three tool-generated inventories in `docs/modelmix/licenses/` (Python `pip-licenses`, frontend `license-checker`, Rust `cargo-license`), and a one-line About-section pointer to the credits file on the real GitHub URL.
 
 ### 5. Lock chassis policy — **SUBSTANTIALLY SATISFIED**
 

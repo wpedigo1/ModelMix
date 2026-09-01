@@ -49,6 +49,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 034 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `034-frozen-aware-user-data-directory.md` |
 | 035 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `035-tauri-sidecar-wiring.md` |
 | 036 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed, documentation-only)** | Punch Board accuracy pass — see `PUNCH-BOARD.md` items 30/31 and Record Repair Note below |
+| 037 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `037-open-source-credits-and-license-inventory.md` |
 
 
 ## Mission 007 Provenance Clarification

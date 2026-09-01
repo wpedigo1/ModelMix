@@ -594,6 +594,7 @@ function AboutSection({ version }) {
         Origin: ModelMix began as a fork/evolution of The AI Counsel, an open-source multi-model AI project.
       </p>
       <p className="modelmix-settings-line"><a href="https://github.com/wpedigo1/ModelMix">github.com/wpedigo1/ModelMix</a></p>
+      <p className="modelmix-settings-line"><a href="https://github.com/wpedigo1/ModelMix/blob/main/OPEN_SOURCE_CREDITS.md">OPEN_SOURCE_CREDITS.md — open-source credits and dependency licenses</a></p>
     </div>
   );
 }
