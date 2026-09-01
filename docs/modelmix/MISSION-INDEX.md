@@ -1,6 +1,6 @@
 # ModelMix Mission Record Index
 
-Updated: 2026-08-31 CT
+Updated: 2026-09-01 CT
 
 This index reconciles completed implementation missions with the canonical engineering records in this repository.
 
@@ -47,6 +47,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 032 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `032-tauri-toolchain-and-shell.md` |
 | 033 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `033-pyinstaller-backend-bundle.md` |
 | 034 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `034-frozen-aware-user-data-directory.md` |
+| 035 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `035-tauri-sidecar-wiring.md` |
 
 
 ## Mission 007 Provenance Clarification

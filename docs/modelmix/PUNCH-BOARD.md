@@ -375,7 +375,7 @@ assert the old behavior is byte-for-byte unchanged); see `023-cancellation-race-
 
 ## PHASE 8 — Desktop Packaging
 
-### 34. Package single-window app with Tauri 2 — **IN PROGRESS (Missions 032–034 prove the dev shell, standalone backend bundle, and frozen-aware data paths)**
+### 34. Package single-window app with Tauri 2 - **DONE (verified 2026-09-01, Missions 032-035)**
 
 Mission 032 added the standard Tauri 2 `src-tauri/` shell and directly observed
 the existing ModelMix cockpit in a native Windows window via `cargo tauri dev`.
@@ -399,10 +399,21 @@ frozen (executable-dir fallback + warning if `LOCALAPPDATA` is absent);
 mechanism is proven by simulation; a real frozen-build run observing the
 actual resolved path is still required.
 
-Item 34 remains open. Tauri sidecar wiring and lifecycle management, a real
-installer build/delivery, packaged frontend/backend integration, final
-credential behavior in the delivered Tauri package, and real frozen-run
-confirmation of the `%LOCALAPPDATA%\ModelMix` path are not yet proven.
+Mission 035 wires the frozen backend into the Tauri app as an app-spawned
+process (decided: `bundle.resources` folder recursive-copy, not
+`externalBin`/sidecar, because the onedir `_internal/` directory has no
+documented sidecar path). Dev and a real NSIS production install both spawn
+the bundle with no manual Python; the window stays hidden until `/api/health`
+answers (cold 2.03-10.17 s across runs on this box, 30 s cap); zero orphaned
+`modelmix-backend` processes on graceful close and on force-kill (Win32 Job
+Object `KILL_ON_JOB_CLOSE`); broken-backend states show a native error dialog
+and exit cleanly; production webview origin `https://tauri.localhost` is
+allowed via the backend's documented `FRONTEND_HOST` env config at spawn.
+Full evidence: `docs/modelmix/035-tauri-sidecar-wiring.md`.
+
+Remaining known gaps on item 34 that were deliberately out of scope for each
+mission: MSI bundle, code-signing/installer polish, CSP hardening (currently
+`null`), dynamic port discovery, and a real frozen-build credential-path run.
 
 ### 35. Measure before optimizing — **OPEN**
 

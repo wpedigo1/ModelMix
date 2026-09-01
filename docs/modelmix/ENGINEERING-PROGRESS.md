@@ -1,6 +1,6 @@
 # ModelMix Engineering Progress
 
-Updated: 2026-08-31 CT
+Updated: 2026-09-01 CT
 
 
 This is the current implementation-state overlay for the locked ModelMix Punch Board. It records observed implementation progress without silently reordering or deleting locked board items.
@@ -10,7 +10,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–034**.
+Completed and locally verified implementation missions: **001–035**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -1062,3 +1062,38 @@ a real PyInstaller run actually lands persisted files in
 `%LOCALAPPDATA%\ModelMix` still needs the same hands-on proof Mission 033
 required and stays with item 34. Dev-mode `data/` behavior and every
 pre-existing test are unchanged.
+
+## Mission 035 Result
+
+Mission 035 wired the frozen backend into the Tauri 2 app as an app-spawned
+process and closed item 34. Decisions: `bundle.resources` recursive copy of
+`dist/modelmix-backend/` (externalBin/sidecar cannot carry the onedir
+`_internal/` directory), Rust `std::process::Command` spawn with
+`CREATE_NO_WINDOW` (no shell-plugin capability needed), and a Win32 Job
+Object (`KILL_ON_JOB_CLOSE`) plus `RunEvent::Exit` teardown for zero orphans.
+
+Observed behavior (all runs on this box):
+
+- Dev (`cargo tauri dev`, invoked from repo root): app spawned the bundle —
+  no manual Python. Cold readiness 4.57 s (first) / 10.17 s (post-fix
+  resource copy). WebView2 held an established connection to
+  `127.0.0.1:8001`. Graceful close → 0 orphaned `modelmix-backend`, port free.
+- Production (`cargo tauri build --bundles nsis`, silent install, ran the
+  installed exe): packaged app spawned the bundled backend from
+  `<install>/_up_/dist/modelmix-backend/` — ready in 2.03 s; window
+  `ModelMix` responding; `Origin: https://tauri.localhost` accepted
+  (Access-Control-Allow-Origin returned, `Vary: Origin`) via the backend's
+  documented `FRONTEND_HOST` env supplied at spawn. Health verified.
+- Zero orphans on graceful close AND on force-kill (`taskkill /F`) in the
+  NSIS install.
+- Broken-backend states: spawn failure and 30 s readiness timeout each show
+  a native error dialog and exit cleanly; main window stays gated.
+
+Validation observed: backend `468 passed` (32.0 s), frontend `138 passed` /
+lint clean / build ok, `cargo clippy --all-targets` clean. Full evidence:
+`docs/modelmix/035-tauri-sidecar-wiring.md`.
+
+Remaining open items on the packaged app (out of scope, per mission): MSI
+bundle, code-signing/installer polish, CSP hardening (`csp` still `null`),
+dynamic port discovery, and a real frozen-build local-appdata credential
+proof.
