@@ -48,6 +48,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 033 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `033-pyinstaller-backend-bundle.md` |
 | 034 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `034-frozen-aware-user-data-directory.md` |
 | 035 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `035-tauri-sidecar-wiring.md` |
+| 036 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed, documentation-only)** | Punch Board accuracy pass — see `PUNCH-BOARD.md` items 30/31 and Record Repair Note below |
 
 
 ## Mission 007 Provenance Clarification
@@ -727,5 +728,7 @@ The accepted repository state is what is reachable from current `main`. Historic
 On 2026-08-28 CT, project bookkeeping was reconciled after detecting that Mission 001 and Mission 007 reports were missing from `main` even though corresponding work/evidence existed elsewhere. Mission 001 was recovered from its verified Claude branch object; Mission 007 was reconstructed from the observed ChatGPT Work result and verified GitHub commit.
 
 On 2026-08-29 CT, the current Library Punch Board and repo project records were reconciled. The authoritative Punch Board was copied into `docs/modelmix/PUNCH-BOARD.md`, while this index and `ENGINEERING-PROGRESS.md` were refreshed to point to the same current mission state and next gap.
+
+On 2026-09-01 CT (Mission 036, documentation-only), Punch Board items 30 and 31 were corrected against already-completed evidence and closed: item 30 citing Missions 026/027 (current-model ACL hardening + startup remediation) and 033/034 (real frozen-executable keyring/ACL proofs + frozen `%LOCALAPPDATA%\ModelMix` credential location); item 31 citing Mission 025 (admin-auth guards on 20 endpoints closing the SSRF→credential-exfiltration path), with the deliberately-deferred `_dev_cors_regex` finding carried forward as sub-item 31a (and the custom-endpoint URL allow-list note as 31b). Item 34 was relabeled from "DONE" to "SUBSTANTIALLY COMPLETE" to stay explicitly open on MSI, code signing, CSP hardening, and dynamic ports. No code changed.
 
 Later on 2026-08-29 CT, Mission 007.5 was inserted as a security/compatibility interlock after dependency remediation reached a clean audit but exposed an MCP 2.x API incompatibility in inherited MCP code. Mission 007.5 subsequently completed and was verified on remote `main` at `e018ed06807beda2c11531f065b2d4181c346ca8`.

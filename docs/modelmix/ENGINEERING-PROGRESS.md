@@ -1097,3 +1097,19 @@ Remaining open items on the packaged app (out of scope, per mission): MSI
 bundle, code-signing/installer polish, CSP hardening (`csp` still `null`),
 dynamic port discovery, and a real frozen-build local-appdata credential
 proof.
+
+## Mission 036 Result
+
+Documentation-only accuracy pass (no code changed). Punch Board item 30
+(verify credential storage in the actual packaging model) closed against
+completed evidence: Missions 026/027 (real `icacls` ACL hardening + once-per-
+process startup remediation) and 033/034 (real frozen-executable keyring
+round-trip across a process restart with distinct PIDs, ACL proof, and the
+frozen `%LOCALAPPDATA%\ModelMix` credential location). Item 31 (harden local
+backend boundary) closed against Mission 025 (admin-auth guards on 20
+endpoints closing the `test-custom-endpoint` SSRF→credential-exfiltration
+vulnerability; 27-test guard suite + endpoint audit table), with the
+deliberately-deferred `_dev_cors_regex` finding tracked as sub-item 31a (and
+the custom-endpoint URL allow-list note as 31b). Item 34 relabeled to
+"SUBSTANTIALLY COMPLETE" to stay explicitly open on MSI, code signing, CSP
+hardening, and dynamic ports per Mission 035.

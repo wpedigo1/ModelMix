@@ -322,19 +322,53 @@ Independent bounded seat histories, Moderator history, hot-swap continuity, and 
 
 ## PHASE 7 — Security Hardening for Alpha
 
-### 30. Verify credential storage in actual packaging model — **OPEN (current-model half closes with Mission 027; Tauri half deferred to item 34)**
+### 30. Verify credential storage in actual packaging model — **CLOSED (current-model half: Missions 026/027; Tauri/frozen half: Missions 033/034)**
 
-Missions 026/027 implemented and verified the current-model (local Python
-server) half: real Windows per-user ACL hardening of `data/credentials.json`
-via `icacls` on write, plus automatic once-per-process remediation of a
-pre-existing unhardened file on first touch (read or write); Unix `0o600`
-unchanged; `file` default mode and `get_effective_mode()` unchanged by declared
-boundary. The remaining, explicitly-deferred half is a SEPARATE later
-re-verification of credential storage once Tauri 2 packaging (item 34) actually
-exists, since Tauri's own storage/IPC model cannot be assumed to inherit these
-guarantees.
+Current-model half (Missions 026/027): real Windows per-user ACL hardening of
+`data/credentials.json` via `icacls "<path>" /inheritance:r /grant:r
+"<current-user>":F` after each atomic write (Mission 026, proven by
+`test_windows_write_invokes_icacls_args`), plus automatic **once-per-process
+remediation** of a pre-existing unhardened file on its first touch, read or
+write (Mission 027, proven by
+`test_read_triggers_remediation_on_existing_unhardened_file`). No new
+dependency (`subprocess` + `icacls` only); non-Windows/containers stay a
+logged no-op, never a write-path crash.
 
-### 31. Harden local backend boundary — **OPEN**
+Tauri/frozen half (Missions 033/034): Mission 033 ran the **real PyInstaller
+frozen executable** and, inside it, proved a real Windows keyring sentinel
+round-trip across a genuine process restart (distinct PIDs), the file
+credential backend across a second restart, and the expected non-inherited
+current-user Windows ACL (`icacls` proof) — no simulation. Mission 034 then
+fixed the credential storage **location** for frozen builds:
+`_internal\data\credentials.json` → `%LOCALAPPDATA%\ModelMix\credentials.json`
+(frozen), repo `data/` byte-identical when not frozen.
+
+### 31. Harden local backend boundary — **CLOSED (Mission 025)**
+
+Mission 025 closed the confirmed SSRF → stored-credential-exfiltration path
+(`POST /api/settings/test-custom-endpoint`) by adding
+`dependencies=[Depends(_require_admin)]` in `backend/main.py` to **20
+credential-sensitive endpoints** (16 required + 4 judgment-call extensions),
+with the full, unchanged `_require_admin` semantics: Bearer token required when
+`LLM_COUNCIL_ADMIN_TOKEN` is set, otherwise loopback-peers-only
+(`127.0.0.1`/`::1`/`localhost`) plus forwarded-header spoofing protection.
+Evidence: `backend/tests/test_admin_guard_credential_endpoints.py` (27 tests)
+and the endpoint-by-endpoint audit table in
+`docs/modelmix/025-harden-local-backend-boundary.md`.
+
+Deliberately-deferred findings from Mission 025, carried forward on the board
+so they are not lost (still open, NOT fixed by this or any later mission):
+
+- **31a. `_dev_cors_regex` over-permissive origin matching.** In
+  `backend/main.py`, `_dev_cors_regex` uses `(?:\d{1,3}\.){3}\d{1,3}`, which
+  matches **any** dotted-IPv4 origin on **any** port — no private/loopback-range
+  restriction. Flagged in Mission 025 as a review follow-up; still real, still
+  not fixed. Tracked as its own item.
+- **31b. Custom-endpoint URL allow-listing.** The arbitrary
+  custom-endpoint-URL SSRF is now admin-gated, but a loopback-local attacker
+  (or a compromised local process) could still point the custom-endpoint URL at
+  an internal host. Mission 025 recommended a separate URL allow-list review;
+  that recommendation also remains open.
 
 ### 32. Add basic structured observability — **OPEN**
 
@@ -375,7 +409,7 @@ assert the old behavior is byte-for-byte unchanged); see `023-cancellation-race-
 
 ## PHASE 8 — Desktop Packaging
 
-### 34. Package single-window app with Tauri 2 - **DONE (verified 2026-09-01, Missions 032-035)**
+### 34. Package single-window app with Tauri 2 — **SUBSTANTIALLY COMPLETE (Missions 032–035) — still OPEN on MSI bundle, code signing, CSP hardening, and dynamic ports**
 
 Mission 032 added the standard Tauri 2 `src-tauri/` shell and directly observed
 the existing ModelMix cockpit in a native Windows window via `cargo tauri dev`.
