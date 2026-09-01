@@ -1,7 +1,7 @@
 # ModelMix Punch Board
 
 Locked: 2026-08-27 17:39 CT  
-Reconciled through Mission 033: 2026-08-31 CT
+Reconciled through Mission 034: 2026-08-31 CT
 
 Status: **BUILD PLAN LOCKED FOR ALPHA**
 
@@ -48,6 +48,7 @@ Changes to this order require a concrete technical blocker or newly verified fac
 | 031 | **PASS (LOCAL)** | Frontend Solo delivery, closing item 27 with Mission 030. Adds `solo` to the persisted mode vocabulary and Mix / Compare / Solo control. Solo renders only Worker A's selector, requires only Worker A, and omits `worker_b_model` plus `moderator_model` from the request object. Moderator and Worker B panels stay mounted but CSS-hidden; Worker A uses the existing single-column maximized visual treatment. Mode visibility remains independent from panel-view state, and a maximize target on a hidden seat cannot blank Solo. New `ModelMixSendSolo.test.jsx` (8 tests); Solo persistence tests extended; sole modified existing test is the necessary top-bar three-option assertion. Frontend **138 passed** / build / lint green; backend workspace-temp rerun **460 passed** after the exact command reproduced the known inaccessible default-temp `WinError 5`. Items 27 (Solo) and 28 (Compare) complete end to end | `031-solo-mode-frontend.md` |
 | 032 | **PASS (LOCAL)** | Tauri 2 toolchain check and minimal shell scaffold. Rust/Cargo and Windows C++ Build Tools/WebView2 were present; missing `cargo-tauri` was installed as CLI 2.11.4. Standard `src-tauri/` reuses the existing Vite dev server at `/modelmix` and `frontend/dist`, with no sidecar/backend-launch behavior. `cargo tauri dev` visibly opened the native ModelMix three-panel cockpit against the separately started backend. Frontend **138 passed** / build / lint green; `cargo check` green; backend workspace-temp rerun **460 passed** after the exact command reproduced the known inaccessible default-temp `WinError 5`. Begins item 34; installer, sidecar, and packaged credential re-verification remain open | `032-tauri-toolchain-and-shell.md` |
 | 033 | **PASS (LOCAL)** | Standalone Windows PyInstaller `onedir` backend bundle proven from the frozen executable: sanitized no-Python/uv/venv launch, real health/session/settings/MCP routes, cross-process Windows keyring retrieval and cleanup, file-mode restart plus non-inherited current-user FullControl ACL, clean Ctrl+C/no orphan, valid JSON/no credential temp, and unchanged repository data. Backend **461 passed** with the workspace-temp workaround after the exact command reproduced the known default-temp `WinError 5` (**247 passed, 214 errors**); frontend **138 passed** / build / lint green; Rust format/check and focused Ruff green. Item 34 remains open for Tauri sidecar integration/lifecycle, installer delivery, and final credential packaging | `033-pyinstaller-backend-bundle.md` |
+| 034 | **PASS (LOCAL)** | Frozen-aware user data directory, fixing the Mission 033 finding (`_internal\data\credentials.json`). New `backend/user_data_dir.py`: `is_frozen()` (standard `getattr(sys, "frozen", False)`) and `resolve_user_data_dir()` — repo `data/` when not frozen (same path the three files already used), `%LOCALAPPDATA%\ModelMix` when frozen, executable-dir fallback with a clear warning if `LOCALAPPDATA` is absent, and `mkdir(exist_ok=True)` before return. `CREDENTIALS_FILE`, `SETTINGS_FILE`, and `personas._DATA_DIR` now derive from it; no other module, keyring/store facade, route, `icacls` hardening, `src-tauri/`, or `frontend/` change; stdlib only. New `test_user_data_dir.py` (7 regression/simulation tests). Backend **468 passed** (461 unmodified + 7 new); focused credential run **24 passed**; `ruff` clean; frontend **138 passed** / build / lint green (required, unchanged). Frozen-mode path proven by simulation; real frozen-build confirmation deferred with item 34 | `034-frozen-aware-user-data-directory.md` |
 
 
 **Mission 008 is present on `main` and its persistence tests pass.**
@@ -374,7 +375,7 @@ assert the old behavior is byte-for-byte unchanged); see `023-cancellation-race-
 
 ## PHASE 8 — Desktop Packaging
 
-### 34. Package single-window app with Tauri 2 — **IN PROGRESS (Missions 032–033 prove the dev shell and standalone backend bundle)**
+### 34. Package single-window app with Tauri 2 — **IN PROGRESS (Missions 032–034 prove the dev shell, standalone backend bundle, and frozen-aware data paths)**
 
 Mission 032 added the standard Tauri 2 `src-tauri/` shell and directly observed
 the existing ModelMix cockpit in a native Windows window via `cargo tauri dev`.
@@ -386,10 +387,22 @@ and cleared a fake keyring sentinel across restart, preserved and cleared a
 second fake file sentinel across restart, and produced the required
 non-inherited current-user FullControl ACL. The isolated credential file was
 deleted with the mission runtime and repository data remained unchanged.
+Mission 033's evidence also confirmed the frozen path defect —
+`_internal\data\credentials.json` — that Mission 034 fixes with a frozen-aware
+user data directory.
+
+Mission 034 closes the credential/data-path correctness finding: a new
+`backend/user_data_dir.py` resolves the repo `data/` folder when not frozen
+(byte-for-byte unchanged dev behavior) and `%LOCALAPPDATA%\ModelMix` when
+frozen (executable-dir fallback + warning if `LOCALAPPDATA` is absent);
+`credentials.json`, `settings.json`, and persona data all derive from it. The
+mechanism is proven by simulation; a real frozen-build run observing the
+actual resolved path is still required.
 
 Item 34 remains open. Tauri sidecar wiring and lifecycle management, a real
-installer build/delivery, packaged frontend/backend integration, and final
-credential behavior in the delivered Tauri package are not yet proven.
+installer build/delivery, packaged frontend/backend integration, final
+credential behavior in the delivered Tauri package, and real frozen-run
+confirmation of the `%LOCALAPPDATA%\ModelMix` path are not yet proven.
 
 ### 35. Measure before optimizing — **OPEN**
 

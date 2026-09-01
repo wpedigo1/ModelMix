@@ -3,11 +3,12 @@
 import json
 import os
 import tempfile
-from pathlib import Path
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 
-_DATA_DIR = Path(__file__).parent.parent / "data"
+from .user_data_dir import resolve_user_data_dir
+
+_DATA_DIR = resolve_user_data_dir()
 _OVERRIDES_FILE = _DATA_DIR / "persona_overrides.json"
 
 

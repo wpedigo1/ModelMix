@@ -46,6 +46,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 031 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `031-solo-mode-frontend.md` |
 | 032 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `032-tauri-toolchain-and-shell.md` |
 | 033 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `033-pyinstaller-backend-bundle.md` |
+| 034 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `034-frozen-aware-user-data-directory.md` |
 
 
 ## Mission 007 Provenance Clarification

@@ -13,12 +13,13 @@ import os
 import subprocess
 import sys
 import tempfile
-from pathlib import Path
 from typing import Dict, Optional
+
+from ..user_data_dir import resolve_user_data_dir
 
 logger = logging.getLogger(__name__)
 
-CREDENTIALS_FILE = Path(__file__).parent.parent.parent / "data" / "credentials.json"
+CREDENTIALS_FILE = resolve_user_data_dir() / "credentials.json"
 
 # Fired only once per process (see _warn_if_unhardened).
 _startup_warned = False

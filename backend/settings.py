@@ -2,7 +2,6 @@
 
 import json
 import logging
-from pathlib import Path
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from .search import SearchProvider
@@ -23,6 +22,7 @@ from .advisor_prompts import (
     ADVISOR_VERDICT_PROMPT,
     ADVISOR_TIEBREAKER_PROMPT,
 )
+from .user_data_dir import resolve_user_data_dir
 
 
 class AdvisorPreset(BaseModel):
@@ -52,7 +52,7 @@ class CouncilPreset(BaseModel):
 logger = logging.getLogger(__name__)
 
 # Settings file path
-SETTINGS_FILE = Path(__file__).parent.parent / "data" / "settings.json"
+SETTINGS_FILE = resolve_user_data_dir() / "settings.json"
 
 # Default models (matches original llm-council defaults)
 DEFAULT_COUNCIL_MODELS = ["", ""]
