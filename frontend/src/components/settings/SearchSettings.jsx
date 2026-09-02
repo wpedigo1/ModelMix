@@ -369,7 +369,7 @@ export default function SearchSettings({
                                 onChange={() => setSearchKeywordExtraction('yake')}
                             />
                             <div className="provider-info">
-                                <span className="provider-name">Smart Keywords (YAKE)</span>
+                                <span className="provider-name">Smart Keywords (RAKE)</span>
                                 <span className="provider-description">
                                     Extract key terms from your prompt before searching. Useful if you paste very long prompts that confuse the search engine.
                                 </span>

@@ -50,6 +50,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 035 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `035-tauri-sidecar-wiring.md` |
 | 036 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed, documentation-only)** | Punch Board accuracy pass — see `PUNCH-BOARD.md` items 30/31 and Record Repair Note below |
 | 037 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `037-open-source-credits-and-license-inventory.md` |
+| 038 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `038-remove-gplv3-yake-dependency.md` |
 
 
 ## Mission 007 Provenance Clarification
@@ -717,6 +718,36 @@ B cockpit, controls, and honest no-configured-models state. Validation observed:
 workspace-temp rerun **460 passed** after the exact command reproduced the
 known default-temp `WinError 5`. Item 34 is started but remains open for the
 Python sidecar, installer, and packaged credential-storage verification.
+
+## Mission 038 Result
+
+**Mission 038 is implemented, verified, and pushed.**
+
+Mission 038 removes the GPLv3-licensed `yake` runtime dependency that Mission
+037's inventory exposed (and Mission 033's PyInstaller bundle embeds) and
+replaces it with a stdlib-only RAKE implementation in `backend/search.py` —
+no new dependency. The public `extract_search_keywords(query, max_keywords)`
+contract, the `"yake"` config-mode token (`"direct"` / `"yake"` / `"llm"`, kept
+for compatibility across `main.py` validation, `settings.py`, the MCP tool, and
+the frontend), and every existing noise/role-play/dedup filter were preserved
+byte-for-byte; only the keyword source changed. `pyproject.toml` (yake row
+removed) and `uv.lock` (yake + its transitive `numpy`/`regex`/`segtok`/`tabulate`
+gone) were updated, and the Python license inventory was regenerated with the
+real `pip-licenses` command (yake absent; remaining GPL rows are dev-only
+`pyinstaller`/`pyinstaller-hooks-contrib`, GPLv2). RAKE is implemented from the
+standard algorithm (stopword-split spans, 1–3 word candidate n-grams,
+degree/frequency word scoring, phrase score = sum, ascending-by-score return to
+match the YAKE sort convention the consumer loop already expects), deterministic
+and dependency-free. First-ever tests for `search.py` added
+(`backend/tests/test_search_keywords.py`, 6 tests). Validation observed: search
+tests **6 passed**; full backend **474 passed** (468 prior + 6 new,
+`--basetemp` workspace override for the known Windows temp-dir issue); frontend
+**138 passed**, build green, lint clean (settings label text updated to
+`Smart Keywords (RAKE)`; config value unchanged). Quality is comparable to YAKE,
+not identical (documented per-query before/after table in the report);
+`pip-licenses` also does not list itself in its own output, which corrected the
+Mission 037 credits note. Closes the GPLv3 exposure from Missions 033/037 and
+advances Punch Board item 4.
 
 ## Evidence Rule
 

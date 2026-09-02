@@ -343,7 +343,7 @@ If settings fetch fails while backend is up: includes `"settings_error": "..."`.
 | Value | Behaviour |
 |-------|-----------|
 | `"direct"` | Send exact query to search engine (default) |
-| `"yake"` | Extract key terms with YAKE before searching |
+| `"yake"` | Extract key terms from the query before searching (stdlib RAKE extraction) |
 | `"llm"` | Chairman model reformulates the query (skipped for DuckDuckGo) |
 
 **`set_api_key` valid providers:** `openrouter`, `openai`, `anthropic`, `google`, `mistral`, `deepseek`, `groq`, `nvidia`, `opencode` (alias for `opencode-zen` / `opencode-go` — both products share the single `opencode_api_key` field), `tinyfish`, `tavily`, `brave`, `serper`.

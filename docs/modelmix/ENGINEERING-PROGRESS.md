@@ -1135,3 +1135,29 @@ runtime differs per package (`fastapi` MIT, `uvicorn` BSD-3-Clause, `httpx` BSD
 License, `yake` GPLv3, `python-multipart` Apache-2.0); Rust direct deps all
 `Apache-2.0 OR MIT`. No `pyproject.toml`/`package.json`/`Cargo.toml` changes; no
 runtime-or-permanent tool added to any manifest.
+
+## Mission 038 Result
+
+Removed the GPLv3 `yake` runtime dependency (finding of Mission 037) from
+`pyproject.toml`, `uv.lock`, and all imports, replacing it with a stdlib-only
+RAKE implementation in `backend/search.py` (`_RAKE_PHRASE_STOPWORDS` +
+`_rake_extract_keywords`, implemented from the standard algorithm:
+stopword-split spans, 1–3 word candidate n-grams, degree/frequency word
+scoring, phrase score = sum, returned ascending by score to match the YAKE
+sort convention the untouched consumer expects). The public
+`extract_search_keywords` contract, the `"yake"` config-mode token (kept across
+`main.py`/`settings.py`/MCP tool/frontend for compatibility), and all existing
+noise/role-play/dedup filters were preserved byte-for-byte; only comments,
+docstrings, the `TOOLS.md`/`SKILL.md` mode descriptions, and the frontend
+settings label ("Smart Keywords (RAKE)") changed. Regenerated
+`THIRD-PARTY-LICENSES-python.txt` with the real `pip-licenses` command (yake
+absent; only dev-only GPLv2 `pyinstaller`/`pyinstaller-hooks-contrib` remain);
+removed the `yake` row from `OPEN_SOURCE_CREDITS.md` and corrected the note
+(`pip-licenses` does not list itself). First test coverage for `search.py` added
+(`backend/tests/test_search_keywords.py`, 6 tests). Validation observed:
+search tests **6 passed**; full backend **474 passed** (468 prior + 6 new,
+`--basetemp` override for the known Windows temp-dir issue); frontend **138
+passed**, build green, lint clean; `rg` proves no `yake` in
+`pyproject.toml`/`uv.lock`/backend imports. Quality is comparable to YAKE, not
+identical (before/after table in the report). Closes the GPLv3 exposure from
+Missions 033/037; Punch Board item 4 now cites Missions 017 + 037 + 038.

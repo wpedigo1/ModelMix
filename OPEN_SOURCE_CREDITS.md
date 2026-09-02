@@ -51,7 +51,6 @@ Runtime dependencies:
 | `pdfplumber` | MIT License |
 | `python-multipart` | Apache-2.0 |
 | `ddgs` | MIT |
-| `yake` | GNU General Public License v3 (GPLv3) |
 | `mcp` (with `cli` extra) | MIT License |
 | `keyring` | MIT |
 
@@ -65,9 +64,9 @@ Development dependencies:
 | `respx` | BSD License |
 | `ruff` | MIT |
 
-Note: `pip-licenses`, `prettytable`, and `wcwidth` also appear in the Python
-inventory because the inspection tool was installed into the same environment at
-generation time; they are not project dependencies.
+Note: `pip-licenses` (the inspection tool) and its helper packages do not
+appear in the Python inventory — it omits itself from its own report — and they
+are not project dependencies.
 
 ## Frontend dependencies (from `frontend/package.json`)
 

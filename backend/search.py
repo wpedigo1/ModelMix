@@ -1,7 +1,7 @@
 """Web search module with multiple provider support."""
 
 from ddgs import DDGS
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Optional, Set, Tuple
 from enum import Enum
 import ipaddress
 import logging
@@ -9,8 +9,8 @@ import httpx
 import os
 import time
 import asyncio
-import yake
 import re
+from collections import Counter
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -19,23 +19,104 @@ logger = logging.getLogger(__name__)
 # Current year for temporal context
 CURRENT_YEAR = datetime.now().year
 
-# YAKE keyword extractor configuration
-_keyword_extractor: Optional[yake.KeywordExtractor] = None
+# RAKE (Rapid Automatic Keyword Extraction) keyword extraction.
+# Implemented here with the standard library only (re + collections) - no
+# external dependency. This replaces the previous YAKE library usage. The sort
+# convention is preserved: returned (phrase, score) tuples are ordered ASCENDING
+# by score, i.e. LOWER score = MORE important, the direction the existing
+# filtering loop in extract_search_keywords iterates in.
+
+# Words that mark phrase boundaries for RAKE candidate splitting. Standard
+# English stopwords only. NOISE_WORDS / NOISE_PHRASES / ROLE_PLAY_TITLES are
+# intentionally separate pre-existing filters and are unchanged.
+_RAKE_PHRASE_STOPWORDS = frozenset({
+    'a', 'an', 'the', 'and', 'or', 'but', 'if', 'then', 'else', 'when',
+    'while', 'for', 'of', 'to', 'in', 'on', 'at', 'by', 'with', 'without',
+    'from', 'into', 'onto', 'over', 'under', 'through', 'between', 'among',
+    'around', 'about', 'after', 'before', 'until', 'during',
+    'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am', 'do', 'does',
+    'did', 'have', 'has', 'had', 'will', 'would', 'can', 'could',
+    'should', 'may', 'might', 'must', 'shall', 'not', 'no', 'nor', 'so',
+    'as', 'than', 'that', 'this', 'these', 'those', 'there', 'here', 'it',
+    'its', 'you', 'your', 'i', 'we', 'our', 'they', 'their', 'he', 'she',
+    'them', 'us', 'me', 'my', 'what', 'which', 'who', 'whom', 'whose',
+    'how', 'why',
+})
 
 
-def get_keyword_extractor() -> yake.KeywordExtractor:
-    """Get or create YAKE keyword extractor (singleton for efficiency)."""
-    global _keyword_extractor
-    if _keyword_extractor is None:
-        _keyword_extractor = yake.KeywordExtractor(
-            lan="en",           # Language
-            n=3,                # Max n-gram size (up to 3-word phrases)
-            dedupLim=0.3,       # Stricter deduplication
-            dedupFunc='seqm',   # Sequence matcher for dedup
-            top=20,             # Extract more candidates, we'll filter
-            features=None       # Use default features
-        )
-    return _keyword_extractor
+def _rake_extract_keywords(text: str) -> List[Tuple[str, float]]:
+    """
+    RAKE (Rapid Automatic Keyword Extraction) implemented stdlib-only.
+
+    Splits the (already-preprocessed) text into candidate phrases at
+    stopword/punctuation boundaries, generates phrases up to 3 words (matching
+    the previous n=3 behavior), and scores each phrase as the sum of its word
+    scores, where each word score is degree(word) / frequency(word) with
+    degree(word) = its own frequency plus the frequencies of the other words it
+    co-occurs with inside candidate phrases.
+
+    Returns List[Tuple[str, float]] ordered ascending by score (LOWER score =
+    MORE important), matching the ordering the caller's existing filtering loop
+    expects. Returns [] when no candidates can be formed.
+    """
+    if not text or not text.strip():
+        return []
+
+    tokens = re.findall(r"[a-zA-Z0-9]+", text.lower())
+    if not tokens:
+        return []
+
+    # Split tokens into spans at phrase-boundary stopwords.
+    spans: List[List[str]] = []
+    current: List[str] = []
+    for tok in tokens:
+        if tok in _RAKE_PHRASE_STOPWORDS:
+            if current:
+                spans.append(current)
+                current = []
+        else:
+            current.append(tok)
+    if current:
+        spans.append(current)
+
+    # Candidate phrases: every contiguous 1..3 word window inside each span.
+    candidates: List[str] = []
+    seen: Set[str] = set()
+    for span in spans:
+        for size in range(1, 4):
+            if size > len(span):
+                break
+            for i in range(len(span) - size + 1):
+                phrase = " ".join(span[i:i + size])
+                if phrase not in seen:
+                    seen.add(phrase)
+                    candidates.append(phrase)
+
+    if not candidates:
+        return []
+
+    freq = Counter(tokens)
+
+    # Co-occurrence degree: for each word, its own frequency plus the sum of
+    # the frequencies of the other words it appears with inside one candidate
+    # phrase. RAKE scores each word as degree / frequency.
+    deg: Dict[str, float] = {w: float(freq[w]) for w in freq}
+    for phrase in candidates:
+        words = phrase.split()
+        for w in words:
+            for other in words:
+                if other != w:
+                    deg[w] += freq[other]
+
+    scored: List[Tuple[str, float]] = []
+    for phrase in candidates:
+        words = phrase.split()
+        score = sum(deg[w] / freq[w] for w in words)
+        scored.append((phrase, score))
+
+    # Lower score = more important (the convention the caller expects).
+    scored.sort(key=lambda item: item[1])
+    return scored
 
 
 # Noise words/phrases to filter out from extracted keywords
@@ -50,7 +131,7 @@ NOISE_WORDS = {
     'current', 'late', 'early', 'recent', 'today', 'now',
     # Common filler
     'like', 'using', 'use', 'way', 'things', 'something',
-    # Prepositions/articles (YAKE sometimes includes these)
+    # Prepositions/articles (extraction sometimes includes these)
     'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'and', 'or'
 }
 
@@ -385,7 +466,7 @@ def rerank_results(results: List[Dict], query: str, intent: str = "factual") -> 
 def _preprocess_query(query: str) -> str:
     """
     Remove noise phrases and role-play titles from query BEFORE keyword extraction.
-    This prevents YAKE from extracting words from these phrases.
+    This prevents RAKE from extracting words from these phrases.
     """
     import re
     cleaned = query
@@ -410,7 +491,7 @@ def _preprocess_query(query: str) -> str:
 
 def extract_search_keywords(query: str, max_keywords: int = 6) -> str:
     """
-    Extract keywords from a user query using YAKE.
+    Extract keywords from a user query using the stdlib RAKE extraction.
     Returns a space-separated string of keywords suitable for search engines.
 
     Args:
@@ -425,12 +506,12 @@ def extract_search_keywords(query: str, max_keywords: int = 6) -> str:
         return query.strip()
 
     try:
-        # Pre-process: Remove noise phrases and role-play titles BEFORE YAKE extraction
+        # Pre-process: Remove noise phrases and role-play titles BEFORE extraction
         cleaned_query = _preprocess_query(query)
 
-        extractor = get_keyword_extractor()
-        # YAKE returns list of (keyword, score) tuples, lower score = more important
-        keywords = extractor.extract_keywords(cleaned_query)
+        # RAKE returns list of (keyword, score) tuples ascending by score,
+        # lower score = more important
+        keywords = _rake_extract_keywords(cleaned_query)
 
         if not keywords:
             return query.strip()
@@ -480,12 +561,12 @@ def extract_search_keywords(query: str, max_keywords: int = 6) -> str:
         # Join into search query
         search_query = " ".join(final_keywords)
 
-        logger.info(f"YAKE extracted keywords: '{search_query}' from query: '{query[:50]}...'")
+        logger.info(f"RAKE extracted keywords: '{search_query}' from query: '{query[:50]}...'")
 
         return search_query if search_query else query.strip()
 
     except Exception as e:
-        logger.warning(f"YAKE keyword extraction failed: {e}, using original query")
+        logger.warning(f"RAKE keyword extraction failed: {e}, using original query")
         return query.strip()
 
 # Rate limit handling
@@ -540,7 +621,7 @@ async def perform_web_search(
         max_results: Maximum number of results to return (default 8, up from 5)
         provider: Which search provider to use
         full_content_results: Number of top results to fetch full content for (0 to disable)
-        keyword_extraction: "yake" for keyword extraction, "direct" for raw query
+        keyword_extraction: "yake" triggers RAKE keyword extraction, "direct" for raw query
         hybrid_mode: For DuckDuckGo, whether to combine web+news search (default True)
 
     Returns:

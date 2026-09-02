@@ -1379,7 +1379,7 @@ curl -X PUT http://localhost:8001/api/settings \
 | Value | Behaviour |
 |-------|-----------|
 | `"direct"` | Send the exact user query to the search engine (default, recommended) |
-| `"yake"` | Extract key terms with YAKE before searching — useful for very long prompts |
+| `"yake"` | Extract key terms from the query before searching (stdlib RAKE extraction) — useful for very long prompts |
 | `"llm"` | Use the Chairman model to reformulate the query into an optimal search term — slower but can improve results for complex questions |
 
 > **DuckDuckGo note:** DDG applies its own built-in query optimisation internally. `"direct"` is recommended when using DuckDuckGo; `"llm"` is skipped for DDG even if selected.
