@@ -736,15 +736,19 @@ gone) were updated, and the Python license inventory was regenerated with the
 real `pip-licenses` command (yake absent; remaining GPL rows are dev-only
 `pyinstaller`/`pyinstaller-hooks-contrib`, GPLv2). RAKE is implemented from the
 standard algorithm (stopword-split spans, 1–3 word candidate n-grams,
-degree/frequency word scoring, phrase score = sum, ascending-by-score return to
-match the YAKE sort convention the consumer loop already expects), deterministic
+degree/frequency word scoring, phrase score = sum, descending-by-score return
+so the most central phrase comes first), deterministic
 and dependency-free. First-ever tests for `search.py` added
-(`backend/tests/test_search_keywords.py`, 6 tests). Validation observed: search
-tests **6 passed**; full backend **474 passed** (468 prior + 6 new,
-`--basetemp` workspace override for the known Windows temp-dir issue); frontend
+(`backend/tests/test_search_keywords.py`). Validation observed: search
+tests **8 passed** (after a post-push correction that fixed an inverted sort
+and added two semantic subject-phrase regression tests — see
+`038-remove-gplv3-yake-dependency.md` section 12); full backend **476 passed**
+(474 at push + 2 semantic tests, `--basetemp` workspace override for the known
+Windows temp-dir issue); frontend
 **138 passed**, build green, lint clean (settings label text updated to
 `Smart Keywords (RAKE)`; config value unchanged). Quality is comparable to YAKE,
-not identical (documented per-query before/after table in the report);
+not identical (documented per-query before/after table in the report, regenerated
+after the sort correction);
 `pip-licenses` also does not list itself in its own output, which corrected the
 Mission 037 credits note. Closes the GPLv3 exposure from Missions 033/037 and
 advances Punch Board item 4.

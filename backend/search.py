@@ -21,10 +21,12 @@ CURRENT_YEAR = datetime.now().year
 
 # RAKE (Rapid Automatic Keyword Extraction) keyword extraction.
 # Implemented here with the standard library only (re + collections) - no
-# external dependency. This replaces the previous YAKE library usage. The sort
-# convention is preserved: returned (phrase, score) tuples are ordered ASCENDING
-# by score, i.e. LOWER score = MORE important, the direction the existing
-# filtering loop in extract_search_keywords iterates in.
+# external dependency. This replaces the previous YAKE library usage. RAKE's
+# real convention applies: a word is more central/important the higher its
+# degree(word)/frequency(word) score, so returned (phrase, score) tuples are
+# ordered DESCENDING by score (HIGHEST score = MOST important), with the most
+# important phrase first — the direction the existing filtering loop in
+# extract_search_keywords iterates in.
 
 # Words that mark phrase boundaries for RAKE candidate splitting. Standard
 # English stopwords only. NOISE_WORDS / NOISE_PHRASES / ROLE_PLAY_TITLES are
@@ -55,9 +57,10 @@ def _rake_extract_keywords(text: str) -> List[Tuple[str, float]]:
     degree(word) = its own frequency plus the frequencies of the other words it
     co-occurs with inside candidate phrases.
 
-    Returns List[Tuple[str, float]] ordered ascending by score (LOWER score =
-    MORE important), matching the ordering the caller's existing filtering loop
-    expects. Returns [] when no candidates can be formed.
+    Returns List[Tuple[str, float]] ordered descending by score (HIGHEST score
+    = MOST important), per RAKE's own convention, with the most important
+    phrase first — the ordering the caller's existing filtering loop iterates
+    in. Returns [] when no candidates can be formed.
     """
     if not text or not text.strip():
         return []
@@ -114,8 +117,10 @@ def _rake_extract_keywords(text: str) -> List[Tuple[str, float]]:
         score = sum(deg[w] / freq[w] for w in words)
         scored.append((phrase, score))
 
-    # Lower score = more important (the convention the caller expects).
-    scored.sort(key=lambda item: item[1])
+    # Higher score = more central/important (RAKE degree/frequency convention).
+    # Sorted so the most important phrase comes first; the caller iterates
+    # from the front.
+    scored.sort(key=lambda item: item[1], reverse=True)
     return scored
 
 
@@ -509,8 +514,8 @@ def extract_search_keywords(query: str, max_keywords: int = 6) -> str:
         # Pre-process: Remove noise phrases and role-play titles BEFORE extraction
         cleaned_query = _preprocess_query(query)
 
-        # RAKE returns list of (keyword, score) tuples ascending by score,
-        # lower score = more important
+        # RAKE returns list of (keyword, score) tuples descending by score,
+        # highest score = most important, best keywords first
         keywords = _rake_extract_keywords(cleaned_query)
 
         if not keywords:

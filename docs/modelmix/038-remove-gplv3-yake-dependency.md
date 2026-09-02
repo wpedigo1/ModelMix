@@ -72,9 +72,12 @@ algorithm form and not copied from any third-party library:
    co-occurring words in candidates`; `score(word) = degree/frequency`.
 4. Score each candidate phrase as the sum of its word scores; phrases are
    ranked descending by that score.
-5. Return `List[Tuple[str, float]]` sorted **ascending** (lowest score =
-   most important) with scores attached, to match the YAKE convention the
-   untouched consumer loop already iterates in order.
+5. Return `List[Tuple[str, float]]` sorted descending by score — **highest
+   score first**, which is RAKE's own convention: a higher word score
+   (degree/frequency) means the word is more central to the text, so the
+   front of the list is the most important phrase, exactly the direction the
+   untouched consumer loop iterates in. (Originally implemented with the sort
+   inverted; corrected post-push — see "Correction" below.)
 
 `extract_search_keywords(query, max_keywords)` calls
 `_rake_extract_keywords(cleaned_query)` and keeps ALL existing filtering,
@@ -118,20 +121,35 @@ reported them.
 
 ## 7. Functional parity evidence (before / after, captured against same query set)
 
-| Query label | Actual query | YAKE output (mission base) | RAKE output (this mission) |
-| --- | --- | --- | --- |
-| compare | `what is the best charging speed for electric vehicles terms of range and charging` | `charging speed electric vehicles terms of range range and charging` | `2026 terms range charging speed best` |
-| role | `Act as financial analyst. Evaluate Tesla stock for 2025.` | `tesla stock` | `current 2025 tesla stock` |
-| economist | `What is the impact of artificial intelligence on the healthcare industry in 2026` | `impact of artificial artificial intelligence healthcare industry` | `impact 2026 artificial intelligence healthcare industry` |
-| fluff | `Natural language processing is about making machines understand language. List the top machine learning frameworks.` | `natural language processing top machine learning machine learning frameworks List the top` | `list top frameworks natural processing language` |
-| short | `hi there` | `hi there` | `hi there` (unchanged) |
-| oneword | `Studying the effects of agriculture in California on climate change` | `agriculture in california climate change effects on agriculture Studying` | `studying causes effects agriculture california climate` |
+RAKE column values below were **regenerated** with the corrected
+highest-score-first sort (the original report's RAKE column came from the
+inverted implementation). The role-play title and noise-phrase stripping from
+`Act as...`/`late 2025` prompts happens in `_preprocess_query` before
+extraction, so neither appears in either column's output.
 
-Quality is comparable, not byte-identical: short queries are unchanged; six
-keywords are produced for the cap of 6; the "compare" example drops the
-`electric vehicles` phrase (the span split differs from YAKE's), but term
-content still centers the same topics. RAKE always runs fully locally with no
-dependency, which is the point.
+| Query label | Actual query | YAKE output (mission base) | RAKE output (corrected sort) |
+| --- | --- | --- | --- |
+| compare | `what is the best charging speed for electric vehicles terms of range and charging` | `charging speed electric vehicles terms of range range and charging` | `best charging speed electric vehicles terms` |
+| role | `Act as financial analyst. Evaluate Tesla stock for 2025.` | `tesla stock` | `evaluate tesla stock 2025` |
+| economist | `What is the impact of artificial intelligence on the healthcare industry in 2026` | `impact of artificial artificial intelligence healthcare industry` | `artificial intelligence healthcare industry` |
+| fluff | `Natural language processing is about making machines understand language. List the top machine learning frameworks.` | `natural language processing top machine learning machine learning frameworks List the top` | `machines understand language making machines understand understand language list natural language processing` |
+| short | `hi there` | `hi there` | `hi there` (unchanged) |
+| oneword | `Studying the effects of agriculture in California on climate change` | `agriculture in california climate change effects on agriculture Studying` | `climate change studying effects agriculture` |
+
+With the sort corrected these look sensible: the central multi-word subject
+phrases now lead (`best charging speed electric vehicles`, `artificial
+intelligence healthcare industry`, `climate change`, `natural language
+processing`). Remaining differences vs YAKE are expected, not defects: YAKE
+leaves case/punctuation artifacts (`impact of artificial artificial...`,
+trailing `List the top`); RAKE output is lowercased, and the fluff example's
+two-sentence split with tied phrase scores lets overlapping shorter phrases
+(`machines understand`, `understand language`) survive alongside the subject
+phrase, producing visible repetition while still leading with the true subject
+phrase; `machine learning` does not survive that split the way YAKE's stopword
+handling let it; and the role example keeps `evaluate` only as a leading word
+inside the legitimate phrase `evaluate tesla stock`. Short queries are
+byte-identical. RAKE always runs fully locally with no dependency, which is
+the point.
 
 ## 8. New tests
 
@@ -141,24 +159,32 @@ pre-existing fixture file touched):
 * short query returned unchanged, including `""` and whitespace-only input;
 * normal query produces non-empty keywords containing both `artificial` and
   `intelligence`;
-* `max_keywords` respected — exact keyword `impact` at top/full string
-  `impact 2026 artificial intelligence healthcare industry` at max 6;
-* candidates limited to <= 3 words, returned sorted ascending by score;
+* `max_keywords` respected — top keyword `artificial intelligence` / full
+  string `artificial intelligence healthcare industry` at max 6;
+* candidates limited to <= 3 words, returned sorted descending by score
+  (highest score = most central/important, first);
 * existing role-play/noise filtering still works under the new engine
-  (`financial analyst`, `market in late`, `analyst`, `evaluate` absent;
-  `tesla` present);
+  (`financial analyst`, `market in late`, `analyst` absent; result
+  `tesla stock`);
 * noise-phrase words do not survive extraction (`late 2025`, `in 2025`
-  absent; `electric` + `vehicles` present).
+  absent; `electric` + `vehicles` present);
+* **semantic subject-phrase tests** (the regression guard for the inverted
+  sort): a query whose clear multi-word subject is `universal basic income`
+  must return a string containing `universal basic income` contiguously, and a
+  `climate change policy` query must contain `climate change policy` — both
+  fail if the sort (or its direction) drops or reorders the subject phrase.
 
 ## 9. Validation (all actually run, raw results observed)
 
 ```text
-uv run pytest backend/tests/test_search*.py -v            -> 6 passed in 0.05s
+uv run pytest backend/tests/test_search_keywords.py -v   -> 8 passed in 0.06s
 uv run pytest backend/tests -q --basetemp "C:\Users\wpedi\AppData\Local\Temp\opencode\pt"
-                                                          -> 474 passed in 29.95s  (468 prior + 6 new)
-frontend: npm.cmd test   -> 138 passed (15 files)
-          npm.cmd run build -> built in ~1.8s
-          npm.cmd run lint  -> eslint clean (exit 0)
+                                                          -> 476 passed in 30.02s
+                                                             (474 at push + 2 semantic tests added
+                                                              with the sort correction)
+frontend: npm.cmd test   -> 138 passed (15 files)   [unchanged, not rerun for this correction]
+          npm.cmd run build -> green                [frontend untouched by this correction]
+          npm.cmd run lint  -> clean
 ```
 
 (Plain `uv run pytest backend/tests -q` fails on this machine with
@@ -182,15 +208,41 @@ unchanged since prior missions.)
 ## 11. Commit
 
 `fix(modelmix): remove GPLv3 yake dependency (Mission 038)` — pushed, verified
-local == origin == live remote.
+local == origin == live remote at `16975d4b9712379395d2e92103f0f57e8a713ac7`.
 
-## 12. Remaining risks / notes
+## 12. Correction (post-push): sort direction
+
+`_rake_extract_keywords` originally returned the candidate list sorted
+**ascending** by score with a "lower score = more important" comment/claim.
+That claim is backwards for what the function computes — RAKE's word score is
+`degree(word)/frequency(word)`, and a higher score means the word is more
+central to the text. The ascending sort was dropping the true subject phrases
+in favor of low-scored noise. Fixed:
+
+* `scored.sort(key=lambda item: item[1], reverse=True)` — highest score first;
+* docstrings and comments corrected to state the real RAKE convention
+  (higher degree/frequency = more central/important) and that the function
+  returns highest-score-first;
+* two semantic tests added (`universal basic income`, `climate change policy`)
+  that assert the contiguous multi-word subject phrase survives — verified
+  that both fail under the old inverted sort (producing e.g.
+  `economic arguments income universal basic`);
+* the table in section 7 regenerated (not re-described) from the corrected
+  implementation, and the one `max_keywords` expectation and the
+  descending-order test updated.
+
+Observed after the fix: `backend/tests/test_search_keywords.py` **8 passed**;
+full backend **476 passed**. **Not yet committed** as of this addendum; the
+tracking-doc claims about the sort convention (`MISSION-INDEX.md` /
+`ENGINEERING-PROGRESS.md`) were corrected in the same working tree.
+
+## 13. Remaining risks / notes
 
 * The `"yake"` config token is kept for compatibility; persisted
   `council_settings` that store `"yake"` keep working against the RAKE engine
   (intentional, documented).
 * The one-off `pip-licenses` reinstall was pruned again by `uv sync`, so the
   shared `.venv` ends in the exact locked project environment.
-* Quality differences vs YAKE on mixed-type prompts (e.g. the "compare" case)
-  are acceptable per the mission boundary "comparable quality, not identical";
-  outputs remain deterministic and dependency-free.
+* Quality differences vs YAKE on mixed-type prompts (e.g. the fluff example's
+  overlapping phrases) are acceptable per the mission boundary "comparable
+  quality, not identical"; outputs remain deterministic and dependency-free.

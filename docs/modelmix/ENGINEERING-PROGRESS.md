@@ -1143,8 +1143,10 @@ Removed the GPLv3 `yake` runtime dependency (finding of Mission 037) from
 RAKE implementation in `backend/search.py` (`_RAKE_PHRASE_STOPWORDS` +
 `_rake_extract_keywords`, implemented from the standard algorithm:
 stopword-split spans, 1–3 word candidate n-grams, degree/frequency word
-scoring, phrase score = sum, returned ascending by score to match the YAKE
-sort convention the untouched consumer expects). The public
+scoring, phrase score = sum, returned highest-score-first so the most central
+phrase comes first — corrected post-push, after the initial version returned an
+ascending list and the report/tests were updated accordingly, see
+`038-remove-gplv3-yake-dependency.md` section 12). The public
 `extract_search_keywords` contract, the `"yake"` config-mode token (kept across
 `main.py`/`settings.py`/MCP tool/frontend for compatibility), and all existing
 noise/role-play/dedup filters were preserved byte-for-byte; only comments,
@@ -1154,10 +1156,14 @@ settings label ("Smart Keywords (RAKE)") changed. Regenerated
 absent; only dev-only GPLv2 `pyinstaller`/`pyinstaller-hooks-contrib` remain);
 removed the `yake` row from `OPEN_SOURCE_CREDITS.md` and corrected the note
 (`pip-licenses` does not list itself). First test coverage for `search.py` added
-(`backend/tests/test_search_keywords.py`, 6 tests). Validation observed:
-search tests **6 passed**; full backend **474 passed** (468 prior + 6 new,
+(`backend/tests/test_search_keywords.py`, 8 tests incl. two semantic
+subject-phrase regression tests added with the sort correction). Validation
+observed:
+search tests **8 passed**; full backend **476 passed** (474 at push + 2
+semantic tests,
 `--basetemp` override for the known Windows temp-dir issue); frontend **138
 passed**, build green, lint clean; `rg` proves no `yake` in
 `pyproject.toml`/`uv.lock`/backend imports. Quality is comparable to YAKE, not
-identical (before/after table in the report). Closes the GPLv3 exposure from
+identical (before/after table in the report, regenerated after the sort
+correction). Closes the GPLv3 exposure from
 Missions 033/037; Punch Board item 4 now cites Missions 017 + 037 + 038.
