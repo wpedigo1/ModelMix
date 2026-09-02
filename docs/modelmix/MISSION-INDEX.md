@@ -55,6 +55,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 040 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `040-durable-structured-logging.md` |
 | 041 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed, docs-only)** | `041-dead-code-inventory.md` |
 | 042 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `042-remove-confirmed-dead-code.md` — closes Punch Board item 46 |
+| 043 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed, docs-only)** | `043-foundational-domain-documentation.md` — draws Punch Board items 7/9/12/13 to SATISFIED |
 
 
 ## Mission 007 Provenance Clarification
@@ -778,6 +779,23 @@ cannot see this class of bug) asserting identical `_preprocess_query` /
 previously-flaky scenario. Validation: raw 13-seed sweep over
 `test_search_keywords.py` = `9 passed` under every seed 0–12; full backend **477
 passed**; frontend **138 passed** / build / lint green; ruff clean.
+
+## Mission 043 Result
+
+**Mission 043 is implemented, verified, and pushed.** Foundational domain
+documentation (docs-only, **zero code changes**) establishing run/seat/event/
+moderator/provider concepts and rules **from real code** rather than from
+punch-board aspirational wording. Four reference docs under `docs/modelmix/`:
+`domain-objects.md` (item 7), `run-state-machine.md` (item 9),
+`provider-capability-matrix.md` (item 12), and
+`privacy-and-data-routing.md` (item 13), each cited to file/line. The run doc
+records an explicit vocabulary correction: the implemented run status is
+`partial` (`persistence.py` `TERMINAL_STATUSES`; `registry.py:314`), not the
+punch-board's `partially_completed`; the code value is authoritative. Backend
+**485 passed** (`--basetemp` workspace override for the known corrupt
+`pytest-of-wpedigo` system temp-dir ACL; the literal command reproduces the
+same environmental `WinError 5`), frontend **138 passed**, build and lint
+clean. Closes Punch Board items **7, 9, 12, 13** to SATISFIED.
 
 ## Evidence Rule
 

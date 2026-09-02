@@ -1290,3 +1290,28 @@ environmental issue unrelated to this mission), frontend **138 passed**,
 `npm run build` clean, `npm run lint` clean. Commit
 `chore(modelmix): remove confirmed dead code (Mission 042)`. Full report in
 `042-remove-confirmed-dead-code.md`.
+
+## Mission 043 Result
+
+Foundational domain documentation (docs-only, **zero code changes**). Wrote
+four code-sourced reference docs under `docs/modelmix/` claiming behavior **from
+real code, not** from punch-board wording: `domain-objects.md` (Punch Board
+item 7), `run-state-machine.md` (item 9), `provider-capability-matrix.md`
+(item 12), and `privacy-and-data-routing.md` (item 13). The run doc documents
+the actual terminal transitions (`completed`/`partial`/`failed`/`cancelled`,
+plus `created`/`active`) with line citations, and explicitly corrects one piece
+of stale punch-board vocabulary: the code value is `partial`
+(`persistence.py:21`, `registry.py:314`), not `partially_completed`. The matrix
+node-by-node confirms exactly one streaming provider (`openai-oauth`), that only
+`openrouter` derives pricing, and which providers derive `is_free` honestly;
+capabilities not implemented anywhere are explicitly marked absent. The privacy
+doc covers the credential store backends, settings-API/credential-store
+separation, single-flight OAuth refresh, seat-scoped history, and the bounded
+visible-only Moderator fan-in. Items 7, 9, 12, and 13 are now **SATISFIED**
+(`PUNCH-BOARD.md` updated; item 9 retains the `partial` vocabulary note).
+Validation: backend **485 passed** (`--basetemp` workspace override for the
+known corrupt system-temp ACL; the literal `uv run pytest backend/tests -q`
+reproduces the same environmental `WinError 5` and is reported honestly),
+frontend **138 passed**, `npm run build` and `npm run lint` clean. Commit
+`docs(modelmix): foundational domain documentation (Mission 043)`. Full report
+in `043-foundational-domain-documentation.md`.

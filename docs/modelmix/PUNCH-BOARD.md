@@ -152,17 +152,19 @@ Dedicated ModelMix domain/session/run/seat/Moderator/orchestration/event/persist
 
 ## PHASE 2 — Define the Core Contracts
 
-### 7. Define domain objects — **PARTIAL**
+### 7. Define domain objects — **SATISFIED — MISSION 043**
 
-Session, Run, Seat, Message, Moderator, Provider/Model reference, ProviderCapabilities, UsageRecord, RunEvent, Artifact/reference, Error/terminal result, with schema versions.
+Session, Run, Seat, Message, Moderator, Provider/Model reference, ProviderCapabilities, UsageRecord, RunEvent, Artifact/reference, Error/terminal result, with schema versions. Documented from code in `docs/modelmix/domain-objects.md`. Note: `Artifact/reference` is not implemented in this alpha slice and is recorded as such; `Error/terminal result` maps to the persisted message status/error/reason and run status.
 
 ### 8. Define context isolation policy — **SATISFIED — MISSION 009**
 
 Workers see only user/authorized shared context plus their own seat history. Moderator sees authorized user/context and current worker outputs. Seat history belongs to the seat, not the selected model.
 
-### 9. Define run state machine — **PARTIAL**
+### 9. Define run state machine — **SATISFIED — MISSION 043**
 
 Created, dispatching, workers_running, moderating, completed, partially_completed, cancelled, failed, timed_out; define partial Moderator policy, Stop, persistence, retries, and UI terminal states. **Mission 013** adds the wall-clock `timed_out` outcome: `run_failed` / `seat_failed` / `moderator_failed` with `reason: "timeout"` through the existing event seam; retries remain open.
+
+Documented from code in `docs/modelmix/run-state-machine.md`. **Vocabulary correction:** the punch-board token `partially_completed` does not match the implemented value, which is **`partial`** (`persistence.py` `TERMINAL_STATUSES`; `registry.py:314`). The code value `partial` is authoritative. Retries remain open.
 
 ### 10. Define ordered event contract — **SATISFIED**
 
@@ -174,13 +176,13 @@ Keep JSON for alpha behind a ModelMix interface; add schema versioning and atomi
 
 **PASS:** restart reconstructs a session without relying on in-memory run state.
 
-### 12. Define provider capability matrix — **PARTIAL**
+### 12. Define provider capability matrix — **SATISFIED — MISSION 043**
 
-Track only capabilities needed to prevent false UI promises: chat, streaming, known limits, usage, inherited tool/vision/file support, auth, local/remote, cancellation, pricing support.
+Track only capabilities needed to prevent false UI promises: chat, streaming, known limits, usage, inherited tool/vision/file support, auth, local/remote, cancellation, pricing support. Documented from code in `docs/modelmix/provider-capability-matrix.md`. Capabilities not implemented anywhere (streaming for all but `openai-oauth`, per-query costs, vision/file/tools in the alpha run path) are explicitly marked absent rather than advertised.
 
-### 13. Define privacy/data-routing rules — **OPEN**
+### 13. Define privacy/data-routing rules — **SATISFIED — MISSION 043**
 
-Document what each provider may receive; credentials are references; no raw secrets in logs/frontend/session JSON; cross-provider forwarding is intelligible.
+Document what each provider may receive; credentials are references; no raw secrets in logs/frontend/session JSON; cross-provider forwarding is intelligible. Documented from code in `docs/modelmix/privacy-and-data-routing.md` (credential store backends, settings-API/credential-store separation, OAuth single-flight refresh, seat-scoped history, and the bounded visible-only Moderator fan-in).
 
 ## PHASE 3 — Build the Smallest Real Engine
 
