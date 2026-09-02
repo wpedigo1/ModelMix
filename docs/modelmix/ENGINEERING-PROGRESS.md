@@ -1194,3 +1194,37 @@ current market in late 2025 for tesla stock"). Validation observed: raw
 **138 passed**, build green, lint clean; `ruff check` clean. Maps to no Punch
 Board item — recorded as a pre-existing correctness bug found and fixed via
 Mission 038's own test coverage.
+
+## Mission 040 Result
+
+Durable structured logging (closes Punch Board item 32, "Add basic structured
+observability"). Added a rotating-file console-preserving logging setup behind
+a new `backend/logging_config.py::configure_logging()`, invoked once early in
+`backend/main.py` (before the FastAPI app is built). Stdlib only; behavior is a
+no-op second call. Key behavior: a `RotatingFileHandler` (5 MB maxBytes, 3
+backups) writes `<user_data_dir>/logs/modelmix.log` with format
+`%(asctime)s %(levelname)s %(name)s: %(message)s`; the console (stderr) handler
+is preserved so `python -m backend.main` still prints; the effective level
+comes from `LLM_COUNCIL_LOG_LEVEL` (default `INFO`, invalid values fall back to
+`INFO`); the log file gets the same Windows per-user ACL hardening as the
+credentials file. ACL hardening was de-duplicated: the `icacls` logic moved
+verbatim into shared `user_data_dir.is_windows()`,
+`user_data_dir.resolve_windows_current_user()`, and
+`user_data_dir.harden_user_dir(path)`, and `file_backend._harden_credentials_file()`
+now delegates to it (credentials behavior byte-for-byte unchanged; the existing
+Mission 026/027 hardening tests were retargeted to the shared helper and all
+pass). Credential-leak audit of all 89 `logger.*` call sites (17 files): no
+message interpolates a credential value, API key, token, password, or request
+body — matches are secret identifiers/keys, absence flags, URLs, status codes,
+or provider error text (see report §3 for the case-by-case review). New
+`backend/tests/test_logging_config.py` (8 tests) covers all six acceptance
+criteria (rotation location/config, env-var level + invalid fallback, ACL
+hardening path via mock — no real icacls, console-presence, structural
+credential-leak audit, idempotency). Validation observed: full backend **485
+passed** (477 baseline + 8 new), `ruff check backend` clean, and a live
+`python -m backend.main` import booted the app and actually wrote a
+structured-format `data/logs/modelmix.log` (dev mode) capturing first-party and
+third-party (httpx/MCP) records. Flagged follow-up, NOT changed in this mission
+(boundary): `src-tauri/src/lib.rs` discards backend stdout/stderr in packaged
+builds, so a frozen build's logs exist on disk but are not tailed to the
+terminal; `tauri_plugin_log` remains debug-gated there.

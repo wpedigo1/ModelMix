@@ -370,7 +370,17 @@ so they are not lost (still open, NOT fixed by this or any later mission):
   an internal host. Mission 025 recommended a separate URL allow-list review;
   that recommendation also remains open.
 
-### 32. Add basic structured observability — **OPEN**
+### 32. Add basic structured observability — **CLOSED (Mission 040)**
+
+Mission 040 delivered durable structured logging. `backend/logging_config.py::configure_logging()`
+adds a `RotatingFileHandler` (5 MB, 3 backups) at
+`<user_data_dir>/logs/modelmix.log` with a
+`%(asctime)s %(levelname)s %(name)s: %(message)s` format, preserves the console
+(stderr) handler, and honors `LLM_COUNCIL_LOG_LEVEL` (default `INFO`). The log
+file receives the same Windows per-user ACL hardening as the credentials file,
+with the `icacls` logic de-duplicated into shared `user_data_dir.harden_user_dir()`
+(credentials path unchanged). A credential-leak audit across all 89 `logger.*`
+call sites found no secret interpolation. See `040-durable-structured-logging.md`.
 
 ## ALPHA GATE
 

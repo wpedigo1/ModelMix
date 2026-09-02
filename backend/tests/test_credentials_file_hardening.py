@@ -13,6 +13,7 @@ import sys
 import pytest
 
 from backend.credentials import file_backend
+from backend import user_data_dir
 
 
 @pytest.fixture()
@@ -34,8 +35,9 @@ def _reset_process_guards():
 
 def _windows(monkeypatch):
     monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(user_data_dir, "is_windows", lambda: True)
     monkeypatch.setattr(
-        file_backend, "_resolve_windows_current_user", lambda: "ACME\\alice"
+        user_data_dir, "resolve_windows_current_user", lambda: "ACME\\alice"
     )
 
 
@@ -59,7 +61,7 @@ def test_windows_write_invokes_icacls_args(cred_file, monkeypatch):
     _windows(monkeypatch)
     calls = []
     monkeypatch.setattr(
-        subprocess,
+        user_data_dir.subprocess,
         "run",
         lambda *args, **kwargs: calls.append(args) or _Result(0),
     )
@@ -81,9 +83,10 @@ def test_windows_write_invokes_icacls_args(cred_file, monkeypatch):
 
 def test_non_windows_never_invokes_icacls(cred_file, monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(user_data_dir, "is_windows", lambda: False)
     calls = []
     monkeypatch.setattr(
-        subprocess,
+        user_data_dir.subprocess,
         "run",
         lambda *args, **kwargs: calls.append(args) or _Result(0),
     )
@@ -107,7 +110,7 @@ def test_failing_icacls_does_not_raise_and_value_survives(
     cred_file, monkeypatch, hardener
 ):
     _windows(monkeypatch)
-    monkeypatch.setattr(subprocess, "run", lambda *a, **k: hardener())
+    monkeypatch.setattr(user_data_dir.subprocess, "run", lambda *a, **k: hardener())
 
     file_backend.set_secret("api:openai", "sk-test")  # must not raise
 
@@ -121,7 +124,7 @@ def test_failing_icacls_does_not_raise_and_value_survives(
 def test_failing_icacls_logs_warning(cred_file, monkeypatch, caplog):
     _windows(monkeypatch)
     monkeypatch.setattr(
-        subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(OSError("boom"))
+        user_data_dir.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(OSError("boom"))
     )
     with caplog.at_level(logging.WARNING, logger="backend.credentials.file_backend"):
         file_backend.set_secret("api:openai", "sk-test")
@@ -148,7 +151,7 @@ def test_startup_remediation_runs_once_on_existing_unhardened_file(
     cred_file.write_text(json.dumps({"api:old": "sk-old"}))
     calls = []
     monkeypatch.setattr(
-        subprocess,
+        user_data_dir.subprocess,
         "run",
         lambda *args, **kwargs: calls.append(args) or _Result(0),
     )
@@ -177,7 +180,7 @@ def test_startup_remediation_failure_warns_once(
     cred_file.write_text(json.dumps({"api:old": "sk-old"}))
     calls = []
     monkeypatch.setattr(
-        subprocess,
+        user_data_dir.subprocess,
         "run",
         lambda *args, **kwargs: calls.append(args)
         or _Result(1, stderr="Access is denied."),
@@ -206,7 +209,7 @@ def test_no_startup_warning_on_non_windows(cred_file, monkeypatch, caplog):
     cred_file.write_text(json.dumps({"api:old": "sk-old"}))
     calls = []
     monkeypatch.setattr(
-        subprocess,
+        user_data_dir.subprocess,
         "run",
         lambda *args, **kwargs: calls.append(args) or _Result(0),
     )
@@ -255,7 +258,7 @@ def test_read_triggers_remediation_on_existing_unhardened_file(
     cred_file.write_text(json.dumps({"api:old": "sk-old"}))
     calls = []
     monkeypatch.setattr(
-        subprocess,
+        user_data_dir.subprocess,
         "run",
         lambda *args, **kwargs: calls.append(args) or _Result(0),
     )

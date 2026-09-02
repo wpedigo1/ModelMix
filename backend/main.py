@@ -58,6 +58,12 @@ from .documents import (
     validate_documents_for_request,
 )
 from .modelmix import router as modelmix_router
+from .logging_config import configure_logging
+
+# Durable structured logging must be configured before the FastAPI app is
+# built and before any module-level logging-producing code runs (see
+# backend/logging_config.py for the rotating-file/console setup).
+configure_logging()
 
 logger = logging.getLogger(__name__)
 

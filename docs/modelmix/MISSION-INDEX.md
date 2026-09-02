@@ -52,6 +52,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 037 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `037-open-source-credits-and-license-inventory.md` |
 | 038 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `038-remove-gplv3-yake-dependency.md` |
 | 039 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `039-fix-nondeterministic-query-preprocessing.md` |
+| 040 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `040-durable-structured-logging.md` |
 
 
 ## Mission 007 Provenance Clarification

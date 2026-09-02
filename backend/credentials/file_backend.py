@@ -10,12 +10,14 @@ from __future__ import annotations
 import json
 import logging
 import os
-import subprocess
-import sys
 import tempfile
 from typing import Dict, Optional
 
-from ..user_data_dir import resolve_user_data_dir
+from ..user_data_dir import (
+    harden_user_dir,
+    is_windows,
+    resolve_user_data_dir,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,31 +29,6 @@ _startup_warned = False
 _hardened = False
 
 
-def _is_windows() -> bool:
-    return sys.platform == "win32"
-
-
-def _resolve_windows_current_user() -> Optional[str]:
-    """Resolve the current Windows user for an icacls grant principal.
-
-    Prefer the USERNAME/USERDOMAIN environment variables (set reliably for a
-    logged-in interactive session and for a user-run service), falling back to
-    os.getlogin(), which can raise OSError when no controlling terminal is
-    present (e.g. some service or SSH contexts).
-    """
-    user = os.environ.get("USERNAME")
-    if user:
-        domain = os.environ.get("USERDOMAIN")
-        return f"{domain}\\{user}" if domain else user
-    try:
-        user = os.getlogin()
-        if user:
-            return user
-    except OSError:
-        pass
-    return None
-
-
 def _harden_credentials_file() -> bool:
     """Restrict CREDENTIALS_FILE to the current user on Windows.
 
@@ -61,33 +38,10 @@ def _harden_credentials_file() -> bool:
     operator-visible warning. Returns True only on a successful hardening.
     """
     global _hardened
-    if not _is_windows():
-        return False
-    user = _resolve_windows_current_user()
-    if not user:
-        logger.warning(
-            "Could not resolve the current Windows user; skipping ACL hardening for %s",
-            CREDENTIALS_FILE,
-        )
-        return False
-    cmd = ["icacls", str(CREDENTIALS_FILE), "/inheritance:r", "/grant:r", f"{user}:F"]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-    except (OSError, subprocess.SubprocessError) as exc:
-        logger.warning(
-            "Failed to harden %s ACLs with icacls: %s", CREDENTIALS_FILE, exc
-        )
-        return False
-    if result.returncode != 0:
-        logger.warning(
-            "icacls exited %s hardening %s: %s",
-            result.returncode,
-            CREDENTIALS_FILE,
-            (result.stderr or result.stdout or "").strip(),
-        )
-        return False
-    _hardened = True
-    return True
+    restricted = harden_user_dir(CREDENTIALS_FILE)
+    if restricted:
+        _hardened = True
+    return restricted
 
 
 def _warn_if_unhardened() -> None:
@@ -105,7 +59,7 @@ def _warn_if_unhardened() -> None:
     if _startup_warned:
         return
     _startup_warned = True
-    if not _is_windows():
+    if not is_windows():
         return
     if not CREDENTIALS_FILE.exists():
         return
