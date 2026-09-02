@@ -54,6 +54,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 039 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `039-fix-nondeterministic-query-preprocessing.md` |
 | 040 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `040-durable-structured-logging.md` |
 | 041 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed, docs-only)** | `041-dead-code-inventory.md` |
+| 042 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `042-remove-confirmed-dead-code.md` — closes Punch Board item 46 |
 
 
 ## Mission 007 Provenance Clarification

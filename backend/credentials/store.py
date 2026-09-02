@@ -377,10 +377,6 @@ async def migrate_storage_mode(target: str) -> Dict[str, Any]:
         return {"mode": target, "moved": len(written), "ids": written}
 
 
-def secret_id_for_settings_field(field: str) -> Optional[str]:
-    return SETTINGS_FIELD_TO_SECRET_ID.get(field)
-
-
 def apply_settings_secret_updates(updates: Dict[str, Any]) -> Dict[str, Any]:
     """Route API key fields from a settings update into the credential store.
 

@@ -933,33 +933,6 @@ def _is_safe_fetch_url(url: str) -> bool:
     return not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast)
 
 
-def _fetch_with_jina_sync(url: str, timeout: float = 25.0) -> Optional[str]:
-    """
-    Fetch article content using Jina Reader API (sync version for DuckDuckGo).
-    Returns clean markdown content. Uses connection pooling.
-    """
-    if not _is_safe_fetch_url(url):
-        logger.warning("Refusing to fetch unsafe URL via Jina: %s", url)
-        return None
-    try:
-        jina_url = f"https://r.jina.ai/{url}"
-        client = get_sync_client()
-        response = client.get(jina_url, headers={
-            "Accept": "text/plain",
-        }, timeout=timeout)
-        if response.status_code == 200:
-            return response.text
-        else:
-            logger.warning(f"Jina Reader returned {response.status_code} for {url}")
-            return None
-    except httpx.TimeoutException:
-        logger.warning(f"Timeout while fetching content via Jina for {url}")
-        return None
-    except Exception as e:
-        logger.warning(f"Failed to fetch content via Jina for {url}: {e}")
-        return None
-
-
 async def _fetch_with_jina(url: str, timeout: float = 25.0) -> Optional[str]:
     """
     Fetch article content using Jina Reader API (async).

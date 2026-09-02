@@ -68,35 +68,6 @@ async def query_model(model: str, messages: List[Dict[str, str]], timeout: float
     return response
 
 
-async def query_models_parallel(models: List[str], messages: List[Dict[str, str]]) -> Dict[str, Any]:
-    """Dispatch parallel query to appropriate providers."""
-    tasks = []
-    
-    # Group models by provider to optimize batching if supported (mostly for OpenRouter/Ollama legacy)
-    # But for simplicity and modularity, we'll just spawn individual tasks for now
-    # OpenRouter and Ollama wrappers might handle their own internal concurrency if we called a batch method,
-    # but the base interface is single query.
-    # To maintain OpenRouter's batch efficiency if it exists, we could check type, but let's stick to simple asyncio.gather first.
-    
-    # Actually, the previous implementation used specific batch logic for Ollama and OpenRouter.
-    # We should preserve that if possible, OR just rely on asyncio.gather which is fine for HTTP clients.
-    # The previous `_query_ollama_batch` was just a helper to strip prefixes.
-    # `openrouter.query_models_parallel` was doing the gather.
-    
-    # Let's just use asyncio.gather for all. It's clean and effective.
-    
-    async def _query_safe(m: str):
-        try:
-            return m, await query_model(m, messages)
-        except Exception as e:
-            return m, {"error": True, "error_message": str(e)}
-
-    tasks = [_query_safe(m) for m in models]
-    results = await asyncio.gather(*tasks)
-    
-    return dict(results)
-
-
 def strip_thinking_blocks(text: Any) -> str:
     """Remove hidden-reasoning markup from model-visible text."""
 

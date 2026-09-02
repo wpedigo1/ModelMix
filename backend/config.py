@@ -37,14 +37,3 @@ def get_chairman_model() -> str:
     from .settings import get_settings, DEFAULT_CHAIRMAN_MODEL
     settings = get_settings()
     return settings.chairman_model or DEFAULT_CHAIRMAN_MODEL
-
-
-# Legacy constants for backwards compatibility
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-COUNCIL_MODELS = [
-    "openai/gpt-4.1",
-    "google/gemini-2.5-pro",
-    "anthropic/claude-sonnet-4",
-    "x-ai/grok-3",
-]
-CHAIRMAN_MODEL = "google/gemini-2.5-pro"

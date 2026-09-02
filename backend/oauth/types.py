@@ -60,21 +60,3 @@ def access_token_is_expiring(token: Optional[str], skew_ms: int = OAUTH_REFRESH_
         return exp * 1000 <= time.time() * 1000 + max(0, skew_ms)
     except Exception:
         return False
-
-
-def parse_stored_oauth_credential(raw: Optional[str]) -> Optional[Dict[str, Any]]:
-    if not raw or not raw.strip().startswith("{"):
-        return None
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    if (
-        isinstance(parsed, dict)
-        and parsed.get("type") == "oauth"
-        and isinstance(parsed.get("access"), str)
-        and isinstance(parsed.get("refresh"), str)
-        and isinstance(parsed.get("expires"), (int, float))
-    ):
-        return parsed
-    return None

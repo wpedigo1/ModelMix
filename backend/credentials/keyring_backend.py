@@ -12,12 +12,6 @@ KEYRING_CHUNK_PREFIX = "__relay_chunked__:"
 KEYRING_CHUNK_SIZE = 1200
 
 
-def _entry(account: str):
-    import keyring
-
-    return keyring
-
-
 def get_secret(secret_id: str) -> Optional[str]:
     import keyring
 

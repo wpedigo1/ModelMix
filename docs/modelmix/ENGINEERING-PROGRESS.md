@@ -1262,3 +1262,31 @@ Council/Advisor/debate code confirmed to be a live product, not a corpse.
 Validation: `pytest backend/tests` **485 passed**, `npx unimported` clean,
 `npx depcheck` flagged only `@types/react-dom`. Zero code files modified. Full
 inventory and a follow-up removal checklist in `041-dead-code-inventory.md`.
+
+## Mission 042 Result
+
+Executed Mission 041's deferred removal (Punch Board item 46 — CLOSED). Every
+confirmed-unreachable item was re-grepped across the whole repo at removal
+time and confirmed dead (zero references beyond the definition site) before
+deleting. Removed: `config.py` legacy constants `OPENROUTER_API_KEY` /
+`COUNCIL_MODELS` / `CHAIRMAN_MODEL`; `settings.AVAILABLE_MODELS`; `credentials
+/ids.py` `SECRET_ID_TO_SETTINGS_FIELD`, `OAUTH_CONNECTED_FLAGS`,
+`api_secret_id`, `oauth_secret_id` (plus the now-orphaned `Optional` import);
+`store.secret_id_for_settings_field`; `DocumentLimits
+.document_timeout_seconds`; three dead `query_models_parallel` wrappers in
+`council.py`/`ollama_client.py`/`openrouter.py`; `openrouter.fetch_models`;
+`search._fetch_with_jina_sync`; `oauth/types.py`
+`parse_stored_oauth_credential`; `keyring_backend._entry`; and the
+`@types/react-dom` devDependency (lockfile updated, no other diff). Left
+untouched per the hard boundary: all 43 FastAPI routes, Pydantic/dataclass
+fields, the intentional async-generator `yield` in `providers/base.py`,
+pytest fixtures, and ambiguous `@types/react`. New findings reported (not
+removed — not on the list): `openrouter.BROKEN_MODELS` and
+`search.get_sync_client` became orphaned as a consequence of the removals.
+Validation: backend **485 passed** (via `--basetemp`; the literal
+`uv run pytest backend/tests -q` currently fails at the corrupt
+`pytest-of-wpedigo` system temp-dir ACL with a `PermissionError`, an
+environmental issue unrelated to this mission), frontend **138 passed**,
+`npm run build` clean, `npm run lint` clean. Commit
+`chore(modelmix): remove confirmed dead code (Mission 042)`. Full report in
+`042-remove-confirmed-dead-code.md`.

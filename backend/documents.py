@@ -41,7 +41,6 @@ class DocumentLimits:
     max_document_base64_chars: int = int(os.getenv("LLM_COUNCIL_MAX_DOCUMENT_BASE64_CHARS", "28000000"))
     max_pdf_pages: int = int(os.getenv("LLM_COUNCIL_MAX_PDF_PAGES", "200"))
     max_ocr_pages: int = int(os.getenv("LLM_COUNCIL_MAX_OCR_PAGES", "20"))
-    document_timeout_seconds: int = int(os.getenv("LLM_COUNCIL_DOCUMENT_TIMEOUT_SECONDS", "60"))
     ocr_timeout_seconds: int = int(os.getenv("LLM_COUNCIL_OCR_TIMEOUT_SECONDS", "60"))
     max_document_chars: int = int(os.getenv("LLM_COUNCIL_MAX_DOCUMENT_CHARS", "150000"))
     max_total_document_chars: int = int(os.getenv("LLM_COUNCIL_MAX_DOCUMENT_CHARS_TOTAL", "300000"))

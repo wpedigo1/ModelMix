@@ -91,27 +91,3 @@ async def query_model(
         'error': last_error,
         'error_message': error_messages.get(last_error, f"Error: {last_error}")
     }
-
-
-async def query_models_parallel(
-    models: List[str],
-    messages: List[Dict[str, str]]
-) -> Dict[str, Optional[Dict[str, Any]]]:
-    """
-    Query multiple Ollama models in parallel.
-
-    Args:
-        models: List of Ollama model identifiers
-        messages: List of message dicts to send to each model
-
-    Returns:
-        Dict mapping model identifier to response dict (or None if failed)
-    """
-    # Create tasks for all models
-    tasks = [query_model(model, messages) for model in models]
-
-    # Wait for all to complete
-    responses = await asyncio.gather(*tasks)
-
-    # Map models to their responses
-    return {model: response for model, response in zip(models, responses)}

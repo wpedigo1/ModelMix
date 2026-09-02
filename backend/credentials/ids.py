@@ -1,6 +1,6 @@
 """Fixed secret ID registry (keyring has no list API)."""
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 # All known credential store keys.
 KNOWN_SECRET_IDS: List[str] = [
@@ -41,8 +41,6 @@ SETTINGS_FIELD_TO_SECRET_ID: Dict[str, str] = {
     "tinyfish_api_key": "api:tinyfish",
 }
 
-SECRET_ID_TO_SETTINGS_FIELD: Dict[str, str] = {v: k for k, v in SETTINGS_FIELD_TO_SECRET_ID.items()}
-
 # Env var overrides (highest precedence).
 ENV_OVERRIDES: Dict[str, str] = {
     "api:openrouter": "OPENROUTER_API_KEY",
@@ -67,18 +65,3 @@ OAUTH_SECRET_IDS = {
     "openai-oauth": "oauth:openai-oauth",
     "github-copilot": "oauth:github-copilot",
 }
-
-# GET /api/settings connected flag names
-OAUTH_CONNECTED_FLAGS = {
-    "xai-oauth": "xai_oauth_connected",
-    "openai-oauth": "openai_oauth_connected",
-    "github-copilot": "github_copilot_connected",
-}
-
-
-def api_secret_id(provider: str) -> str:
-    return f"api:{provider}"
-
-
-def oauth_secret_id(provider_id: str) -> Optional[str]:
-    return OAUTH_SECRET_IDS.get(provider_id)
