@@ -1228,3 +1228,37 @@ third-party (httpx/MCP) records. Flagged follow-up, NOT changed in this mission
 (boundary): `src-tauri/src/lib.rs` discards backend stdout/stderr in packaged
 builds, so a frozen build's logs exist on disk but are not tailed to the
 terminal; `tauri_plugin_log` remains debug-gated there.
+
+## Mission 041 Result
+
+Dead code inventory via one-off tools (Punch Board item 46 — inventory phase
+only; item stays OPEN). Ran `uvx vulture backend` (Python dead code),
+`npx.depcheck` and `npx unimported` against `frontend/` (unused deps/files) —
+all one-off, no permanent dependencies, no file-modifying tool. Categorized
+every finding into confirmed-unreachable / false-positive / ambiguous with
+independent whole-repo `git grep`-based confirmation for each. **Confirmed
+unreachable (~263 lines across 12 backend symbols in 11 files plus one frontend
+devDependency):** `config.py` legacy constants `OPENROUTER_API_KEY` /
+`COUNCIL_MODELS` / `CHAIRMAN_MODEL` (superseded by the getter functions);
+`settings.AVAILABLE_MODELS` hardcoded model list (live `/api/models` provides
+data); `credentials/ids.py` `SECRET_ID_TO_SETTINGS_FIELD`, `OAUTH_CONNECTED_FLAGS`,
+`api_secret_id`, `oauth_secret_id` (never imported/called); `store.py`
+`secret_id_for_settings_field` (wrapper never called); `DocumentLimits
+.document_timeout_seconds` (class attr never read); three dead
+`query_models_parallel` wrappers in `council.py`/`ollama_client.py`/
+`openrouter.py` plus `openrouter.fetch_models` (legacy pre-refactor free
+functions, 105 lines — the single largest dead block); `search.py`
+`_fetch_with_jina_sync`; `oauth/types.py` `parse_stored_oauth_credential`;
+`keyring_backend.py` `_entry` stub; and the `@types/react-dom` devDependency
+(project is 100% JSX with no tsconfig/TS source). **False positives (not to
+touch):** all 43 FastAPI route handlers (`@app.*`/`@router.*` decorators vulture
+can't see), all Pydantic/dataclass fields (`created_at`, `message_count`,
+`avatar_emoji`, `OAuthStartResponse` fields, `RunEventJournal.created_at` — all
+serialized via `model_dump()`), the intentional async-generator `yield` after
+`raise` in `providers/base.py:52` (`# pragma: no cover`), and all 13 pytest
+fixture/mock-attribute findings (pytest runtime injection). **Ambiguous:**
+`@types/react` (unused by build but `react-select`'s peer dep — left alone).
+Council/Advisor/debate code confirmed to be a live product, not a corpse.
+Validation: `pytest backend/tests` **485 passed**, `npx unimported` clean,
+`npx depcheck` flagged only `@types/react-dom`. Zero code files modified. Full
+inventory and a follow-up removal checklist in `041-dead-code-inventory.md`.

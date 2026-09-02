@@ -493,7 +493,24 @@ mission: MSI bundle, code-signing/installer polish, CSP hardening (currently
 
 ## PHASE 14 — Cleanup and Upstream Maintenance
 
-### 46. Prune dead Council/Advisor/debate code — **OPEN**
+### 46. Prune dead Council/Advisor/debate code — **OPEN (inventory complete — Mission 041)**
+
+Mission 041 ran `vulture` (backend) and `depcheck`/`unimported` (frontend) as
+one-off tools and produced a three-category dead-code inventory in
+`041-dead-code-inventory.md`. Confirmed-reachable false positives (all FastAPI
+routes, Pydantic/dataclass fields, the intentional async-generator `yield` in
+`providers/base.py`) are documented and will not be touched, and the Council
+pipeline itself is confirmed to be a live product, not dead code. Confirmed
+unreachable: ~263 lines across 12 backend symbols (three `config.py` legacy
+constants, `settings.AVAILABLE_MODELS`, four `credentials/ids.py` symbols,
+`secret_id_for_settings_field`, `DocumentLimits.document_timeout_seconds`,
+three dead `query_models_parallel` wrappers in `council.py`/`ollama_client.py`/
+`openrouter.py`, `openrouter.fetch_models`, `search._fetch_with_jina_sync`,
+`oauth.types.parse_stored_oauth_credential`, `keyring_backend._entry`)
+plus the unused frontend devDependency `@types/react-dom` (no TypeScript in
+the project; `@types/react` left ambiguous as `react-select`'s peer dep).
+Removal itself is deferred to a later mission; see report §7 for the
+follow-up removal steps. Item 46 stays OPEN.
 
 ### 47. Establish selective upstream watch — **OPEN**
 
