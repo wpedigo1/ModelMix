@@ -164,6 +164,24 @@ CURRENT_EVENT_INDICATORS = {
     'update', 'new', 'just', 'happening', 'live', 'weather', 'forecast'
 }
 
+# Deterministic iteration order for the preprocessing regex passes in
+# _preprocess_query. Python set iteration order for string elements depends on
+# the per-process PYTHONHASHSEED, and the sequential role-play/noise
+# substitutions interact (removing one phrase can change whether a later
+# phrase's \b...\b regex still matches), so iterating these two sets directly
+# produces process-dependent output. Longest phrase first (with an explicit
+# alphabetical tiebreak) also lowers interaction risk: removing a longer,
+# more specific phrase first is less likely to fragment text a shorter
+# phrase's regex still needs. NOISE_WORDS and CURRENT_EVENT_INDICATORS are
+# intentionally not listed here: they are only used for order-independent
+# membership checks, not sequential substitution.
+_ROLE_PLAY_TITLES_DETERMINISTIC = tuple(
+    sorted(ROLE_PLAY_TITLES, key=lambda s: (-len(s), s))
+)
+_NOISE_PHRASES_DETERMINISTIC = tuple(
+    sorted(NOISE_PHRASES, key=lambda s: (-len(s), s))
+)
+
 # Company/organization patterns that suggest current event queries
 COMPANY_PATTERNS = [
     r'\b(apple|google|microsoft|amazon|meta|tesla|nvidia|openai|anthropic)\b',
@@ -472,6 +490,10 @@ def _preprocess_query(query: str) -> str:
     """
     Remove noise phrases and role-play titles from query BEFORE keyword extraction.
     This prevents RAKE from extracting words from these phrases.
+
+    Deterministic: ROLE_PLAY_TITLES and NOISE_PHRASES are iterated in a fixed
+    longest-first (alphabetically-tied) order, so the sequential substitutions
+    yield the same output regardless of PYTHONHASHSEED.
     """
     import re
     cleaned = query
@@ -480,12 +502,12 @@ def _preprocess_query(query: str) -> str:
     # This catches variations like "act as an expert", "acting as a consultant", etc.
     cleaned = re.sub(r'\b(act(ing)?|behave|pretend|imagine you are|you are|be) as (a|an|the)?\s*\w+(\s+\w+)?\b', '', cleaned, flags=re.IGNORECASE)
 
-    # Remove specific role-play titles
-    for title in ROLE_PLAY_TITLES:
+    # Remove specific role-play titles (deterministic, longest first)
+    for title in _ROLE_PLAY_TITLES_DETERMINISTIC:
         cleaned = re.sub(rf'\b{re.escape(title)}\b', '', cleaned, flags=re.IGNORECASE)
 
-    # Remove noise phrases
-    for phrase in NOISE_PHRASES:
+    # Remove noise phrases (deterministic, longest first)
+    for phrase in _NOISE_PHRASES_DETERMINISTIC:
         cleaned = re.sub(rf'\b{re.escape(phrase)}\b', '', cleaned, flags=re.IGNORECASE)
 
     # Clean up extra whitespace

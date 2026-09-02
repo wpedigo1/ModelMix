@@ -51,6 +51,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 036 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed, documentation-only)** | Punch Board accuracy pass — see `PUNCH-BOARD.md` items 30/31 and Record Repair Note below |
 | 037 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `037-open-source-credits-and-license-inventory.md` |
 | 038 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `038-remove-gplv3-yake-dependency.md` |
+| 039 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `039-fix-nondeterministic-query-preprocessing.md` |
 
 
 ## Mission 007 Provenance Clarification
@@ -752,6 +753,28 @@ after the sort correction);
 `pip-licenses` also does not list itself in its own output, which corrected the
 Mission 037 credits note. Closes the GPLv3 exposure from Missions 033/037 and
 advances Punch Board item 4.
+
+## Mission 039 Result
+
+**Mission 039 is implemented, verified, and pushed.** Fixes a pre-existing,
+confirmed correctness bug (not a Punch Board item — surfaced by Mission 038's
+own new test coverage, not introduced by it): `_preprocess_query`
+(`backend/search.py`) applied sequential, interactive regex substitutions
+inside plain-`set` iteration over `ROLE_PLAY_TITLES` / `NOISE_PHRASES`, so the
+result depended on the per-process `PYTHONHASHSEED` (~3 of 13 seeds degraded,
+e.g. left `current 2025` in "tesla stock" queries). Fix: iterate the two sets
+in a fixed, fully reproducible order (`sorted(..., key=lambda s: (-len(s), s))`,
+longest-first + alphabetical tiebreak — precomputed as module-level tuples),
+which also lowers the interaction risk. `NOISE_WORDS` and
+`CURRENT_EVENT_INDICATORS` were audited and left untouched (membership-only
+usage, order-independent); regex patterns, set contents, and all other
+functions unchanged. New cross-seed subprocess test spawns real
+`PYTHONHASHSEED`-overridden processes per seed 0–12 (a same-process test
+cannot see this class of bug) asserting identical `_preprocess_query` /
+`extract_search_keywords` output and exactly `"tesla stock"` for the
+previously-flaky scenario. Validation: raw 13-seed sweep over
+`test_search_keywords.py` = `9 passed` under every seed 0–12; full backend **477
+passed**; frontend **138 passed** / build / lint green; ruff clean.
 
 ## Evidence Rule
 

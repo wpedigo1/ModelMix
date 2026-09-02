@@ -11,11 +11,36 @@ a word is more central, so the extraction returns the highest-scored (most
 important) phrases first. The semantic tests below assert the subject phrase
 must appear contiguously in the output - shape-only tests ("is non-empty")
 cannot catch an inverted sort, which is exactly the regression these guard.
+
+Mission 039 (this file's cross-seed test) additionally locks down
+preprocessing determinism: the interactive role-play/noise regex passes used
+to depend on PYTHONHASHSEED via plain-set iteration order, flaking ~1 in 5
+processes. That bug predates Mission 038 and was only catchable from a
+subprocess, because hash randomization is fixed for the lifetime of one
+process.
 """
+
+import ast
+import os
+import subprocess
+import sys
+from pathlib import Path
 
 from backend.search import (
     _rake_extract_keywords,
     extract_search_keywords,
+)
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# Seeds sweep matching how the nondeterminism was confirmed: real subprocesses,
+# each with its own hash seed. The original bug made ~3 of every 13 seeds
+# produce a degraded result for the query below.
+HASH_SEED_SWEEP = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+_PREPROCESS_DETERMINISM_QUERY = (
+    "Act as a financial analyst and evaluate the current market in late "
+    "2025 for tesla stock"
 )
 
 
@@ -107,3 +132,46 @@ def test_climate_change_policy_phrase_survives_extraction():
         "Compare the main climate change policy proposals for 2026"
     )
     assert "climate change policy" in result
+
+
+def _run_preprocess_snapshot(seed):
+    """Run preprocessing + extraction in a fresh subprocess under a hash seed.
+
+    Returns (preprocessed, extracted) for that seed's process, or raises if
+    the subprocess fails. A same-process test cannot observe hash-seed
+    variance, so the sweep must spawn real subprocesses.
+    """
+    code = (
+        "from backend.search import _preprocess_query, extract_search_keywords;"
+        "q = %r;"
+        "print(repr((_preprocess_query(q), extract_search_keywords(q))))"
+        % _PREPROCESS_DETERMINISM_QUERY
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        env={**os.environ, "PYTHONHASHSEED": str(seed)},
+        cwd=str(_REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return ast.literal_eval(result.stdout.strip())
+
+
+def test_preprocess_query_is_deterministic_across_hash_seeds():
+    """Same input, 13 different PYTHONHASHSEED processes -> identical output.
+
+    This is the regression test for the pre-existing bug where the sequential
+    ROLE_PLAY_TITLES / NOISE_PHRASES regex substitutions iterated plain sets,
+    so the iteration order (and thus the interaction between substitutions)
+    depended on the process's hash seed. It produces 'tesla stock' for every
+    seed in the sweep, never the degraded 'current 2025 tesla stock'.
+    """
+    snapshots = {seed: _run_preprocess_snapshot(seed) for seed in HASH_SEED_SWEEP}
+
+    preprocessed = {seed: snap[0] for seed, snap in snapshots.items()}
+    extracted = {seed: snap[1] for seed, snap in snapshots.items()}
+
+    assert len(set(preprocessed.values())) == 1, preprocessed
+    assert len(set(extracted.values())) == 1, extracted
+    assert extracted[HASH_SEED_SWEEP[0]] == "tesla stock"

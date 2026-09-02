@@ -1167,3 +1167,30 @@ passed**, build green, lint clean; `rg` proves no `yake` in
 identical (before/after table in the report, regenerated after the sort
 correction). Closes the GPLv3 exposure from
 Missions 033/037; Punch Board item 4 now cites Missions 017 + 037 + 038.
+
+## Mission 039 Result
+
+Deterministic query preprocessing. Fixed a pre-existing, confirmed
+correctness bug in `backend/search.py::_preprocess_query`: it applied
+sequential, interactive regex substitutions over plain-`set` iteration of
+`ROLE_PLAY_TITLES` and `NOISE_PHRASES`, so the output depended on the
+per-process `PYTHONHASHSEED` (verified ~3 of 13 seeds degraded, e.g. leaving
+`current 2025` in a "tesla stock" query). Not introduced by Mission 038 — its
+sort fix was correct; Mission 038's new tests were simply the first with
+enough sensitivity to catch this much older bug. Fix: iterate both sets in a
+fully reproducible order (`sorted(..., key=lambda s: (-len(s), s))` —
+longest-first with alphabetical tiebreak, precomputed as module-level tuples),
+which also lowers the interaction risk; `NOISE_WORDS` /
+`CURRENT_EVENT_INDICATORS` were audited (membership-only, order-independent)
+and deliberately left unchanged; regex patterns, set contents, and every other
+function untouched. New cross-seed test spawns real
+`PYTHONHASHSEED`-overridden subprocesses (seeds 0–12; a same-process test
+cannot see this bug) and asserts identical `_preprocess_query` /
+`extract_search_keywords` output plus exactly `"tesla stock"` for the
+previously-flaky scenario ("Act as a financial analyst and evaluate the
+current market in late 2025 for tesla stock"). Validation observed: raw
+13-seed sweep over `test_search_keywords.py` = **9 passed under every seed
+0–12** (pre-fix, seeds 5/11/12 failed); full backend **477 passed**; frontend
+**138 passed**, build green, lint clean; `ruff check` clean. Maps to no Punch
+Board item — recorded as a pre-existing correctness bug found and fixed via
+Mission 038's own test coverage.
