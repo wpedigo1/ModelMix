@@ -1477,6 +1477,28 @@ build` and `npm run lint` clean, backend **525 passed** (unchanged).
 Enforcement/cutoff and cumulative session-cost tracking remain separate,
 undecided future work. Full report in `051-spend-warning-rendering-frontend.md`.
 
+## Mission 052 Result
+
+Per-request spend confirmation gate, backend only (Punch Board item 17 advanced
+with the first real dollar-cap enforcement). `TwoWorkerRequest` gains
+`spend_limit_usd` (Optional[float], `gt=0`) and `confirm_over_budget` (bool,
+default False). `routes.py::stream_two_workers` runs the gate BEFORE
+`run_registry.start()`: when `spend_limit_usd` AND `session_id` are provided and
+`confirm_over_budget` is False, `_over_budget_rejection` loads the session via
+the existing `load_session` and inspects only the most recent run's
+already-persisted messages. Per-seat only - never an aggregate - any message
+with a real, non-`None` `cost_usd > limit` yields HTTP 402 naming the seat and
+actual cost. `None` cost is never treated as over-budget; a missing session or
+prior run proceeds; `confirm_over_budget: true` bypasses the check entirely;
+omitting `spend_limit_usd` is byte-for-byte unchanged. Hard boundaries honored:
+no `should_warn_cost`/`WARNING_COST_USD_THRESHOLD`/Mission 050 warning changes,
+no server-side persistence of the limit, no `compute_openrouter_cost_usd`
+change, no schema bump, no new dependency. ModelMix-only path. Validation:
+`test_modelmix_spend_gate.py` **9 passed** (7 acceptance criteria + regression),
+targeted 4-file suite **44 passed**, full backend **544 passed** (535 + 9),
+frontend **181 passed**, `npm run build` + `npm run lint` clean. Full report in
+`052-spend-confirmation-gate-backend.md`.
+
 ## Mission 053 Result
 
 Temperature control and moderator guidance, backend only (Punch Board item 26

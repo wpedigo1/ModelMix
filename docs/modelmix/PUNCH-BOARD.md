@@ -255,7 +255,19 @@ non-alarming `Cost notice` footer row reusing the existing `formatCostUsd`
 threaded through hydration/history/archive, matching `outputWarning`'s scope.
 Item 17's spend visibility work is now complete end to end; enforcement/cutoff
 and cumulative session-cost tracking remain explicitly separate, undecided
-future work.
+future work. **Mission 052** adds the first dollar-cap enforcement (backend): a
+per-request `spend_limit_usd` (+`confirm_over_budget` flag) on
+`TwoWorkerRequest`. Before the next run starts, the gate loads the session's most
+recent run and, per-seat only (never aggregated), compares its real,
+already-persisted `cost_usd`; if any seat's real cost exceeds the limit and the
+request did not confirm, the run is rejected with HTTP 402 naming the seat and
+actual cost. `None` cost (non-OpenRouter/uncached) is never treated as
+over-budget, `confirm_over_budget: true` bypasses the check, and omitting
+`spend_limit_usd` is byte-for-byte unchanged. It reads only previously computed
+facts from the existing `load_session` — no `should_warn_cost` change, no
+server-side persistence of the limit, no schema bump, no new dependency. Mission
+053/054 (per-request temperature/moderator guidance, frontend) land on top had
+already shipped before 052 was retroactively renumbered.
 
 ## PHASE 4 — Streaming
 

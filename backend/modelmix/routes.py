@@ -26,6 +26,8 @@ class TwoWorkerRequest(BaseModel):
     hard_cap_chars: Optional[int] = Field(default=None, gt=0)
     temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
     moderator_guidance: Optional[str] = Field(default=None, max_length=2000)
+    spend_limit_usd: Optional[float] = Field(default=None, gt=0)
+    confirm_over_budget: bool = False
 
 
 def _resolve_guardrail_overrides(
@@ -72,6 +74,45 @@ def _resolve_guardrail_overrides(
     return warning, cap
 
 
+async def _over_budget_rejection(
+    session_id: str,
+    spend_limit_usd: float,
+) -> Optional[str]:
+    """Return a rejection detail if the last run's real per-seat cost exceeded the limit.
+
+    Reads already-persisted, already-computed cost values only — never sums seats
+    together and never fabricates cost. If the session does not exist, has no prior
+    runs, or none of the last run's real costs exceed the limit, returns ``None``.
+    """
+    try:
+        session_document = await run_registry.persistence.load_session(session_id)
+    except PersistenceError:
+        return None
+    if session_document is None:
+        return None
+    session = session_document.get("session") or {}
+    runs = session.get("runs") or []
+    if not runs:
+        return None
+    last_run = runs[-1]
+    last_run_id = last_run.get("run_id")
+    for message in session.get("messages") or []:
+        if message.get("run_id") != last_run_id:
+            continue
+        cost = message.get("cost_usd")
+        if cost is None:
+            continue
+        if not isinstance(cost, (int, float)):
+            continue
+        if cost > spend_limit_usd:
+            seat = message.get("seat") or "unknown"
+            return (
+                f"Seat {seat} cost ${cost:g} exceeds the spend limit of "
+                f"${spend_limit_usd:g} from the previous run; confirm to proceed"
+            )
+    return None
+
+
 @router.post("/runs/stream")
 async def stream_two_workers(body: TwoWorkerRequest) -> StreamingResponse:
     """Launch two independent witnesses and return one multiplexed SSE feed."""
@@ -88,6 +129,14 @@ async def stream_two_workers(body: TwoWorkerRequest) -> StreamingResponse:
             detail="A moderator requires a second worker (worker_b_model); "
             "Solo mode runs worker_a only",
         )
+    if (
+        body.spend_limit_usd is not None
+        and body.session_id is not None
+        and not body.confirm_over_budget
+    ):
+        rejection = await _over_budget_rejection(body.session_id, body.spend_limit_usd)
+        if rejection is not None:
+            raise HTTPException(status_code=402, detail=rejection)
     try:
         run = await run_registry.start(
             body.prompt,

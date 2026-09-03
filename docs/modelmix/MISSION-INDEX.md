@@ -64,6 +64,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 049 | OpenCode | **PASS (LOCAL)** | `049-session-manager-frontend.md` — closes Punch Board item 29 (retention/delete UI) |
 | 050 | OpenCode | **PASS (LOCAL)** | `050-per-seat-spend-warning-backend.md` — advances Punch Board item 17 (informational spend warning) |
 | 051 | OpenCode | **PASS (LOCAL)** | `051-spend-warning-rendering-frontend.md` — closes Punch Board item 17 spend visibility (frontend warning) |
+| 052 | OpenCode | **PASS (LOCAL)** | `052-spend-confirmation-gate-backend.md` — advances Punch Board item 17 (backend dollar-cap enforcement gate) |
 | 053 | OpenCode | **PASS (LOCAL)** | `053-temperature-and-moderator-guidance-backend.md` — advances Punch Board item 26 (temperature + moderator guidance, backend) |
 | 054 | OpenCode | **PASS (LOCAL)** | `054-temperature-and-moderator-guidance-frontend.md` — advances Punch Board item 26 (temperature + moderator guidance, frontend) |
 
@@ -957,6 +958,28 @@ matching `outputWarning`. No new formatter, no alarm styling, no new
 dependency. Validation: frontend **166 passed** (9 new tests), `npm run build`
 and `npm run lint` clean, backend **525 passed** (unchanged). Enforcement/cutoff
 and cumulative session-cost tracking remain separate, undecided future work.
+
+## Mission 052 Result
+
+**Mission 052 is implemented and verified locally.** Per-request spend
+confirmation gate, backend only (Punch Board item 17 advanced with the first
+real dollar-cap enforcement). `TwoWorkerRequest` gains `spend_limit_usd`
+(Optional[float], `gt=0`) and `confirm_over_budget` (bool, default False).
+`routes.py::stream_two_workers` runs the gate BEFORE `run_registry.start()`:
+when `spend_limit_usd` AND `session_id` are provided and `confirm_over_budget`
+is False, `_over_budget_rejection` loads the session via the existing
+`load_session` and inspects only the most recent run's already-persisted
+messages. Per-seat only — never an aggregate — any message with a real,
+non-`None` `cost_usd > limit` yields HTTP 402 naming the seat and actual cost.
+`None` cost is never treated as over-budget; a missing session or prior run
+proceeds; `confirm_over_budget: true` bypasses the check entirely; omitting
+`spend_limit_usd` is byte-for-byte unchanged. Hard boundaries honored: no
+`should_warn_cost`/`WARNING_COST_USD_THRESHOLD`/Mission 050 warning changes, no
+server-side persistence of the limit, no `compute_openrouter_cost_usd` change,
+no schema bump, no new dependency. ModelMix-only path. Validation:
+`test_modelmix_spend_gate.py` **9 passed** (7 acceptance criteria + regression),
+targeted 4-file suite **44 passed**, full backend **544 passed** (535 + 9),
+frontend **181 passed**, `npm run build` + `npm run lint` clean.
 
 ## Mission 053 Result
 
