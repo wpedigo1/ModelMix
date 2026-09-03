@@ -148,6 +148,23 @@ class RunRegistry:
         async with self._lock:
             return self._runs.get(run_id)
 
+    async def active_run_for_session(self, session_id: str) -> Optional[str]:
+        """Return the run_id of an in-process, non-terminal run for a session.
+
+        A run is considered active while its status is not in
+        ``TERMINAL_STATUSES`` (e.g. ``created``/``active``). Used by the delete
+        route to refuse deleting a session out from under a streaming run.
+        """
+        await self._prune()
+        async with self._lock:
+            for run in self._runs.values():
+                if (
+                    run.session_id == session_id
+                    and run.status not in TERMINAL_STATUSES
+                ):
+                    return run.run_id
+            return None
+
     async def cancel(self, run_id: str) -> Optional[RunEventJournal]:
         run = await self.get(run_id)
         if run is None:

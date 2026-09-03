@@ -60,6 +60,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 045 | GLM 5.3 Flash (OpenCode) | **PASS (LOCAL)** | `045-cost-rendering-frontend.md` — closes Punch Board item 17 visibility half (frontend rendering) |
 | 046 | OpenCode | **PASS (LOCAL)** | `046-deterministic-mock-provider-library.md` — closes Punch Board item 14 |
 | 047 | OpenCode | **PARTIAL — config implemented, runtime verification REQUIRES USER** | `047-tauri-csp-hardening.md` — advances Punch Board item 34 (CSP half); runtime proof outstanding |
+| 048 | OpenCode | **PASS (LOCAL)** | `048-session-listing-and-deletion-backend.md` — advances Punch Board item 29 (retention/delete basics) |
 
 
 ## Mission 007 Provenance Clarification
@@ -879,6 +880,25 @@ build` package with fonts rendering, a real streaming Mix run, and zero CSP
 console errors remain to be verified by the user (and the `'unsafe-inline'`
 `style-src` directive is my best read of React/Google Fonts needs, not
 runtime-confirmed).
+
+## Mission 048 Result
+
+**Mission 048 is implemented and verified locally.** Manual session listing
+and deletion (backend only, Punch Board item 29 retention/delete basics; no
+automatic retention, no frontend, no schema bump). `persistence.py`:
+`ModelMixPersistence` gains `list_sessions()` and `delete_session()`;
+`AtomicJsonModelMixPersistence` implements `list_sessions()` via the
+`latest_session()` glob+mtime pattern returning lightweight newest-first
+summaries (`session_id`, `created_at`, `updated_at`, `message_count`, never
+message/run content) and `delete_session()` reusing the existing `_path()`
+validation to unlink inside `self._lock` (True if existed, False if not).
+`registry.py`: `active_run_for_session()` returns a non-terminal run_id from
+the existing `_runs` map (pruned, locked). `routes.py`: `GET
+/api/modelmix/sessions` and `DELETE /api/modelmix/sessions/{session_id}` (409
+while a run in that session is active, 422 on bad id, 404 if absent, 204 on
+success). Validation: targeted persistence+streaming suite **39 passed**, full
+backend **517 passed** (10 new tests), frontend **148 passed**, build and lint
+clean.
 
 ## Evidence Rule
 

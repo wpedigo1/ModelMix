@@ -14,7 +14,7 @@ import time
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 SCHEMA_VERSION = 1
 DEFAULT_MODELMIX_DATA_DIR = Path("data/modelmix/sessions")
@@ -46,6 +46,12 @@ class ModelMixPersistence(ABC):
 
     @abstractmethod
     async def append_event(self, session_id: str, run_id: str, event: Dict[str, Any], status: str) -> None: ...
+
+    @abstractmethod
+    async def list_sessions(self) -> List[Dict[str, Any]]: ...
+
+    @abstractmethod
+    async def delete_session(self, session_id: str) -> bool: ...
 
 
 class AtomicJsonModelMixPersistence(ModelMixPersistence):
@@ -114,6 +120,47 @@ class AtomicJsonModelMixPersistence(ModelMixPersistence):
                 if snapshot is not None:
                     return deepcopy(document), deepcopy(snapshot)
             return None
+
+    async def list_sessions(self) -> List[Dict[str, Any]]:
+        """Return lightweight per-session summaries, newest-first.
+
+        Only summary fields are returned (session_id, created_at, updated_at,
+        message_count) — never full message/run content. Ordering matches
+        ``latest_session()``: files scanned newest-first by modification time.
+        """
+        async with self._lock:
+            if not self.root.exists():
+                return []
+            candidates = sorted(
+                self.root.glob("*.json"),
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )
+            summaries: List[Dict[str, Any]] = []
+            for path in candidates:
+                document = self._read(path)
+                session = document["session"]
+                summaries.append({
+                    "session_id": session["session_id"],
+                    "created_at": session.get("created_at"),
+                    "updated_at": session.get("updated_at"),
+                    "message_count": len(session.get("messages", [])),
+                })
+            return summaries
+
+    async def delete_session(self, session_id: str) -> bool:
+        """Remove the durable session file. Returns True if it existed.
+
+        The id is validated by the existing ``_path()`` (same as every other
+        method); no id ever touches the filesystem unvalidated.
+        """
+        async with self._lock:
+            path = self._path(session_id)
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                return False
+            return True
 
     async def create_run(self, session_id: str, run: Dict[str, Any]) -> None:
         async with self._lock:

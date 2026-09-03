@@ -4,7 +4,7 @@ import json
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..council import get_provider_for_model
@@ -113,6 +113,38 @@ async def latest_session() -> dict:
     if document is None:
         raise HTTPException(status_code=404, detail="No persisted ModelMix session")
     return document
+
+
+@router.get("/sessions")
+async def list_sessions() -> list:
+    """List lightweight summaries of all durable sessions, newest-first."""
+    try:
+        summaries = await run_registry.persistence.list_sessions()
+    except PersistenceError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return summaries
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(session_id: str) -> Response:
+    """Delete a durable session unless it has an active (non-terminal) run.
+
+    409 when a run in that session is currently streaming in this process;
+    404 when the session does not exist; 204 on successful deletion.
+    """
+    active_run_id = await run_registry.active_run_for_session(session_id)
+    if active_run_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Session has an active run ({active_run_id}); cancel it first",
+        )
+    try:
+        deleted = await run_registry.persistence.delete_session(session_id)
+    except PersistenceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="ModelMix session not found")
+    return Response(status_code=204)
 
 
 @router.get("/sessions/{session_id}")

@@ -465,3 +465,73 @@ async def test_mix_compare_and_solo_shapes_all_load_from_disk(tmp_path):
         (tmp_path / f"{session_id}.json").write_text(json.dumps(document), encoding="utf-8")
         loaded = await AtomicJsonModelMixPersistence(tmp_path).load_session(session_id)
         assert loaded["session"]["runs"][0]["models"] == models
+
+
+async def test_list_sessions_empty_directory_returns_empty_list(tmp_path):
+    store = AtomicJsonModelMixPersistence(tmp_path)
+    assert await store.list_sessions() == []
+
+
+async def test_list_sessions_summarizes_newest_first_without_message_content(tmp_path):
+    store = AtomicJsonModelMixPersistence(tmp_path)
+    await store.create_session("alpha")
+    await store.create_session("beta")
+    await store.create_session("gamma")
+
+    # Deterministic newest-first ordering independent of disk write timing.
+    import os
+    os.utime(tmp_path / "alpha.json", (1, 1))
+    os.utime(tmp_path / "beta.json", (2, 2))
+    os.utime(tmp_path / "gamma.json", (3, 3))
+
+    summaries = await store.list_sessions()
+
+    assert [summary["session_id"] for summary in summaries] == ["gamma", "beta", "alpha"]
+    for summary in summaries:
+        assert isinstance(summary["created_at"], float)
+        assert isinstance(summary["updated_at"], float)
+        assert summary["message_count"] == 0
+        # Lightweight summary: never full run/message content.
+        assert "messages" not in summary
+        assert "runs" not in summary
+
+
+async def test_list_sessions_reports_message_count(tmp_path):
+    store = AtomicJsonModelMixPersistence(tmp_path)
+    await store.create_session("sess")
+    await store.create_run("sess", {
+        "run_id": "run-1",
+        "prompt": "question",
+        "models": {"worker_a": "p:a"},
+        "status": "created",
+        "latest_seq": 0,
+        "events": [],
+    })
+    summaries = await store.list_sessions()
+    assert summaries[0]["session_id"] == "sess"
+    assert summaries[0]["message_count"] == 1  # create_run appends the user message
+
+
+async def test_delete_session_removes_file_and_load_returns_none(tmp_path):
+    store = AtomicJsonModelMixPersistence(tmp_path)
+    await store.create_session("gone")
+    assert (tmp_path / "gone.json").exists()
+
+    assert await store.delete_session("gone") is True
+    assert not (tmp_path / "gone.json").exists()
+    assert await store.load_session("gone") is None
+
+
+async def test_delete_session_nonexistent_returns_false_without_raising(tmp_path):
+    store = AtomicJsonModelMixPersistence(tmp_path)
+    assert await store.delete_session("does-not-exist") is False
+
+
+async def test_delete_session_invalid_id_raises_persistence_error(tmp_path):
+    store = AtomicJsonModelMixPersistence(tmp_path)
+    with pytest.raises(PersistenceError, match="Invalid ModelMix session id"):
+        await store.delete_session("../../evil")
+    with pytest.raises(PersistenceError, match="Invalid ModelMix session id"):
+        await store.delete_session("")
+    with pytest.raises(PersistenceError, match="Invalid ModelMix session id"):
+        await store.delete_session("a" * 129)

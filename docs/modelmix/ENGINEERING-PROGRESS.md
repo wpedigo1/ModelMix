@@ -1401,3 +1401,22 @@ user's hands** and is outstanding; the `'unsafe-inline'` style-src directive
 is not runtime-confirmed. Automated suites unaffected: backend **507 passed**,
 frontend **148 passed**, build and lint clean. Full report in
 `047-tauri-csp-hardening.md`.
+
+## Mission 048 Result
+
+Manual session listing and deletion (backend only, Punch Board item 29
+retention/delete basics; no automatic retention, no frontend, no schema
+bump). `persistence.py`: `ModelMixPersistence` gains `list_sessions()` and
+`delete_session()`; `AtomicJsonModelMixPersistence.list_sessions()` reuses the
+`latest_session()` glob+mtime pattern and returns lightweight newest-first
+summaries (`session_id`/`created_at`/`updated_at`/`message_count`, never
+message/run content); `delete_session()` reuses the existing `_path()`
+validation and unlinks inside `self._lock` (True if existed, False if not).
+`registry.py`: `active_run_for_session()` returns a non-terminal run_id from
+the existing `_runs` map (pruned, locked). `routes.py`: `GET
+/api/modelmix/sessions` and `DELETE /api/modelmix/sessions/{session_id}` - 409
+while a run in that session is active (checked before any delete), 422 on bad
+id, 404 if absent, 204 on success. Validation: targeted persistence+streaming
+suite **39 passed**, full backend **517 passed** (10 new tests), frontend
+**148 passed**, `npm run build` and `npm run lint` clean. Full report in
+`048-session-listing-and-deletion-backend.md`.

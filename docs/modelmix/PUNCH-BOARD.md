@@ -338,9 +338,9 @@ frontend top-bar test was updated (the mode span had to become a real control)
 and is the sole modified existing test. Reports:
 `028-compare-backend-verification.md`, `029-compare-mode-status-fix-and-frontend.md`.
 
-### 29. Finalize Mix multi-turn session behavior — **PARTIAL — MISSIONS 009/011/012**
+### 29. Finalize Mix multi-turn session behavior — **PARTIAL — MISSIONS 009/011/012/048**
 
-Independent bounded seat histories, Moderator history, hot-swap continuity, and context without cross-seat leakage are implemented. Mission 011 displays completed prior turns above the live turn in each cockpit panel; Mission 012 makes archived turns carry their real prompt/models and adds the New Session reset control. Retention/delete basics remain open.
+Independent bounded seat histories, Moderator history, hot-swap continuity, and context without cross-seat leakage are implemented. Mission 011 displays completed prior turns above the live turn in each cockpit panel; Mission 012 makes archived turns carry their real prompt/models and adds the New Session reset control. **Mission 048** adds manual session listing and deletion (backend): ``list_sessions()`` returns lightweight newest-first summaries and ``delete_session()`` removes a session file via the existing validated-id path, exposed as ``GET /api/modelmix/sessions`` and ``DELETE /api/modelmix/sessions/{session_id}`` (409 while a run in that session is active, 404 if absent). Retention/delete basics are now in place; automatic/scheduled retention and the session manager UI remain open.
 
 ## PHASE 7 — Security Hardening for Alpha
 
