@@ -46,6 +46,11 @@ function finishLabel(reason) {
   return reason || 'not reported';
 }
 
+export function formatCostUsd(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return `$${value.toFixed(value < 0.01 ? 4 : 2)}`;
+}
+
 function isSeatActive(seat) {
   if (!seat || typeof seat !== 'object') return false;
   const ran = typeof seat.status === 'string' && !['idle', 'waiting'].includes(seat.status);
@@ -69,6 +74,14 @@ export function buildSeatTelemetry(seat) {
     label: 'Finish',
     value: finishLabel(seat.finishReason),
   });
+  const costLabel = formatCostUsd(seat.costUsd);
+  if (costLabel !== null) {
+    items.push({
+      key: 'cost',
+      label: 'Cost',
+      value: costLabel,
+    });
+  }
   if (
     seat.outputWarning
     && Number.isInteger(seat.outputWarning.chars)

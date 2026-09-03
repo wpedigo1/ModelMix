@@ -57,6 +57,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 042 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `042-remove-confirmed-dead-code.md` — closes Punch Board item 46 |
 | 043 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed, docs-only)** | `043-foundational-domain-documentation.md` — draws Punch Board items 7/9/12/13 to SATISFIED |
 | 044 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `044-real-cost-computation-backend.md` — advances Punch Board item 17 (spend visibility backend half) |
+| 045 | GLM 5.3 Flash (OpenCode) | **PASS (LOCAL)** | `045-cost-rendering-frontend.md` — closes Punch Board item 17 visibility half (frontend rendering) |
 
 
 ## Mission 007 Provenance Clarification
@@ -817,6 +818,27 @@ explicitly open. Validation: narrow persistence/streaming/moderator suite
 **44 passed**, full backend **494 passed** (`--basetemp` workspace override
 for the known corrupt `pytest-of-wpedigo` system temp-dir ACL), frontend
 **138 passed**, `npm run build` and `npm run lint` clean.
+
+## Mission 045 Result
+
+**Mission 045 is implemented and verified locally.** Cost rendering, frontend
+only (no backend change): `cost_usd` now flows through the full frontend
+telemetry lifecycle exactly like `usage`/`finish_reason` — `costUsd: null` on
+all three seats in `createModelMixState()`/`buildHistoryEntry()`, no-clobber
+capture from `seat_completed`/`moderator_completed` events
+(`event.cost_usd ?? seat.costUsd`), hydration from persisted
+`message.cost_usd`, and carry-through in `archiveCurrentRun`.
+`seatTelemetry.js` renders a standalone `Cost` footer row **only** when
+`seat.costUsd` is a real finite number — 4 decimals under $0.01 (so Mission
+044's own `$0.0045` fixture never displays as a misleading `$0.00`), 2
+decimals at or above — and no row at all when absent (Timing/Finish-style
+conditional rendering, deliberately not Usage's always-present pattern). No
+cross-seat aggregate; live seat footers only; no new dependencies. Punch
+Board item 17 is now **SATISFIED** (visibility half complete end to end);
+any actual dollar spend-cap enforcement remains a separate, explicitly
+undecided product question. Validation: frontend **148 passed** (138 prior +
+10 new), `npm run build` and `npm run lint` clean, backend **494 passed**
+(unchanged).
 
 ## Evidence Rule
 

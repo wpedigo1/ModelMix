@@ -207,6 +207,81 @@ test('finish reason for a worker without a reported reason stays known-unknown',
   assert.equal(finish.value, 'not reported');
 });
 
+test('a seat with a real sub-cent cost renders a Cost row that is not $0.00', () => {
+  const seat = {
+    text: 'answer',
+    status: 'completed',
+    error: null,
+    finishReason: 'stop',
+    usage: { prompt_tokens: 1000, completion_tokens: 500 },
+    costUsd: 0.0045,
+    startedAt: 100,
+    completedAt: 112.4,
+  };
+  const cost = buildSeatTelemetry(seat).find((item) => item.key === 'cost');
+  assert.equal(cost.label, 'Cost');
+  assert.equal(cost.value, '$0.0045');
+  assert.notEqual(cost.value, '$0.00');
+});
+
+test('a seat with a cost over a cent renders standard two-decimal currency', () => {
+  const seat = {
+    text: 'answer',
+    status: 'completed',
+    error: null,
+    finishReason: 'stop',
+    usage: null,
+    costUsd: 0.125,
+    startedAt: 100,
+    completedAt: 112.4,
+  };
+  const cost = buildSeatTelemetry(seat).find((item) => item.key === 'cost');
+  assert.equal(cost.value, '$0.13');
+});
+
+test('a seat without a cost renders no Cost row at all', () => {
+  const seat = {
+    text: 'answer',
+    status: 'completed',
+    error: null,
+    finishReason: 'stop',
+    usage: { total_tokens: 5 },
+    costUsd: null,
+    startedAt: 100,
+    completedAt: 112.4,
+  };
+  assert.equal(buildSeatTelemetry(seat).find((item) => item.key === 'cost'), undefined);
+});
+
+test('a seat with the cost field absent entirely renders no Cost row', () => {
+  const seat = {
+    text: 'answer',
+    status: 'completed',
+    error: null,
+    finishReason: 'stop',
+    usage: { total_tokens: 5 },
+    startedAt: 100,
+    completedAt: 112.4,
+  };
+  assert.equal(buildSeatTelemetry(seat).find((item) => item.key === 'cost'), undefined);
+});
+
+test('non-finite cost values never render', () => {
+  for (const bad of [NaN, Infinity, '0.0045', null, undefined]) {
+    const seat = {
+      text: 'answer',
+      status: 'completed',
+      error: null,
+      finishReason: 'stop',
+      usage: null,
+      costUsd: bad,
+      startedAt: 100,
+      completedAt: 112.4,
+    };
+    assert.equal(buildSeatTelemetry(seat).find((item) => item.key === 'cost'), undefined);
+  }
+});
+
 test('moderator without a reported finish reason stays known-unknown', () => {
   const moderator = {
     text: 'synthesis',

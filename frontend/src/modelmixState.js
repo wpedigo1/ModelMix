@@ -5,7 +5,7 @@ export const createModelMixState = () => ({
   overall: 'idle',
   message: 'Ready',
   history: [],
-  worker_a: { text: '', status: 'idle', error: null, finishReason: null, usage: null, startedAt: null, completedAt: null },
+  worker_a: { text: '', status: 'idle', error: null, finishReason: null, usage: null, costUsd: null, startedAt: null, completedAt: null },
   moderator: {
     text: '',
     status: 'waiting',
@@ -13,10 +13,11 @@ export const createModelMixState = () => ({
     started: false,
     finishReason: null,
     usage: null,
+    costUsd: null,
     startedAt: null,
     completedAt: null,
   },
-  worker_b: { text: '', status: 'idle', error: null, finishReason: null, usage: null, startedAt: null, completedAt: null },
+  worker_b: { text: '', status: 'idle', error: null, finishReason: null, usage: null, costUsd: null, startedAt: null, completedAt: null },
 });
 
 const terminalOverall = new Set(['completed', 'partial', 'failed', 'cancelled', 'replay_gap', 'expired']);
@@ -66,6 +67,7 @@ export function applyModelMixEvent(state, event) {
       seat.status = 'completed';
       seat.finishReason = event.finish_reason || null;
       seat.usage = event.usage ?? seat.usage;
+      seat.costUsd = event.cost_usd ?? seat.costUsd;
       seat.completedAt = event.ts ?? null;
     }
     if (event.type === 'seat_failed') {
@@ -96,6 +98,7 @@ export function applyModelMixEvent(state, event) {
       moderator.status = 'completed';
       moderator.finishReason = event.finish_reason || null;
       moderator.usage = event.usage ?? moderator.usage;
+      moderator.costUsd = event.cost_usd ?? moderator.costUsd;
       moderator.completedAt = event.ts ?? null;
     } else if (event.type === 'moderator_failed') {
       moderator.status = 'failed';
@@ -143,17 +146,18 @@ function buildHistoryEntry(run, messages) {
     prompt: run.prompt,
     models: run.models,
     status: run.status,
-    worker_a: { text: '', status: 'idle', error: null, finishReason: null, usage: null, startedAt: null, completedAt: null },
+    worker_a: { text: '', status: 'idle', error: null, finishReason: null, usage: null, costUsd: null, startedAt: null, completedAt: null },
     moderator: {
       text: '',
       status: 'waiting',
       error: null,
       finishReason: null,
       usage: null,
+      costUsd: null,
       startedAt: null,
       completedAt: null,
     },
-    worker_b: { text: '', status: 'idle', error: null, finishReason: null, usage: null, startedAt: null, completedAt: null },
+    worker_b: { text: '', status: 'idle', error: null, finishReason: null, usage: null, costUsd: null, startedAt: null, completedAt: null },
   };
   for (const message of messages) {
     if (message.run_id !== run.run_id || !['worker_a', 'worker_b', 'moderator'].includes(message.seat)) continue;
@@ -164,6 +168,7 @@ function buildHistoryEntry(run, messages) {
       error: message.error || null,
       finishReason: message.finish_reason || null,
       usage: message.usage ?? null,
+      costUsd: message.cost_usd ?? null,
       startedAt: message.started_at ?? null,
       completedAt: message.completed_at ?? null,
     };
@@ -183,6 +188,7 @@ export function archiveCurrentRun(state) {
       error: state.worker_a.error,
       finishReason: state.worker_a.finishReason ?? null,
       usage: state.worker_a.usage ?? null,
+      costUsd: state.worker_a.costUsd ?? null,
       startedAt: state.worker_a.startedAt ?? null,
       completedAt: state.worker_a.completedAt ?? null,
     },
@@ -192,6 +198,7 @@ export function archiveCurrentRun(state) {
       error: state.moderator.error,
       finishReason: state.moderator.finishReason ?? null,
       usage: state.moderator.usage ?? null,
+      costUsd: state.moderator.costUsd ?? null,
       startedAt: state.moderator.startedAt ?? null,
       completedAt: state.moderator.completedAt ?? null,
     },
@@ -201,6 +208,7 @@ export function archiveCurrentRun(state) {
       error: state.worker_b.error,
       finishReason: state.worker_b.finishReason ?? null,
       usage: state.worker_b.usage ?? null,
+      costUsd: state.worker_b.costUsd ?? null,
       startedAt: state.worker_b.startedAt ?? null,
       completedAt: state.worker_b.completedAt ?? null,
     },
@@ -249,6 +257,7 @@ export function hydrateModelMixState(document) {
       error: message.error || null,
       finishReason: message.finish_reason || null,
       usage: message.usage ?? null,
+      costUsd: message.cost_usd ?? null,
       startedAt: message.started_at ?? null,
       completedAt: message.completed_at ?? null,
     };

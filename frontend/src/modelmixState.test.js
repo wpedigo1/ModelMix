@@ -372,6 +372,7 @@ test('archiveCurrentRun appends the outgoing run, resets live slots, and keeps s
     error: null,
     finishReason: null,
     usage: null,
+    costUsd: null,
     startedAt: null,
     completedAt: null,
   });
@@ -381,6 +382,7 @@ test('archiveCurrentRun appends the outgoing run, resets live slots, and keeps s
     error: null,
     finishReason: 'stop',
     usage: null,
+    costUsd: null,
     startedAt: null,
     completedAt: null,
   });
@@ -390,6 +392,7 @@ test('archiveCurrentRun appends the outgoing run, resets live slots, and keeps s
     error: null,
     finishReason: null,
     usage: null,
+    costUsd: null,
     startedAt: null,
     completedAt: null,
   });
@@ -525,6 +528,36 @@ test('seat_completed usage is stored unchanged and never clobbered by an empty e
   assert.deepEqual(state.worker_a.usage, usage);
 });
 
+test('seat_completed cost_usd is stored and never clobbered by an event without it', () => {
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 1, type: 'seat_completed', seat_id: 'worker_a', cost_usd: 0.0045, ts: 101,
+  });
+  assert.equal(state.worker_a.costUsd, 0.0045);
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 2, type: 'seat_completed', seat_id: 'worker_a', ts: 102,
+  });
+  assert.equal(state.worker_a.costUsd, 0.0045);
+});
+
+test('moderator_completed cost_usd is stored and never clobbered by an event without it', () => {
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 1, type: 'moderator_completed', cost_usd: 0.009, ts: 101,
+  });
+  assert.equal(state.moderator.costUsd, 0.009);
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 2, type: 'moderator_completed', ts: 102 });
+  assert.equal(state.moderator.costUsd, 0.009);
+});
+
+test('seats without a reported cost keep costUsd null', () => {
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 1, type: 'seat_completed', seat_id: 'worker_b', ts: 101 });
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 2, type: 'moderator_completed', ts: 102 });
+  assert.equal(state.worker_b.costUsd, null);
+  assert.equal(state.moderator.costUsd, null);
+});
+
 test('startedAt and completedAt populate from event ts for both workers and moderator', () => {
   let state = createModelMixState();
   state = applyModelMixEvent(state, { run_id: 'run', seq: 1, type: 'seat_started', seat_id: 'worker_b', ts: 101 });
@@ -606,6 +639,67 @@ test('hydration reads usage, startedAt, completedAt, and moderator finish reason
   assert.equal(entry.worker_a.completedAt, 101);
 });
 
+test('hydration reads cost_usd off persisted messages and leaves absence null', () => {
+  const document = {
+    schema_version: 1,
+    session: {
+      session_id: 'session-1',
+      runs: [
+        {
+          run_id: 'run-live', latest_seq: 4, status: 'completed',
+          prompt: 'Live question',
+          models: { worker_a: 'p:a', moderator: 'p:m', worker_b: 'p:b' },
+        },
+      ],
+      messages: [
+        {
+          run_id: 'run-live', seat: 'worker_a', content: 'A', status: 'completed',
+          usage: { prompt_tokens: 1000, completion_tokens: 500 }, started_at: 200, completed_at: 201,
+          finish_reason: 'stop', cost_usd: 0.0045,
+        },
+        {
+          run_id: 'run-live', seat: 'moderator', content: 'M', status: 'completed',
+          usage: { total_tokens: 5 }, started_at: 300, completed_at: 301,
+          finish_reason: 'stop', cost_usd: 0.009,
+        },
+        {
+          run_id: 'run-live', seat: 'worker_b', content: 'B', status: 'completed',
+          usage: { total_tokens: 9 }, started_at: 400, completed_at: 401,
+        },
+      ],
+    },
+  };
+  const state = hydrateModelMixState(document);
+  assert.equal(state.worker_a.costUsd, 0.0045);
+  assert.equal(state.moderator.costUsd, 0.009);
+  assert.equal(state.worker_b.costUsd, null);
+});
+
+test('archiveCurrentRun carries costUsd into the history entry', () => {
+  const state = {
+    ...createModelMixState(),
+    sessionId: 'session-9',
+    runId: 'run-9',
+    prompt: 'Outgoing question',
+    models: { worker_a: 'p:a', moderator: 'p:m', worker_b: 'p:b' },
+    overall: 'completed',
+    lastSeq: 42,
+  };
+  state.worker_a = {
+    text: 'A evidence', status: 'completed', error: null, costUsd: 0.0045,
+    usage: { total_tokens: 3 }, startedAt: 10, completedAt: 11,
+  };
+  state.worker_b = {
+    text: 'B evidence', status: 'failed', error: 'stopped',
+    usage: null, startedAt: 14, completedAt: 15,
+  };
+
+  const archived = archiveCurrentRun(state);
+  assert.equal(archived.history[0].worker_a.costUsd, 0.0045);
+  assert.equal(archived.history[0].moderator.costUsd, null);
+  assert.equal(archived.history[0].worker_b.costUsd, null);
+});
+
 test('archiveCurrentRun carries usage, startedAt, and completedAt into the history entry', () => {
   const state = {
     ...createModelMixState(),
@@ -622,7 +716,7 @@ test('archiveCurrentRun carries usage, startedAt, and completedAt into the histo
   };
   state.moderator = {
     text: 'M synthesis', status: 'completed', error: null, started: true, finishReason: 'stop',
-    usage: { total_tokens: 4 }, startedAt: 12, completedAt: 13,
+    usage: { total_tokens: 4 }, costUsd: null, startedAt: 12, completedAt: 13,
   };
   state.worker_b = {
     text: 'B evidence', status: 'failed', error: 'stopped',
@@ -631,14 +725,14 @@ test('archiveCurrentRun carries usage, startedAt, and completedAt into the histo
 
   const archived = archiveCurrentRun(state);
   assert.deepEqual(archived.history[0].worker_a, {
-    text: 'A evidence', status: 'completed', error: null, finishReason: null, usage: { total_tokens: 3 }, startedAt: 10, completedAt: 11,
+    text: 'A evidence', status: 'completed', error: null, finishReason: null, usage: { total_tokens: 3 }, costUsd: null, startedAt: 10, completedAt: 11,
   });
   assert.deepEqual(archived.history[0].moderator, {
     text: 'M synthesis', status: 'completed', error: null, finishReason: 'stop',
-    usage: { total_tokens: 4 }, startedAt: 12, completedAt: 13,
+    usage: { total_tokens: 4 }, costUsd: null, startedAt: 12, completedAt: 13,
   });
   assert.deepEqual(archived.history[0].worker_b, {
-    text: 'B evidence', status: 'failed', error: 'stopped', finishReason: null, usage: null, startedAt: 14, completedAt: 15,
+    text: 'B evidence', status: 'failed', error: 'stopped', finishReason: null, usage: null, costUsd: null, startedAt: 14, completedAt: 15,
   });
 });
 

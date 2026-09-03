@@ -1340,3 +1340,25 @@ passed**, full backend **494 passed** (9 new tests; `--basetemp` workspace
 override for the known corrupt system-temp ACL), frontend **138 passed**,
 `npm run build` and `npm run lint` clean. Full report in
 `044-real-cost-computation-backend.md`.
+
+## Mission 045 Result
+
+Cost rendering, frontend only (Punch Board item 17 visibility half closed; no
+backend change). `modelmixState.js`: `costUsd: null` on all three seats in
+`createModelMixState()` and `buildHistoryEntry()`; no-clobber capture from
+`seat_completed`/`moderator_completed` (`event.cost_usd ?? seat.costUsd`,
+matching the `usage` pattern exactly); hydration and history entries read
+persisted `message.cost_usd ?? null`; `archiveCurrentRun` carries `costUsd`
+through. `seatTelemetry.js`: new `formatCostUsd()` renders 4 decimals under
+$0.01 and 2 decimals at or above (Mission 044's `$0.0045` fixture displays as
+`$0.0045`, never `$0.00`), and `buildSeatTelemetry` pushes a `Cost` row only
+for a real finite value — absent/null renders no row at all (Timing/Finish
+conditional pattern, deliberately not Usage's always-present one). No
+cross-seat aggregate, no "unavailable" placeholder, live footers only, no new
+dependencies. Two existing archive `deepEqual` expectations gained
+`costUsd: null` as the unavoidable consequence of the new field; no behavior
+expectation changed. Validation: frontend **148 passed** (10 new tests),
+`npm run build` and `npm run lint` clean, backend **494 passed** (unchanged).
+Punch Board item 17 is now **SATISFIED**; dollar spend-cap enforcement remains
+a separate, undecided product question. Full report in
+`045-cost-rendering-frontend.md`.

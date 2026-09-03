@@ -225,8 +225,14 @@ tokens at the Mission 015 capture point to attach an honest `cost_usd` to
 computed only for `openrouter:`-prefixed models with cached pricing and real
 token counts, entirely absent (never 0, never estimated) in every other case.
 No spend cap or enforcement was built: what an exceeded dollar budget should
-*do* is a separate, undecided product question. Frontend rendering of
-`cost_usd` also remains open (later mission).
+*do* is a separate, undecided product question. **Mission 045** closes the
+frontend half: ``cost_usd`` now flows through the full frontend state lifecycle
+(no-clobber capture, hydration, archiving) and renders as a standalone ``Cost``
+footer row only when a real finite figure exists - sub-cent values show four
+decimals so a real cost never displays as a misleading ``$0.00`` - with no
+cross-seat aggregate and no ``unavailable`` placeholder. The visibility half is
+now done end to end; any actual dollar spend-cap enforcement remains a
+separate, explicitly undecided product question.
 
 ## PHASE 4 — Streaming
 
