@@ -108,6 +108,11 @@ Only `openrouter` extracts real pricing fields at catalog time
 (`openrouter.py:54-58`). It derives `is_free = prompt_price == 0 and
 completion_price == 0` and adds `"is_free": is_free` to the model dict
 (`openrouter.py:58`, `:64`). No other provider returns dollar pricing.
+**Mission 044**: OpenRouter per-token pricing is no longer discarded —
+`get_models()` returns `prompt_price_per_token`/`completion_price_per_token`
+and caches it, so OpenRouter-routed seats get a real `cost_usd` on their
+completion events when real usage tokens exist; all other cases leave cost
+absent.
 
 ### is_free
 Three distinct, honest derivations exist:

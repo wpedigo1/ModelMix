@@ -1,9 +1,51 @@
 """OpenRouter provider wrapper."""
 
-from typing import List, Dict, Any
+from typing import Dict, Any, List, Optional, Tuple
 from .base import LLMProvider
 from .. import openrouter
 from ..credentials import get_api_key
+
+# In-memory per-token USD pricing, keyed by the bare OpenRouter model id
+# (e.g. "anthropic/claude-3.5-sonnet"). Populated/refreshed on every
+# successful get_models() fetch; the last successful fetch wins. A fresh app
+# state starts with an empty cache until the model list is first fetched, so
+# pricing is simply unavailable for any model not yet cached rather than guessed.
+_PRICING: Dict[str, Dict[str, float]] = {}
+
+
+def _bare_model_id(model_id: str) -> str:
+    """Strip the internal ``openrouter:`` prefix to the upstream model id."""
+    if model_id.startswith("openrouter:"):
+        return model_id[len("openrouter:"):]
+    return model_id
+
+
+def compute_openrouter_cost_usd(model_id: str, usage: Optional[Dict[str, Any]]) -> Optional[float]:
+    """Return USD cost for an OpenRouter-routed model, or None when not computable.
+
+    Cost is only ever computed when ALL of the following hold:
+      * the model id is ``openrouter:``-prefixed,
+      * per-token pricing for the bare model id was successfully cached,
+      * ``usage`` carries real, non-negative ``prompt_tokens`` and
+        ``completion_tokens``.
+    Otherwise ``None`` is returned so the caller leaves ``cost_usd`` absent
+    (never ``0``, never guessed).
+    """
+    if not usage or not isinstance(usage, dict):
+        return None
+    if not model_id.startswith("openrouter:"):
+        return None
+    price = _PRICING.get(_bare_model_id(model_id))
+    if price is None:
+        return None
+    prompt_tokens = usage.get("prompt_tokens")
+    completion_tokens = usage.get("completion_tokens")
+    if not isinstance(prompt_tokens, (int, float)) or not isinstance(completion_tokens, (int, float)):
+        return None
+    if prompt_tokens < 0 or completion_tokens < 0:
+        return None
+    return prompt_tokens * price["prompt"] + completion_tokens * price["completion"]
+
 
 class OpenRouterProvider(LLMProvider):
     """OpenRouter API provider."""
@@ -56,12 +98,18 @@ class OpenRouterProvider(LLMProvider):
                     prompt_price = float(pricing.get("prompt", "0") or "0")
                     completion_price = float(pricing.get("completion", "0") or "0")
                     is_free = prompt_price == 0 and completion_price == 0
-                    
+                    _PRICING[model.get("id")] = {
+                        "prompt": prompt_price,
+                        "completion": completion_price,
+                    }
+
                     models.append({
                         "id": f"openrouter:{model.get('id')}",
                         "name": f"{model.get('name', model.get('id'))} [OpenRouter]",
                         "provider": "OpenRouter",
-                        "is_free": is_free
+                        "is_free": is_free,
+                        "prompt_price_per_token": prompt_price,
+                        "completion_price_per_token": completion_price,
                     })
                 return sorted(models, key=lambda x: x["name"])
         except Exception:

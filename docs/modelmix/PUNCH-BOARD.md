@@ -217,7 +217,16 @@ override exists, the per-seat warning renders live in the footer as a plain
 informational line, and worker seats now report honest finish captions
 including "Output capped by ModelMix". The provider/account usage warning
 remains open because no authoritative quota data exists to compare against;
-the cost/token ceiling is the remaining item-17 sub-work.
+the cost/token ceiling is the remaining item-17 sub-work. **Mission 044**
+delivers the dollar-visibility half: real OpenRouter per-token pricing is
+preserved from `get_models()`, cached, and multiplied by real per-seat usage
+tokens at the Mission 015 capture point to attach an honest `cost_usd` to
+`seat_completed`/`moderator_completed` events and persisted messages —
+computed only for `openrouter:`-prefixed models with cached pricing and real
+token counts, entirely absent (never 0, never estimated) in every other case.
+No spend cap or enforcement was built: what an exceeded dollar budget should
+*do* is a separate, undecided product question. Frontend rendering of
+`cost_usd` also remains open (later mission).
 
 ## PHASE 4 — Streaming
 

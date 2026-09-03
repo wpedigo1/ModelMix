@@ -186,6 +186,7 @@ class AtomicJsonModelMixPersistence(ModelMixPersistence):
                 "error": None,
                 "usage": None,
                 "finish_reason": None,
+                "cost_usd": None,
                 "started_at": None,
                 "completed_at": None,
             }
@@ -202,6 +203,8 @@ class AtomicJsonModelMixPersistence(ModelMixPersistence):
                 message["usage"] = event["usage"]
             if event.get("finish_reason") is not None:
                 message["finish_reason"] = event["finish_reason"]
+            if event.get("cost_usd") is not None:
+                message["cost_usd"] = event["cost_usd"]
         elif event_type in {"seat_failed", "moderator_failed"}:
             message["status"] = "failed"
             message["error"] = str(event.get("error") or "Participant failed")

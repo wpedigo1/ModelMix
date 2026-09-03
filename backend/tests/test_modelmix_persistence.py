@@ -253,6 +253,43 @@ async def test_persisted_usage_matches_event_exactly_and_absent_usage_stays_none
     assert document["session"]["messages"][1]["usage"] == usage
 
 
+async def test_persisted_cost_usd_survives_reload_and_absence_stays_none(tmp_path):
+    store = AtomicJsonModelMixPersistence(tmp_path)
+    await _play(store, "session-1", [
+        {"run_id": "run-1", "seq": 1, "type": "seat_started", "ts": 1.0, "seat_id": "worker_a"},
+        {
+            "run_id": "run-1", "seq": 2, "type": "seat_completed", "ts": 2.0, "seat_id": "worker_a",
+            "usage": {"prompt_tokens": 1000, "completion_tokens": 500},
+            "cost_usd": 0.0045,
+        },
+        {"run_id": "run-1", "seq": 3, "type": "seat_started", "ts": 3.0, "seat_id": "worker_b"},
+        {
+            "run_id": "run-1", "seq": 4, "type": "seat_completed", "ts": 4.0, "seat_id": "worker_b",
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+        },
+    ])
+    reloaded = await AtomicJsonModelMixPersistence(tmp_path).load_session("session-1")
+    messages = {message["seat"]: message for message in reloaded["session"]["messages"]}
+    assert messages["worker_a"]["cost_usd"] == 0.0045
+    assert messages["worker_b"]["cost_usd"] is None
+
+
+async def test_moderator_cost_usd_survives_persistence_reload(tmp_path):
+    store = AtomicJsonModelMixPersistence(tmp_path)
+    await _play(store, "session-1", [
+        {"run_id": "run-1", "seq": 1, "type": "seat_started", "ts": 1.0, "seat_id": "worker_a"},
+        {"run_id": "run-1", "seq": 2, "type": "seat_completed", "ts": 2.0, "seat_id": "worker_a"},
+        {"run_id": "run-1", "seq": 3, "type": "moderator_started", "ts": 3.0, "actor": "moderator"},
+        {
+            "run_id": "run-1", "seq": 4, "type": "moderator_completed", "ts": 4.0, "actor": "moderator",
+            "finish_reason": "stop", "cost_usd": 0.009,
+        },
+    ])
+    reloaded = await AtomicJsonModelMixPersistence(tmp_path).load_session("session-1")
+    message = next(message for message in reloaded["session"]["messages"] if message["seat"] == "moderator")
+    assert message["cost_usd"] == 0.009
+
+
 async def test_moderator_finish_reason_and_usage_survive_persistence_reload(tmp_path):
     store = AtomicJsonModelMixPersistence(tmp_path)
     await _play(store, "session-1", [

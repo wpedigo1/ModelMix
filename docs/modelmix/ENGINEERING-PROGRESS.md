@@ -1315,3 +1315,28 @@ reproduces the same environmental `WinError 5` and is reported honestly),
 frontend **138 passed**, `npm run build` and `npm run lint` clean. Commit
 `docs(modelmix): foundational domain documentation (Mission 043)`. Full report
 in `043-foundational-domain-documentation.md`.
+
+## Mission 044 Result
+
+Real per-token cost computation for OpenRouter-routed models (backend only,
+Punch Board item 17 spend-visibility half). `openrouter.py`: `get_models()`
+stops discarding `prompt_price`/`completion_price` — model dicts now carry
+`prompt_price_per_token`/`completion_price_per_token` (existing `is_free`
+derivation untouched), and a module-level `_PRICING` dict is refreshed on
+every successful fetch (last fetch wins, no TTL). New
+`compute_openrouter_cost_usd()` returns a real USD figure only when the model
+id is `openrouter:`-prefixed, the bare model id is cached, and usage carries
+real non-negative `prompt_tokens`/`completion_tokens`; otherwise `None`, so
+`cost_usd` stays entirely absent (never 0, never estimated) — including for
+every non-OpenRouter provider. `orchestrator.py::run_seat` (streaming and
+non-streaming paths) and `moderator.py::run_moderator` attach `cost_usd` as a
+sibling field on the same `seat_completed`/`moderator_completed` payloads
+that already carry Mission 015 usage. `persistence.py::_apply_event` extends
+the additive `usage`/`finish_reason` pattern to capture `cost_usd` onto
+persisted messages (no schema bump). No spend cap, enforcement, or frontend
+changes; what an exceeded dollar budget should do remains an open product
+decision. Validation: targeted persistence/streaming/moderator suite **44
+passed**, full backend **494 passed** (9 new tests; `--basetemp` workspace
+override for the known corrupt system-temp ACL), frontend **138 passed**,
+`npm run build` and `npm run lint` clean. Full report in
+`044-real-cost-computation-backend.md`.

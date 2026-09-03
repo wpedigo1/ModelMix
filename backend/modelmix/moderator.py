@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from ..providers.base import LLMProvider
+from ..providers.openrouter import compute_openrouter_cost_usd
 from . import guardrails, timeouts
 from .orchestrator import EventFactory
 from .timeouts import aiter_with_deadline
@@ -160,6 +161,9 @@ async def run_moderator(
         payload: Dict[str, Any] = {"actor": "moderator"}
         if usage is not None:
             payload["usage"] = usage
+        cost_usd = compute_openrouter_cost_usd(model_id, usage)
+        if cost_usd is not None:
+            payload["cost_usd"] = cost_usd
         finish_reason = "modelmix_output_cap" if capped else finish_reason
         if finish_reason is not None:
             payload["finish_reason"] = finish_reason

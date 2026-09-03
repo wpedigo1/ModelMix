@@ -56,6 +56,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 041 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed, docs-only)** | `041-dead-code-inventory.md` |
 | 042 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed)** | `042-remove-confirmed-dead-code.md` — closes Punch Board item 46 |
 | 043 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed, docs-only)** | `043-foundational-domain-documentation.md` — draws Punch Board items 7/9/12/13 to SATISFIED |
+| 044 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `044-real-cost-computation-backend.md` — advances Punch Board item 17 (spend visibility backend half) |
 
 
 ## Mission 007 Provenance Clarification
@@ -796,6 +797,26 @@ punch-board's `partially_completed`; the code value is authoritative. Backend
 `pytest-of-wpedigo` system temp-dir ACL; the literal command reproduces the
 same environmental `WinError 5`), frontend **138 passed**, build and lint
 clean. Closes Punch Board items **7, 9, 12, 13** to SATISFIED.
+
+## Mission 044 Result
+
+**Mission 044 is implemented and verified locally.** Real per-token cost
+computation for OpenRouter-routed models (backend only): `get_models()` now
+preserves `prompt_price_per_token`/`completion_price_per_token` and refreshes a
+module-level `_PRICING` cache (last successful fetch wins); a new
+`compute_openrouter_cost_usd()` attaches an exact `cost_usd` to the existing
+`seat_completed`/`moderator_completed` event payloads only when the model is
+`openrouter:`-prefixed, pricing is cached, and real non-negative prompt/
+completion token counts exist — cost stays entirely absent (never 0, never
+estimated) in every other case, including all non-OpenRouter providers.
+`persistence.py::_apply_event` captures `cost_usd` onto persisted messages
+using the same additive pattern as `usage`/`finish_reason` (no schema bump).
+No spend cap, no enforcement, no frontend changes. Item 17 advances (dollar
+visibility half); frontend rendering and any spend-cap decision remain
+explicitly open. Validation: narrow persistence/streaming/moderator suite
+**44 passed**, full backend **494 passed** (`--basetemp` workspace override
+for the known corrupt `pytest-of-wpedigo` system temp-dir ACL), frontend
+**138 passed**, `npm run build` and `npm run lint` clean.
 
 ## Evidence Rule
 
