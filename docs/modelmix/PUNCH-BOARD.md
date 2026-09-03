@@ -481,6 +481,22 @@ Remaining known gaps on item 34 that were deliberately out of scope for each
 mission: MSI bundle, code-signing/installer polish, CSP hardening (currently
 `null`), dynamic port discovery, and a real frozen-build credential-path run.
 
+Mission 047 replaces the `null` CSP in `tauri.conf.json` with a real policy
+(`default-src 'self'`; `script-src 'self'`; `style-src 'self' 'unsafe-inline'
+https://fonts.googleapis.com`; `font-src 'self' https://fonts.gstatic.com`;
+`img-src 'self' data:`; `connect-src 'self' http://localhost:8001
+http://127.0.0.1:8001 http://tauri.localhost:8001`) so the shipped webview no
+longer runs with no script/style/connect restrictions. The production
+`connect-src` origin `http://tauri.localhost:8001` is required because the
+frontend builds its backend URL from `window.location.hostname` (which is
+`tauri.localhost` in the packaged app, per `FRONTEND_HOST` at
+`lib.rs:223`). CSP hardening is therefore addressed. Item 34 remains **OPEN**
+only on MSI bundle, code signing, dynamic ports, and the real frozen-build
+credential-path run. The CSP change itself requires the user's runtime
+confirmation (fonts render, real Mix run streams, zero CSP console errors) in
+both `cargo tauri dev` and a launched production build before it is
+considered fully proven — see `047-tauri-csp-hardening.md`.
+
 ### 35. Measure before optimizing — **OPEN**
 
 ## PHASE 9 — Research and Workspace Features

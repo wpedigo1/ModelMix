@@ -59,6 +59,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 044 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `044-real-cost-computation-backend.md` — advances Punch Board item 17 (spend visibility backend half) |
 | 045 | GLM 5.3 Flash (OpenCode) | **PASS (LOCAL)** | `045-cost-rendering-frontend.md` — closes Punch Board item 17 visibility half (frontend rendering) |
 | 046 | OpenCode | **PASS (LOCAL)** | `046-deterministic-mock-provider-library.md` — closes Punch Board item 14 |
+| 047 | OpenCode | **PARTIAL — config implemented, runtime verification REQUIRES USER** | `047-tauri-csp-hardening.md` — advances Punch Board item 34 (CSP half); runtime proof outstanding |
 
 
 ## Mission 007 Provenance Clarification
@@ -855,6 +856,29 @@ plus one test driving a real `multiplex_workers` flow to prove usability
 (replacing an ad-hoc fake). Punch Board item 14 is now **SATISFIED**.
 Validation: new suite **13 passed**, full backend **507 passed**, frontend
 **148 passed**, build and lint clean.
+
+## Mission 047 Result
+
+**CSP change implemented; runtime verification REQUIRES the user's hands
+(same limit as Missions 032/033/035).** `src-tauri/tauri.conf.json`'s
+`app.security.csp` changed from `null` to a real policy: `default-src 'self'`;
+`script-src 'self'`; `style-src 'self' 'unsafe-inline'
+https://fonts.googleapis.com`; `font-src 'self' https://fonts.gstatic.com`;
+`img-src 'self' data:`; `connect-src 'self' http://localhost:8001
+http://127.0.0.1:8001 http://tauri.localhost:8001`. The production
+`connect-src` origin `http://tauri.localhost:8001` was added beyond the
+mission's starting policy from repo evidence: the frontend builds its backend
+URL as `http://${window.location.hostname}:8001` (`modelmixApi.js:4`,
+`api.js:15`), and `window.location.hostname` is `tauri.localhost` in the
+packaged app (confirmed by `FRONTEND_HOST` at `lib.rs:223`) — so the
+starting 127.0.0.1/localhost-only policy would pass dev but block the
+production backend fetch, exactly Mission 035's warned divergence. Automated
+suites unaffected: backend **507 passed**, frontend **148 passed**, build and
+lint clean. NOT yet PASS: `cargo tauri dev` and a launched `cargo tauri
+build` package with fonts rendering, a real streaming Mix run, and zero CSP
+console errors remain to be verified by the user (and the `'unsafe-inline'`
+`style-src` directive is my best read of React/Google Fonts needs, not
+runtime-confirmed).
 
 ## Evidence Rule
 

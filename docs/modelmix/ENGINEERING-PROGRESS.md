@@ -1380,3 +1380,24 @@ with `streaming_provider`. Existing tests are deliberately not migrated.
 Validation: new suite **13 passed**, full backend **507 passed**, frontend
 **148 passed**, `npm run build` and `npm run lint` clean. Full report in
 `046-deterministic-mock-provider-library.md`.
+
+## Mission 047 Result
+
+Tauri CSP hardening (Punch Board item 34 CSP half; no production code touched
+outside the config). `src-tauri/tauri.conf.json` `app.security.csp` changed
+from `null` to: `default-src 'self'; script-src 'self'; style-src 'self'
+'unsafe-inline' https://fonts.googleapis.com; font-src 'self'
+https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'
+http://localhost:8001 http://127.0.0.1:8001 http://tauri.localhost:8001`.
+Per-directive justification is repo-evidence based (fonts origin, no CDN
+scripts, backend URL built from `window.location.hostname`). Production
+connect-src `http://tauri.localhost:8001` was added beyond the starting policy
+because the frontend connects to `http://${window.location.hostname}:8001` and
+that hostname is `tauri.localhost` in the packaged app (`FRONTEND_HOST`,
+`lib.rs:223`) — the dev-only starting policy would block production. Runtime
+verification (fonts render, real streaming Mix run, zero CSP console errors,
+in BOTH `cargo tauri dev` and a launched production build) **requires the
+user's hands** and is outstanding; the `'unsafe-inline'` style-src directive
+is not runtime-confirmed. Automated suites unaffected: backend **507 passed**,
+frontend **148 passed**, build and lint clean. Full report in
+`047-tauri-csp-hardening.md`.
