@@ -246,7 +246,16 @@ already-computed completion (never blocking or altering it). ``None`` cost
 (non-OpenRouter or uncached) never warns. This fires once at completion per
 seat — not mid-stream, not a cumulative session total — exactly matching the
 telemetry honesty rules. Enforcement/cutoff and cumulative session-cost
-tracking remain separate, explicitly undecided future work.
+tracking remain separate, explicitly undecided future work. **Mission 051**
+closes the frontend visibility half: `seat_cost_warning`/`moderator_cost_warning`
+are captured in live seat state (`seat.costWarning = { cost_usd, threshold }`,
+mirroring the `outputWarning` pattern exactly) and rendered as a plain,
+non-alarming `Cost notice` footer row reusing the existing `formatCostUsd`
+(sub-cent values never show as `$0.00`), live-only — not persisted, not
+threaded through hydration/history/archive, matching `outputWarning`'s scope.
+Item 17's spend visibility work is now complete end to end; enforcement/cutoff
+and cumulative session-cost tracking remain explicitly separate, undecided
+future work.
 
 ## PHASE 4 — Streaming
 

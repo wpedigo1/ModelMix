@@ -361,3 +361,74 @@ test('no output-warning line is rendered when the seat never crossed a threshold
   const items = buildSeatTelemetry(seat);
   assert.equal(items.some((item) => item.key === 'output-warning'), false);
 });
+
+test('a valid costWarning renders a Cost notice row with sub-cent precision (never $0.00)', () => {
+  const seat = {
+    text: 'answer',
+    status: 'completed',
+    error: null,
+    finishReason: 'stop',
+    usage: null,
+    costWarning: { cost_usd: 0.1234, threshold: 0.1 },
+    startedAt: 100,
+    completedAt: 112.4,
+  };
+  const items = buildSeatTelemetry(seat);
+  const notice = items.find((item) => item.key === 'cost-warning');
+  assert.equal(notice.label, 'Cost notice');
+  assert.ok(notice.value.includes('$0.12'));
+  assert.ok(notice.value.includes('$0.10'));
+  assert.notEqual(notice.value, '$0.00');
+});
+
+test('a sub-cent cost warning value renders with four decimals, not $0.00', () => {
+  const seat = {
+    text: 'answer',
+    status: 'completed',
+    error: null,
+    finishReason: 'stop',
+    usage: null,
+    costWarning: { cost_usd: 0.0045, threshold: 0.001 },
+    startedAt: 100,
+    completedAt: 112.4,
+  };
+  const items = buildSeatTelemetry(seat);
+  const notice = items.find((item) => item.key === 'cost-warning');
+  assert.ok(notice.value.includes('$0.0045'));
+  assert.notEqual(notice.value, '$0.00');
+});
+
+test('a seat with no costWarning renders no Cost notice row', () => {
+  const seat = {
+    text: 'answer',
+    status: 'completed',
+    error: null,
+    finishReason: 'stop',
+    usage: null,
+    startedAt: 100,
+    completedAt: 112.4,
+  };
+  assert.equal(buildSeatTelemetry(seat).find((item) => item.key === 'cost-warning'), undefined);
+});
+
+test('a costWarning with non-finite or missing values renders no Cost notice row', () => {
+  for (const costWarning of [
+    null,
+    { cost_usd: '0.25', threshold: 0.1 },
+    { cost_usd: 0.25, threshold: '0.1' },
+    { cost_usd: 0.25 },
+    { threshold: 0.1 },
+  ]) {
+    const seat = {
+      text: 'answer',
+      status: 'completed',
+      error: null,
+      finishReason: 'stop',
+      usage: null,
+      costWarning,
+      startedAt: 100,
+      completedAt: 112.4,
+    };
+    assert.equal(buildSeatTelemetry(seat).find((item) => item.key === 'cost-warning'), undefined);
+  }
+});

@@ -93,6 +93,17 @@ export function buildSeatTelemetry(seat) {
       value: `${seat.outputWarning.chars.toLocaleString('en-US')} / ${seat.outputWarning.threshold.toLocaleString('en-US')} chars`,
     });
   }
+  if (seat.costWarning) {
+    const costNotice = formatCostUsd(seat.costWarning.cost_usd);
+    const noticeThreshold = formatCostUsd(seat.costWarning.threshold);
+    if (costNotice !== null && noticeThreshold !== null) {
+      items.push({
+        key: 'cost-warning',
+        label: 'Cost notice',
+        value: `${costNotice} (above ${noticeThreshold} notice threshold)`,
+      });
+    }
+  }
   const started = seat.startedAt;
   const completed = seat.completedAt;
   if (started != null && completed != null) {

@@ -889,3 +889,99 @@ test('a worker seat that crosses the warning and completes normally keeps the tr
   assert.equal(state.worker_a.finishReason, 'stop');
   assert.deepEqual(state.worker_a.outputWarning, { chars: 22451, threshold: 20000 });
 });
+
+test('seat_cost_warning updates only its own seat and never the peers or moderator', () => {
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 1, type: 'seat_delta', seat_id: 'worker_a', delta: 'A' });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 2, type: 'seat_cost_warning', seat_id: 'worker_a', cost_usd: 0.25, threshold: 0.1,
+  });
+  assert.deepEqual(state.worker_a.costWarning, { cost_usd: 0.25, threshold: 0.1 });
+  assert.equal(state.worker_b.costWarning, undefined);
+  assert.equal(state.moderator.costWarning, undefined);
+});
+
+test('moderator_cost_warning updates only the moderator seat', () => {
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 1, type: 'moderator_started' });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 2, type: 'moderator_cost_warning', cost_usd: 0.4, threshold: 0.1,
+  });
+  assert.deepEqual(state.moderator.costWarning, { cost_usd: 0.4, threshold: 0.1 });
+  assert.equal(state.worker_a.costWarning, undefined);
+  assert.equal(state.worker_b.costWarning, undefined);
+});
+
+test('costWarning stays live-only and never leaks into archive or history entries', () => {
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 1, type: 'seat_delta', seat_id: 'worker_a', delta: 'A' });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 2, type: 'seat_cost_warning', seat_id: 'worker_a', cost_usd: 0.25, threshold: 0.1,
+  });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 3, type: 'seat_completed', seat_id: 'worker_a', finish_reason: 'stop',
+  });
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 4, type: 'moderator_delta', delta: 'M' });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 5, type: 'moderator_cost_warning', cost_usd: 0.4, threshold: 0.1,
+  });
+  assert.deepEqual(state.worker_a.costWarning, { cost_usd: 0.25, threshold: 0.1 });
+  assert.deepEqual(state.moderator.costWarning, { cost_usd: 0.4, threshold: 0.1 });
+
+  const archived = archiveCurrentRun({
+    ...state,
+    prompt: 'question',
+    models: { worker_a: 'p:a', moderator: 'p:m', worker_b: 'p:b' },
+  });
+  assert.equal('costWarning' in archived.history[0].worker_a, false);
+  assert.equal('costWarning' in archived.history[0].moderator, false);
+  assert.equal('costWarning' in archived.worker_a, false);
+});
+
+test('hydration never invents costWarning on live seats or history entries', () => {
+  const document = {
+    schema_version: 1,
+    session: {
+      session_id: 'session-1',
+      runs: [
+        {
+          run_id: 'run-old', latest_seq: 4, status: 'completed', prompt: 'Prior',
+          models: { worker_a: 'p:a', moderator: 'p:m', worker_b: 'p:b' },
+        },
+        {
+          run_id: 'run-live', latest_seq: 4, status: 'completed', prompt: 'Live',
+          models: { worker_a: 'p:a', moderator: 'p:m', worker_b: 'p:b' },
+        },
+      ],
+      messages: [
+        {
+          run_id: 'run-old', seat: 'worker_a', content: 'old A', status: 'completed',
+          finish_reason: 'stop', cost_usd: 0.25,
+        },
+        {
+          run_id: 'run-live', seat: 'worker_a', content: 'live A', status: 'completed',
+          finish_reason: 'stop', cost_usd: 0.3,
+        },
+      ],
+    },
+  };
+  const state = hydrateModelMixState(document);
+  assert.equal(state.worker_a.costUsd, 0.3);
+  assert.equal(state.history[0].worker_a.costUsd, 0.25);
+  assert.equal('costWarning' in state.worker_a, false);
+  assert.equal('costWarning' in state.history[0].worker_a, false);
+});
+
+test('a seat that warns then completes normally keeps the truthful cost warning alongside finish', () => {
+  let state = createModelMixState();
+  state = applyModelMixEvent(state, { run_id: 'run', seq: 1, type: 'seat_delta', seat_id: 'worker_a', delta: 'A' });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 2, type: 'seat_cost_warning', seat_id: 'worker_a', cost_usd: 0.25, threshold: 0.1,
+  });
+  state = applyModelMixEvent(state, {
+    run_id: 'run', seq: 3, type: 'seat_completed', seat_id: 'worker_a', finish_reason: 'stop', cost_usd: 0.25,
+  });
+  assert.equal(state.worker_a.finishReason, 'stop');
+  assert.equal(state.worker_a.costUsd, 0.25);
+  assert.deepEqual(state.worker_a.costWarning, { cost_usd: 0.25, threshold: 0.1 });
+});

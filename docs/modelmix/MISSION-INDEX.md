@@ -63,6 +63,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 048 | OpenCode | **PASS (LOCAL)** | `048-session-listing-and-deletion-backend.md` â€” advances Punch Board item 29 (retention/delete basics) |
 | 049 | OpenCode | **PASS (LOCAL)** | `049-session-manager-frontend.md` â€” closes Punch Board item 29 (retention/delete UI) |
 | 050 | OpenCode | **PASS (LOCAL)** | `050-per-seat-spend-warning-backend.md` â€” advances Punch Board item 17 (informational spend warning) |
+| 051 | OpenCode | **PASS (LOCAL)** | `051-spend-warning-rendering-frontend.md` â€” closes Punch Board item 17 spend visibility (frontend warning) |
 
 
 ## Mission 007 Provenance Clarification
@@ -922,20 +923,38 @@ and `npm run lint` clean, backend **517 passed** (unchanged).
 ## Mission 050 Result
 
 **Mission 050 is implemented and verified locally.** Per-seat spend warning
-(backend only, Punch Board item 17, informational only — no enforcement).
+(backend only, Punch Board item 17, informational only ï¿½ no enforcement).
 `guardrails.py`: `WARNING_COST_USD_THRESHOLD = 0.10` (provisional default,
-the "notice this" point for a single seat turn) and `should_warn_cost()` —
+the "notice this" point for a single seat turn) and `should_warn_cost()` ï¿½
 true only for a real finite number strictly above the threshold; `None`
 (non-OpenRouter or uncached) never warns. `orchestrator.py` (both streaming
 and non-streaming worker paths) and `moderator.py` emit one
 `seat_cost_warning`/`moderator_cost_warning` (cost_usd, threshold) at the
-exact point cost is computed, just before the completion event — purely
+exact point cost is computed, just before the completion event ï¿½ purely
 additional, never replacing/altering it. Fires once at completion per seat,
 never mid-stream, no cumulative session total. Output-length warning
 untouched. Validation: targeted cost+guardrails suite **43 passed**, full
 backend **525 passed** (8 new tests), frontend **157 passed**, build and lint
 clean. Enforcement/cutoff and cumulative tracking remain separate, undecided
 future work.
+
+## Mission 051 Result
+
+**Mission 051 is implemented and verified locally.** Spend warning rendering
+(frontend only, Punch Board item 17 spend visibility closed; no backend
+change). `modelmixState.js`: `seat_cost_warning`/`moderator_cost_warning` set
+`seat.costWarning`/`moderator.costWarning = { cost_usd, threshold }`, mirroring
+the `outputWarning` set exactly at both branches. `seatTelemetry.js`:
+`buildSeatTelemetry` renders a plain, non-alarming `Cost notice` footer row
+only when `costWarning` has a real finite `cost_usd` and `threshold`, reusing
+the existing `formatCostUsd` (sub-cent values four decimals, never `$0.00`) —
+value like `$0.12 (above $0.10 notice threshold)`. Live-only by design:
+`costWarning` is deliberately absent from `createModelMixState` shapes,
+`hydrateModelMixState`, `buildHistoryEntry`, and `archiveCurrentRun`, exactly
+matching `outputWarning`. No new formatter, no alarm styling, no new
+dependency. Validation: frontend **166 passed** (9 new tests), `npm run build`
+and `npm run lint` clean, backend **525 passed** (unchanged). Enforcement/cutoff
+and cumulative session-cost tracking remain separate, undecided future work.
 
 ## Evidence Rule
 

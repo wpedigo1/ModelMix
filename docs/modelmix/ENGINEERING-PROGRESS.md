@@ -1458,3 +1458,21 @@ cost+guardrails suite **43 passed**, full backend **525 passed** (8 new
 tests), frontend **157 passed**, `npm run build` and `npm run lint` clean.
 Enforcement/cutoff and cumulative session-cost tracking remain separate,
 undecided future work. Full report in `050-per-seat-spend-warning-backend.md`.
+
+## Mission 051 Result
+
+Spend warning rendering (frontend only, Punch Board item 17 spend visibility
+closed; no backend change). `modelmixState.js`: `seat_cost_warning` and
+`moderator_cost_warning` set `seat.costWarning`/`moderator.costWarning =
+{ cost_usd, threshold }`, mirroring the `outputWarning` set exactly in both
+applyModelMixEvent branches. `seatTelemetry.js`: `buildSeatTelemetry` renders
+a plain, non-alarming `Cost notice` footer row only when `costWarning` has a
+real finite `cost_usd` and `threshold`, reusing the existing `formatCostUsd`
+(sub-cent values four decimals, never `$0.00`). Live-only by design:
+`costWarning` is deliberately absent from `createModelMixState` shapes,
+`hydrateModelMixState`, `buildHistoryEntry`, and `archiveCurrentRun`, exactly
+matching `outputWarning`. No new formatter, no alarm styling, no new
+dependency. Validation: frontend **166 passed** (9 new tests), `npm run
+build` and `npm run lint` clean, backend **525 passed** (unchanged).
+Enforcement/cutoff and cumulative session-cost tracking remain separate,
+undecided future work. Full report in `051-spend-warning-rendering-frontend.md`.

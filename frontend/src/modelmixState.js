@@ -63,6 +63,9 @@ export function applyModelMixEvent(state, event) {
     if (event.type === 'seat_output_warning') {
       seat.outputWarning = { chars: event.chars, threshold: event.threshold };
     }
+    if (event.type === 'seat_cost_warning') {
+      seat.costWarning = { cost_usd: event.cost_usd, threshold: event.threshold };
+    }
     if (event.type === 'seat_completed') {
       seat.status = 'completed';
       seat.finishReason = event.finish_reason || null;
@@ -93,6 +96,8 @@ export function applyModelMixEvent(state, event) {
       moderator.text += String(event.delta || '');
     } else if (event.type === 'moderator_output_warning') {
       moderator.outputWarning = { chars: event.chars, threshold: event.threshold };
+    } else if (event.type === 'moderator_cost_warning') {
+      moderator.costWarning = { cost_usd: event.cost_usd, threshold: event.threshold };
     } else if (event.type === 'moderator_completed') {
       moderator.started = true;
       moderator.status = 'completed';
