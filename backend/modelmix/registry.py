@@ -54,6 +54,8 @@ class RunRegistry:
         session_id: Optional[str] = None,
         warning_threshold_chars: Optional[int] = None,
         hard_cap_chars: Optional[int] = None,
+        temperature: Optional[float] = None,
+        moderator_guidance: Optional[str] = None,
     ) -> RunEventJournal:
         await self._prune()
         session_id = session_id or str(uuid.uuid4())
@@ -108,6 +110,8 @@ class RunRegistry:
                 seat_histories,
                 warning_threshold_chars,
                 hard_cap_chars,
+                temperature,
+                moderator_guidance,
             )
         )
         await asyncio.sleep(0)
@@ -188,6 +192,8 @@ class RunRegistry:
         seat_histories: Dict[str, List[Dict[str, str]]],
         warning_threshold_chars: Optional[int] = None,
         hard_cap_chars: Optional[int] = None,
+        temperature: Optional[float] = None,
+        moderator_guidance: Optional[str] = None,
     ) -> None:
         bound = timeouts.RUN_TIMEOUT_SECONDS if self.run_timeout is None else self.run_timeout
         try:
@@ -203,6 +209,8 @@ class RunRegistry:
                     seat_histories,
                     warning_threshold_chars,
                     hard_cap_chars,
+                    temperature,
+                    moderator_guidance,
                 ),
                 timeout=bound,
             )
@@ -235,6 +243,8 @@ class RunRegistry:
         seat_histories: Dict[str, List[Dict[str, str]]],
         warning_threshold_chars: Optional[int] = None,
         hard_cap_chars: Optional[int] = None,
+        temperature: Optional[float] = None,
+        moderator_guidance: Optional[str] = None,
     ) -> None:
         worker_outputs = {"worker_a": ""}
         if worker_b_model is not None:
@@ -254,6 +264,7 @@ class RunRegistry:
             seat_timeout=self.seat_timeout,
             warning_threshold_chars=warning_threshold_chars,
             hard_cap_chars=hard_cap_chars,
+            temperature=temperature,
             seat_histories=worker_seat_histories,
         )
         async with aclosing(worker_stream):
@@ -294,6 +305,7 @@ class RunRegistry:
                 successful_outputs,
                 worker_failures,
                 history=seat_histories["moderator"],
+                moderator_guidance=moderator_guidance,
             )
             try:
                 moderator_provider = provider_resolver(moderator_model)
@@ -315,6 +327,7 @@ class RunRegistry:
                     seat_timeout=self.seat_timeout,
                     warning_threshold_chars=warning_threshold_chars,
                     hard_cap_chars=hard_cap_chars,
+                    temperature=temperature,
                 )
             )
             try:

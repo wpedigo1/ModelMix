@@ -1476,3 +1476,23 @@ dependency. Validation: frontend **166 passed** (9 new tests), `npm run
 build` and `npm run lint` clean, backend **525 passed** (unchanged).
 Enforcement/cutoff and cumulative session-cost tracking remain separate,
 undecided future work. Full report in `051-spend-warning-rendering-frontend.md`.
+
+## Mission 053 Result
+
+Temperature control and moderator guidance, backend only (Punch Board item 26
+advanced). `TwoWorkerRequest` gains `temperature` (Optional[float], 0.0-2.0,
+validated) and `moderator_guidance` (Optional[str], max 2000 chars, validated).
+Both thread through `registry.start()` -> `_run` -> `_run_phase` exactly like
+`warning_threshold_chars`. All four real provider call sites
+(`orchestrator.py` streaming + non-streaming, `moderator.py` streaming +
+non-streaming) pass `temperature` only when not `None` via a conditional
+`provider_kwargs` dict - when `None`, NO `temperature` kwarg at all, so each
+provider's own default applies unchanged; no ModelMix-level default added.
+`assemble_moderator_input` appends guidance after the FULL unmodified
+`MODERATOR_INSTRUCTIONS` as `Additional guidance from the user:` - strictly
+append-only; when `None`, the system message is byte-for-byte identical.
+ModelMix-only; no Council/Advisor path, no `settings.py` persistence, no new
+dependencies, no schema bump. Validation: targeted pytest **30 passed**, full
+suite **535 passed** (525 + 10 new), frontend **166 passed**, build + lint
+clean. Frontend controls and local persistence remain open (item 26 still
+PARTIAL). Full report in `053-temperature-and-moderator-guidance-backend.md`.

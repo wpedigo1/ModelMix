@@ -24,6 +24,8 @@ class TwoWorkerRequest(BaseModel):
     session_id: Optional[str] = Field(default=None, min_length=1)
     warning_threshold_chars: Optional[int] = Field(default=None, gt=0)
     hard_cap_chars: Optional[int] = Field(default=None, gt=0)
+    temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
+    moderator_guidance: Optional[str] = Field(default=None, max_length=2000)
 
 
 def _resolve_guardrail_overrides(
@@ -96,6 +98,8 @@ async def stream_two_workers(body: TwoWorkerRequest) -> StreamingResponse:
             body.session_id,
             warning_threshold_chars=warning_threshold_chars,
             hard_cap_chars=hard_cap_chars,
+            temperature=body.temperature,
+            moderator_guidance=body.moderator_guidance,
         )
     except PersistenceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -4,6 +4,7 @@ import asyncio
 
 from backend.modelmix.moderator import (
     MAX_VISIBLE_OUTPUT_CHARS,
+    MODERATOR_INSTRUCTIONS,
     ModeratorOutputLimits,
     assemble_moderator_input,
     run_moderator,
@@ -388,3 +389,119 @@ async def test_input_truncation_and_unsupported_hard_cap_are_explicit():
     else:
         raise AssertionError("unsupported hard cap must fail clearly")
     assert events == []
+
+
+class RecordingProvider(LLMProvider):
+    """Records each provider call's messages and exact kwargs."""
+
+    def __init__(self, *, streaming=True):
+        self.calls = []
+        self._streaming = streaming
+
+    @property
+    def supports_streaming(self):
+        return self._streaming
+
+    async def stream_query(self, model_id, messages, **kwargs):
+        self.calls.append({"messages": messages, **kwargs})
+        yield ProviderStreamEvent(type="text_delta", delta="out")
+        yield ProviderStreamEvent(
+            type="completed", result={"content": "out"}, finish_reason="stop"
+        )
+
+    async def query(self, model_id, messages, **kwargs):
+        self.calls.append({"messages": messages, **kwargs})
+        return {"content": "out", "finish_reason": "stop", "error": False}
+
+    async def get_models(self):
+        return []
+
+    async def validate_key(self, api_key):
+        return {"success": True}
+
+
+def test_moderator_guidance_is_appended_after_full_unmodified_instructions():
+    guidance = "Emphasize numeric claims and flag missing citations."
+    moderator_input = assemble_moderator_input(
+        "prompt",
+        {"worker_a": "A output", "worker_b": "B output"},
+        {},
+        moderator_guidance=guidance,
+    )
+    system = moderator_input.messages[0]["content"]
+    assert MODERATOR_INSTRUCTIONS in system
+    assert f"Additional guidance from the user:\n{guidance}" in system
+    assert system.index(MODERATOR_INSTRUCTIONS) < system.index(
+        "Additional guidance from the user:"
+    )
+
+
+def test_omitted_moderator_guidance_keeps_system_message_byte_identical():
+    moderator_input = assemble_moderator_input(
+        "prompt",
+        {"worker_a": "A output", "worker_b": "B output"},
+        {},
+    )
+    assert moderator_input.messages[0]["content"] == MODERATOR_INSTRUCTIONS
+
+
+async def test_moderator_guidance_reaches_the_real_system_message(tmp_path):
+    guidance = "Favor concrete next steps."
+    providers = {
+        "a": RecordingProvider(streaming=True),
+        "b": RecordingProvider(streaming=True),
+        "m": RecordingProvider(streaming=True),
+    }
+    registry = RunRegistry(persistence=AtomicJsonModelMixPersistence(tmp_path))
+    run = await registry.start(
+        "original prompt", "a", "b", providers.__getitem__, "m",
+        moderator_guidance=guidance,
+    )
+    await run.task
+    assert run.status == "completed"
+    moderator_calls = providers["m"].calls
+    assert moderator_calls, "moderator provider must have been called"
+    for call in moderator_calls:
+        system = call["messages"][0]["content"]
+        assert system.startswith(MODERATOR_INSTRUCTIONS)
+        assert f"Additional guidance from the user:\n{guidance}" in system
+
+
+async def test_moderator_temperature_reaches_provider_exactly_when_provided(tmp_path):
+    for streaming in (True, False):
+        store = AtomicJsonModelMixPersistence(tmp_path / f"temp-{streaming}")
+        providers = {
+            "a": RecordingProvider(streaming=True),
+            "b": RecordingProvider(streaming=True),
+            "m": RecordingProvider(streaming=streaming),
+        }
+        registry = RunRegistry(persistence=store)
+        run = await registry.start(
+            "original prompt", "a", "b", providers.__getitem__, "m",
+            temperature=1.25,
+        )
+        await run.task
+        assert run.status == "completed"
+        assert providers["m"].calls, "moderator provider must have been called"
+        assert all(call.get("temperature") == 1.25 for call in providers["m"].calls)
+        assert all(call.get("temperature") == 1.25 for call in providers["a"].calls)
+        assert all(call.get("temperature") == 1.25 for call in providers["b"].calls)
+
+
+async def test_omitted_temperature_never_reaches_any_provider(tmp_path):
+    for streaming in (True, False):
+        store = AtomicJsonModelMixPersistence(tmp_path / f"no-temp-{streaming}")
+        providers = {
+            "a": RecordingProvider(streaming=True),
+            "b": RecordingProvider(streaming=True),
+            "m": RecordingProvider(streaming=streaming),
+        }
+        registry = RunRegistry(persistence=store)
+        run = await registry.start(
+            "original prompt", "a", "b", providers.__getitem__, "m",
+        )
+        await run.task
+        assert run.status == "completed"
+        for provider in providers.values():
+            assert provider.calls, "provider must have been called"
+            assert all("temperature" not in call for call in provider.calls)

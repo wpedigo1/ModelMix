@@ -49,8 +49,15 @@ def assemble_moderator_input(
     worker_outputs: Dict[str, str],
     worker_failures: Dict[str, str],
     history: Optional[List[Dict[str, str]]] = None,
+    moderator_guidance: Optional[str] = None,
 ) -> ModeratorInput:
     """Build a bounded handoff from visible deltas and structured failure notes only."""
+    instructions = MODERATOR_INSTRUCTIONS
+    if moderator_guidance is not None:
+        instructions = (
+            f"{MODERATOR_INSTRUCTIONS}\n\n"
+            f"Additional guidance from the user:\n{moderator_guidance}"
+        )
     sections = [f"Original user prompt:\n{prompt}"]
     truncation: Dict[str, bool] = {}
     for seat_id, label in (("worker_a", "Worker A"), ("worker_b", "Worker B")):
@@ -67,7 +74,7 @@ def assemble_moderator_input(
             sections.append(f"{label} status:\n{status}")
     return ModeratorInput(
         messages=[
-            {"role": "system", "content": MODERATOR_INSTRUCTIONS},
+            {"role": "system", "content": instructions},
             *(history or []),
             {"role": "user", "content": "\n\n".join(sections)},
         ],
@@ -84,6 +91,7 @@ async def run_moderator(
     seat_timeout: Optional[float] = None,
     warning_threshold_chars: Optional[int] = None,
     hard_cap_chars: Optional[int] = None,
+    temperature: Optional[float] = None,
 ) -> bool:
     """Stream or query one Moderator and publish through the canonical event factory."""
     limits = output_limits or ModeratorOutputLimits()
@@ -100,6 +108,9 @@ async def run_moderator(
         if hard_cap_chars is None
         else hard_cap_chars
     )
+    provider_kwargs: Dict[str, Any] = {}
+    if temperature is not None:
+        provider_kwargs["temperature"] = temperature
 
     await create_event(
         "moderator_started",
@@ -115,7 +126,7 @@ async def run_moderator(
             emitted = 0
             warned = False
             capped = False
-            stream = provider.stream_query(model_id, moderator_input.messages)
+            stream = provider.stream_query(model_id, moderator_input.messages, **provider_kwargs)
             async for item in aiter_with_deadline(stream, bound):
                 if item.type == "text_delta" and item.delta:
                     delta, capped = guardrails.clip_delta(
@@ -145,7 +156,7 @@ async def run_moderator(
                     raise RuntimeError(item.error_message or "Moderator stream failed")
         else:
             result = await asyncio.wait_for(
-                provider.query(model_id, moderator_input.messages), timeout=bound
+                provider.query(model_id, moderator_input.messages, **provider_kwargs), timeout=bound
             )
             if result.get("error"):
                 raise RuntimeError(result.get("error_message") or "Moderator query failed")

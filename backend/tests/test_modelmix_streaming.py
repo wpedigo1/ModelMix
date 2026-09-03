@@ -4,13 +4,15 @@ import asyncio
 import json
 
 import httpx
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from backend.modelmix.orchestrator import multiplex_workers
 from backend.modelmix.persistence import AtomicJsonModelMixPersistence
 from backend.modelmix.registry import RunRegistry
-from backend.modelmix.routes import router
+from backend.modelmix.routes import TwoWorkerRequest, router
 from backend.providers.base import LLMProvider, ProviderStreamEvent
 from backend.providers.openai_oauth import OpenAIOauthProvider
 
@@ -254,3 +256,91 @@ def test_modelmix_route_resolves_both_models_without_ranking(monkeypatch, tmp_pa
     assert resolved == ["model-a", "model-b"]
     assert events[0]["type"] == "run_started"
     assert events[-1]["type"] == "run_completed"
+
+class RecordingProvider(LLMProvider):
+    """Records exactly which kwargs each provider call received."""
+
+    def __init__(self, *, streaming=True):
+        self.calls = []
+        self._streaming = streaming
+
+    @property
+    def supports_streaming(self):
+        return self._streaming
+
+    async def stream_query(self, model_id, messages, **kwargs):
+        self.calls.append(kwargs)
+        yield ProviderStreamEvent(type="text_delta", delta="out")
+        yield ProviderStreamEvent(
+            type="completed", result={"content": "out"}, finish_reason="stop"
+        )
+
+    async def query(self, model_id, messages, **kwargs):
+        self.calls.append(kwargs)
+        return {"content": "out", "finish_reason": "stop", "error": False}
+
+    async def get_models(self):
+        return []
+
+    async def validate_key(self, api_key):
+        return {"success": True}
+
+
+async def test_worker_temperature_reaches_provider_exactly_when_provided():
+    for streaming in (True, False):
+        provider = RecordingProvider(streaming=streaming)
+        events = [
+            event
+            async for event in multiplex_workers(
+                "same prompt",
+                "model-a",
+                None,
+                {"model-a": provider}.__getitem__,
+                temperature=0.33,
+            )
+        ]
+        assert provider.calls, "provider must have been called"
+        assert all(call.get("temperature") == 0.33 for call in provider.calls)
+        assert events[-1]["type"] == "run_completed"
+
+
+async def test_worker_temperature_kwarg_is_absent_entirely_when_omitted():
+    for streaming in (True, False):
+        provider = RecordingProvider(streaming=streaming)
+        events = [
+            event
+            async for event in multiplex_workers(
+                "same prompt",
+                "model-a",
+                None,
+                {"model-a": provider}.__getitem__,
+            )
+        ]
+        assert provider.calls, "provider must have been called"
+        assert all("temperature" not in call for call in provider.calls)
+        assert events[-1]["type"] == "run_completed"
+
+
+def test_moderator_guidance_over_2000_chars_is_rejected_by_validation():
+    with pytest.raises(ValidationError):
+        TwoWorkerRequest(
+            prompt="p", worker_a_model="a", moderator_guidance="x" * 2001
+        )
+
+
+def test_temperature_outside_bounds_is_rejected_by_validation():
+    for value in (-0.01, 2.01, 3.0):
+        with pytest.raises(ValidationError):
+            TwoWorkerRequest(prompt="p", worker_a_model="a", temperature=value)
+
+
+def test_request_option_boundaries_are_accepted():
+    request = TwoWorkerRequest(
+        prompt="p",
+        worker_a_model="a",
+        temperature=0.0,
+        moderator_guidance="x" * 2000,
+    )
+    assert request.temperature == 0.0
+    request = TwoWorkerRequest(prompt="p", worker_a_model="a", temperature=2.0)
+    assert request.temperature == 2.0

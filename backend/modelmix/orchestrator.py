@@ -30,6 +30,7 @@ async def multiplex_workers(
     seat_timeout: Optional[float] = None,
     warning_threshold_chars: Optional[int] = None,
     hard_cap_chars: Optional[int] = None,
+    temperature: Optional[float] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
     """Run one or two isolated model calls and multiplex their visible output."""
     run_id = run_id or str(uuid.uuid4())
@@ -64,6 +65,9 @@ async def multiplex_workers(
             if hard_cap_chars is None
             else hard_cap_chars
         )
+        provider_kwargs: Dict[str, Any] = {}
+        if temperature is not None:
+            provider_kwargs["temperature"] = temperature
         try:
             provider = provider_resolver(model_id)
             if provider.supports_streaming:
@@ -72,7 +76,7 @@ async def multiplex_workers(
                 emitted = 0
                 warned = False
                 capped = False
-                stream = provider.stream_query(model_id, messages)
+                stream = provider.stream_query(model_id, messages, **provider_kwargs)
                 async for item in aiter_with_deadline(stream, bound):
                     if item.type == "text_delta" and item.delta:
                         delta, capped = guardrails.clip_delta(
@@ -120,7 +124,7 @@ async def multiplex_workers(
                 await queue.put((seat_id, "seat_completed", payload))
             else:
                 result = await asyncio.wait_for(
-                    provider.query(model_id, messages), timeout=bound
+                    provider.query(model_id, messages, **provider_kwargs), timeout=bound
                 )
                 if result.get("error"):
                     raise RuntimeError(result.get("error_message") or "Provider query failed")

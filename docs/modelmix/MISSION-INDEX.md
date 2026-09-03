@@ -956,6 +956,25 @@ dependency. Validation: frontend **166 passed** (9 new tests), `npm run build`
 and `npm run lint` clean, backend **525 passed** (unchanged). Enforcement/cutoff
 and cumulative session-cost tracking remain separate, undecided future work.
 
+## Mission 053 Result
+
+Temperature control and moderator guidance, backend only (Punch Board item 26
+advanced). `TwoWorkerRequest` gains `temperature` (Optional[float], 0.0–2.0,
+validated) and `moderator_guidance` (Optional[str], max 2000 chars, validated).
+Both thread through `registry.start()` ? `_run` ? `_run_phase` exactly like
+`warning_threshold_chars`. All four real provider call sites
+(`orchestrator.py` streaming + non-streaming, `moderator.py` streaming +
+non-streaming) pass `temperature` only when not `None` via a conditional
+`provider_kwargs` dict — when `None`, NO `temperature` kwarg at all, so each
+provider's own default applies unchanged; no ModelMix-level default added.
+`assemble_moderator_input` appends guidance after the FULL unmodified
+`MODERATOR_INSTRUCTIONS` as `Additional guidance from the user:` — strictly
+append-only; when `None`, the system message is byte-for-byte identical.
+ModelMix-only; no Council/Advisor path, no `settings.py` persistence, no new
+dependencies, no schema bump. Validation: targeted pytest **30 passed**, full
+suite **535 passed** (525 + 10 new), frontend **166 passed**, build + lint
+clean. Frontend controls and local persistence remain open (item 26 still
+PARTIAL).
 ## Evidence Rule
 
 Historical worker branch names, reports, local commit SHAs, or PASS statements are evidence to reconcile; they are not proof of current remote state by themselves.
@@ -971,3 +990,4 @@ On 2026-08-29 CT, the current Library Punch Board and repo project records were 
 On 2026-09-01 CT (Mission 036, documentation-only), Punch Board items 30 and 31 were corrected against already-completed evidence and closed: item 30 citing Missions 026/027 (current-model ACL hardening + startup remediation) and 033/034 (real frozen-executable keyring/ACL proofs + frozen `%LOCALAPPDATA%\ModelMix` credential location); item 31 citing Mission 025 (admin-auth guards on 20 endpoints closing the SSRFâ†’credential-exfiltration path), with the deliberately-deferred `_dev_cors_regex` finding carried forward as sub-item 31a (and the custom-endpoint URL allow-list note as 31b). Item 34 was relabeled from "DONE" to "SUBSTANTIALLY COMPLETE" to stay explicitly open on MSI, code signing, CSP hardening, and dynamic ports. No code changed.
 
 Later on 2026-08-29 CT, Mission 007.5 was inserted as a security/compatibility interlock after dependency remediation reached a clean audit but exposed an MCP 2.x API incompatibility in inherited MCP code. Mission 007.5 subsequently completed and was verified on remote `main` at `e018ed06807beda2c11531f065b2d4181c346ca8`.
+
