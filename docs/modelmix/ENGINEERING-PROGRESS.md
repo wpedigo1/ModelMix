@@ -1514,3 +1514,12 @@ precedent. No backend change, no new dependency. Validation: frontend **176
 passed** (166 + 10 new), build + lint clean, backend **535 passed**
 (unchanged). Both settings are local-preference only, not persisted
 server-side. Full report in `054-temperature-and-moderator-guidance-frontend.md`.
+
+Follow-up: added `frontend/src/components/ModelMixSendBehavior.test.jsx`
+(+5) mirroring ModelMixSendCompare.test.jsx's mocked-startModelMixRun capture
+pattern: both saved values -> body carries both correctly; nothing saved ->
+NEITHER key present (`'temperature' in body === false`);
+temperature-only-saved -> guidance genuinely absent; guidance-only -> temperature
+genuinely absent; malformed saved behavior ignored (both omitted). Frontend
+suite now **181 passed** (18 files; 166 -> +15), build + lint clean; backend
+unchanged **535 passed**.

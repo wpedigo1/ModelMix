@@ -54,9 +54,9 @@ Stands alongside `guardrailSettings.js`, mirroring its defensive discipline:
 - Values are validated against the exact backend bounds (`0.0–2.0`,
   `<= 2000`) before saving and before sending.
 
-## Tests (10 new)
+## Tests (15 total)
 
-`frontend/src/modelmixBehavior.test.js`: bound constants match backend;
+`frontend/src/modelmixBehavior.test.js` (10): bound constants match backend;
 `validateBehavior` accepts valid/independent/empty and boundary values;
 rejects temperature outside `[0.0, 2.0]` (including NaN/non-finite/
 non-number); rejects guidance over 2000 chars and non-strings; treats an
@@ -66,9 +66,18 @@ while rejecting corrupt shapes without throwing; `saveBehavior` writes and
 `clearBehavior` removes; `saveBehavior` refuses invalid or empty values
 without writing; helpers tolerate broken/throwing storage without throwing.
 
+`frontend/src/components/ModelMixSendBehavior.test.jsx` (5) — mirrors
+`ModelMixSendCompare.test.jsx`'s mocked-`startModelMixRun` capture pattern:
+with both a saved temperature and guidance, `send()` builds a body carrying
+both correct values; with nothing saved, NEITHER key is present (`'temperature'
+in body === false`, `'moderator_guidance' in body === false`); with only
+temperature saved, guidance is genuinely absent; with only guidance saved,
+temperature is genuinely absent; malformed saved behavior is ignored and
+omits both keys.
+
 ## Validation (observed)
 
-- `cd frontend && npm test` → **176 passed** (17 files; 166 prior + 10 new).
+- `cd frontend && npm test` → **181 passed** (18 files; 166 prior + 15 new).
 - `npm run build` → clean; `npm run lint` → clean.
 - `uv run pytest backend/tests -q --basetemp=...` → **535 passed**
   (backend unchanged; `--basetemp` is the established workaround for the
