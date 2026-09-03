@@ -7,7 +7,13 @@ import pkg from '../../package.json';
 import { DEFAULT_SAVED_MODELS_KEY, loadSavedSeatModels } from '../defaultSeatModels';
 import { GUARDRAIL_STORAGE_KEY, loadGuardrailOverride } from '../guardrailSettings';
 
-const { mockSettings, mockDiscovered } = vi.hoisted(() => ({ mockSettings: {}, mockDiscovered: [] }));
+const { mockSettings, mockDiscovered, mockHydrate, mockSessions, mockDelete } = vi.hoisted(() => ({
+  mockSettings: {},
+  mockDiscovered: [],
+  mockHydrate: { value: null, shouldThrow: true },
+  mockSessions: { value: [] },
+  mockDelete: { error: null, called: [] },
+}));
 
 vi.mock('../api', () => ({
   api: { getSettings: async () => mockSettings.value },
@@ -31,7 +37,18 @@ vi.mock('../modelmixApi', () => {
     ModelMixHttpError,
     cancelModelMixRun: async () => {},
     consumeModelMixSSE: async () => { throw new Error('not used in render test'); },
-    hydrateModelMixSession: async () => { throw new ModelMixHttpError('no session found', 404); },
+    hydrateModelMixSession: async () => {
+      if (mockHydrate.shouldThrow) throw new ModelMixHttpError('no session found', 404);
+      return mockHydrate.value;
+    },
+    listModelMixSessions: async () => mockSessions.value,
+    deleteModelMixSession: async (sessionId) => {
+      if (mockDelete.error) {
+        throw new ModelMixHttpError(mockDelete.error.message, mockDelete.error.status);
+      }
+      mockDelete.called.push(sessionId);
+      return {};
+    },
     replayModelMixRun: async () => { throw new Error('not used in render test'); },
     startModelMixRun: async () => { throw new Error('not used in render test'); },
   };
@@ -71,11 +88,21 @@ const mounted = [];
 beforeEach(() => {
   mockSettings.value = {};
   mockDiscovered.value = DISCOVERED;
+  mockHydrate.value = null;
+  mockHydrate.shouldThrow = true;
+  mockSessions.value = [];
+  mockDelete.error = null;
+  mockDelete.called = [];
 });
 
 afterEach(() => {
   mockSettings.value = {};
   mockDiscovered.value = [];
+  mockHydrate.value = null;
+  mockHydrate.shouldThrow = true;
+  mockSessions.value = [];
+  mockDelete.error = null;
+  mockDelete.called = [];
   for (const { root, container } of mounted.splice(0)) {
     act(() => {
       root.unmount();
@@ -329,4 +356,145 @@ test('Guardrails section Clear removes the override and resets both inputs', asy
   assert.equal(document.getElementById('modelmix-guardrail-cap').value, '');
   assert.equal(document.querySelector('.modelmix-settings-clear').disabled, true);
   assert.ok(document.querySelector('.modelmix-settings-section').textContent.includes('No saved override — server defaults apply.'));
+});
+
+function openSessionsSection() {
+  openSettings();
+  click(navButton('Sessions'));
+}
+
+const flush = async () => {
+  await act(async () => {});
+};
+
+test('Sessions section renders the fetched list with friendly details and an empty state', async () => {
+  mockSessions.value = [
+    { session_id: 'session-alpha', created_at: 1700000000, updated_at: 1700003600, message_count: 3 },
+    { session_id: 'session-beta', created_at: 1690000000, updated_at: 1690000100, message_count: 0 },
+  ];
+  await renderObserver();
+  openSessionsSection();
+  await flush();
+
+  const section = document.querySelector('.modelmix-settings-section');
+  assert.ok(section.textContent.includes('session-alpha'));
+  assert.ok(section.textContent.includes('3 messages'));
+  assert.ok(section.textContent.includes('session-beta'));
+  assert.ok(section.textContent.includes('0 messages'));
+  assert.ok(section.textContent.includes('Deleting a session is permanent and cannot be undone.'));
+  const rows = document.querySelectorAll('.modelmix-session-row');
+  assert.equal(rows.length, 2);
+});
+
+test('Sessions section shows an honest empty state when there are no sessions', async () => {
+  mockSessions.value = [];
+  await renderObserver();
+  openSessionsSection();
+  await flush();
+
+  assert.ok(document.querySelector('.modelmix-settings-section').textContent.includes('No sessions yet.'));
+});
+
+test('a single Delete click does not delete; the confirm click does', async () => {
+  mockSessions.value = [{ session_id: 'session-alpha', created_at: 1, updated_at: 2, message_count: 1 }];
+  await renderObserver();
+  openSessionsSection();
+  await flush();
+
+  click(document.querySelector('.modelmix-session-delete'));
+  await flush();
+  assert.deepEqual(mockDelete.called, []);
+  assert.ok(document.querySelector('.modelmix-session-confirm'));
+
+  click(document.querySelector('.modelmix-session-delete-confirm'));
+  await flush();
+  assert.deepEqual(mockDelete.called, ['session-alpha']);
+  assert.equal(document.querySelectorAll('.modelmix-session-row').length, 0);
+});
+
+test('a 409 delete response renders the real backend error message', async () => {
+  mockSessions.value = [{ session_id: 'busy', created_at: 1, updated_at: 2, message_count: 1 }];
+  mockDelete.error = { status: 409, message: 'Session has an active run (run-7); cancel it first' };
+  await renderObserver();
+  openSessionsSection();
+  await flush();
+
+  click(document.querySelector('.modelmix-session-delete'));
+  await flush();
+  click(document.querySelector('.modelmix-session-delete-confirm'));
+  await flush();
+
+  const section = document.querySelector('.modelmix-settings-section');
+  assert.ok(section.textContent.includes('Session has an active run (run-7); cancel it first'));
+  assert.equal(document.querySelector('.modelmix-settings-error').getAttribute('role'), 'alert');
+  // The failed row stays visible.
+  assert.equal(document.querySelectorAll('.modelmix-session-row').length, 1);
+});
+
+test('deleting the currently-open session resets to a fresh session', async () => {
+  mockHydrate.value = {
+    schema_version: 1,
+    session: {
+      session_id: 'sess-current',
+      created_at: 1,
+      updated_at: 2,
+      runs: [{
+        run_id: 'run-1', prompt: 'p', models: { worker_a: 'a' },
+        status: 'completed', latest_seq: 1, events: [],
+      }],
+      messages: [],
+    },
+  };
+  mockHydrate.shouldThrow = false;
+  mockSessions.value = [{ session_id: 'sess-current', created_at: 1, updated_at: 2, message_count: 1 }];
+  await renderObserver();
+  window.localStorage.setItem('modelmix.sessionId', 'sess-current');
+  openSessionsSection();
+  await flush();
+
+  click(document.querySelector('.modelmix-session-delete'));
+  await flush();
+  click(document.querySelector('.modelmix-session-delete-confirm'));
+  await flush();
+
+  assert.deepEqual(mockDelete.called, ['sess-current']);
+  // The live cockpit reset to a fresh session: no persisted session id remains.
+  assert.equal(window.localStorage.getItem('modelmix.sessionId'), null);
+});
+
+test('deleting a different session leaves the live cockpit state unchanged', async () => {
+  mockHydrate.value = {
+    schema_version: 1,
+    session: {
+      session_id: 'sess-current',
+      created_at: 1,
+      updated_at: 2,
+      runs: [{
+        run_id: 'run-1', prompt: 'p', models: { worker_a: 'a' },
+        status: 'completed', latest_seq: 1, events: [],
+      }],
+      messages: [],
+    },
+  };
+  mockHydrate.shouldThrow = false;
+  mockSessions.value = [
+    { session_id: 'sess-current', created_at: 1, updated_at: 2, message_count: 1 },
+    { session_id: 'sess-other', created_at: 1, updated_at: 2, message_count: 2 },
+  ];
+  await renderObserver();
+  window.localStorage.setItem('modelmix.sessionId', 'sess-current');
+  openSessionsSection();
+  await flush();
+
+  const rows = [...document.querySelectorAll('.modelmix-session-row')];
+  const otherRow = rows.find((row) => row.textContent.includes('sess-other'));
+  click(otherRow.querySelector('.modelmix-session-delete'));
+  await flush();
+  click(otherRow.querySelector('.modelmix-session-delete-confirm'));
+  await flush();
+
+  assert.deepEqual(mockDelete.called, ['sess-other']);
+  // The currently-open session is untouched.
+  assert.equal(window.localStorage.getItem('modelmix.sessionId'), 'sess-current');
+  assert.equal(document.querySelector('.modelmix-session-status').getAttribute('data-status'), 'completed');
 });

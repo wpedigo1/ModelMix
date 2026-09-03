@@ -58,6 +58,18 @@ export async function cancelModelMixRun(runId) {
   return response.json();
 }
 
+export async function listModelMixSessions(signal) {
+  const response = await checkedFetch(`${getApiBase()}/api/modelmix/sessions`, { signal });
+  return response.json();
+}
+
+export async function deleteModelMixSession(sessionId) {
+  return checkedFetch(
+    `${getApiBase()}/api/modelmix/sessions/${encodeURIComponent(sessionId)}`,
+    { method: 'DELETE' },
+  );
+}
+
 export async function consumeModelMixSSE(response, onEvent) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();

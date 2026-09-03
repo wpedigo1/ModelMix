@@ -24,7 +24,9 @@ import pkg from '../../package.json';
 import {
   cancelModelMixRun,
   consumeModelMixSSE,
+  deleteModelMixSession,
   hydrateModelMixSession,
+  listModelMixSessions,
   ModelMixHttpError,
   replayModelMixRun,
   startModelMixRun,
@@ -267,6 +269,11 @@ export default function ModelMixObserver() {
     updateObserver((current) => startNewSession(current));
   };
 
+  const resetToFreshSession = useCallback(() => {
+    window.localStorage?.removeItem('modelmix.sessionId');
+    updateObserver((current) => startNewSession(current));
+  }, [updateObserver]);
+
   const saveDefaults = () => {
     saveSeatModels(window.localStorage, {
       worker_a: workerAModel,
@@ -353,6 +360,8 @@ export default function ModelMixObserver() {
           guardrailsRevision={guardrailsRevision}
           onSaveGuardrails={saveGuardrails}
           onClearGuardrails={clearGuardrails}
+          currentSessionId={observer.sessionId}
+          onCurrentSessionDeleted={resetToFreshSession}
         />
       )}
 
@@ -517,6 +526,7 @@ const SETTINGS_SECTIONS = [
   { id: 'providers', label: 'Providers' },
   { id: 'defaults', label: 'Defaults' },
   { id: 'guardrails', label: 'Guardrails' },
+  { id: 'sessions', label: 'Sessions' },
 ];
 
 function ModelMixSettings({
@@ -531,6 +541,8 @@ function ModelMixSettings({
   guardrailsRevision,
   onSaveGuardrails,
   onClearGuardrails,
+  currentSessionId,
+  onCurrentSessionDeleted,
 }) {
   return (
     <div className="modelmix-settings-backdrop" onClick={onClose}>
@@ -574,6 +586,12 @@ function ModelMixSettings({
               key={guardrailsRevision}
               onSave={onSaveGuardrails}
               onClear={onClearGuardrails}
+            />
+          )}
+          {section === 'sessions' && (
+            <SessionsSection
+              currentSessionId={currentSessionId}
+              onCurrentSessionDeleted={onCurrentSessionDeleted}
             />
           )}
         </div>
@@ -743,6 +761,105 @@ function GuardrailsSection({ onSave, onClear }) {
           Clear saved override
         </button>
       </div>
+    </div>
+  );
+}
+
+function formatSessionTime(ts) {
+  if (typeof ts !== 'number' || !Number.isFinite(ts)) return 'unknown';
+  return new Date(ts * 1000).toLocaleString();
+}
+
+function SessionRow({ session, current, confirming, busy, onConfirm, onDelete }) {
+  const displayId = session.session_id.length > 40 ? `${session.session_id.slice(0, 37)}…` : session.session_id;
+  const isCurrent = current != null && session.session_id === current;
+  return (
+    <li className="modelmix-session-row">
+      <div className="modelmix-session-info">
+        <span className="modelmix-session-id" title={session.session_id}>{displayId}</span>
+        {isCurrent && <span className="modelmix-session-current">current</span>}
+        <span className="modelmix-session-time">
+          created {formatSessionTime(session.created_at)} · updated {formatSessionTime(session.updated_at)}
+        </span>
+        <span className="modelmix-session-count">{session.message_count} messages</span>
+      </div>
+      {confirming === session.session_id ? (
+        <span className="modelmix-session-confirm">
+          <span className="modelmix-session-confirm-text">Delete this session?</span>
+          <button type="button" className="modelmix-session-delete-confirm" disabled={busy} onClick={() => onDelete(session.session_id)}>Confirm</button>
+          <button type="button" className="modelmix-session-delete-cancel" disabled={busy} onClick={() => onConfirm(null)}>Cancel</button>
+        </span>
+      ) : (
+        <button type="button" className="modelmix-session-delete" onClick={() => onConfirm(session.session_id)}>Delete</button>
+      )}
+    </li>
+  );
+}
+
+function SessionsSection({ currentSessionId, onCurrentSessionDeleted }) {
+  const [sessions, setSessions] = useState(null);
+  const [error, setError] = useState('');
+  const [confirming, setConfirming] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setError('');
+    try {
+      const list = await listModelMixSessions();
+      setSessions(list);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load sessions.');
+      setSessions(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleDelete = async (sessionId) => {
+    setBusy(true);
+    setError('');
+    try {
+      await deleteModelMixSession(sessionId);
+      setSessions((current) => (current || []).filter((s) => s.session_id !== sessionId));
+      setConfirming(null);
+      if (currentSessionId != null && sessionId === currentSessionId) {
+        onCurrentSessionDeleted();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete session.');
+      setConfirming(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modelmix-settings-section">
+      <p className="modelmix-settings-line">
+        Sessions are stored locally on this device. Deleting a session is permanent and cannot be undone.
+      </p>
+      {error && <p className="modelmix-settings-error" role="alert">{error}</p>}
+      {sessions === null ? (
+        <p className="modelmix-settings-line">Loading sessions…</p>
+      ) : sessions.length === 0 ? (
+        <p className="modelmix-settings-line">No sessions yet.</p>
+      ) : (
+        <ul className="modelmix-session-list">
+          {sessions.map((session) => (
+            <SessionRow
+              key={session.session_id}
+              session={session}
+              current={currentSessionId}
+              confirming={confirming}
+              busy={busy}
+              onConfirm={setConfirming}
+              onDelete={handleDelete}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

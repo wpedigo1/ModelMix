@@ -1420,3 +1420,20 @@ id, 404 if absent, 204 on success. Validation: targeted persistence+streaming
 suite **39 passed**, full backend **517 passed** (10 new tests), frontend
 **148 passed**, `npm run build` and `npm run lint` clean. Full report in
 `048-session-listing-and-deletion-backend.md`.
+
+## Mission 049 Result
+
+Session manager UI (frontend only, Punch Board item 29 retention/delete UI;
+no backend change). `modelmixApi.js`: `listModelMixSessions()` (GET) and
+`deleteModelMixSession()` (DELETE with encoded id), reusing `checkedFetch`.
+`ModelMixObserver.jsx`: `Sessions` added to `SETTINGS_SECTIONS`;
+`SessionsSection` lists real sessions (shortened id, created/updated absolute
+time, message count) with an honest empty/loading state, per-row two-click
+delete confirmation (a single click never calls the API), removal of the
+deleted row without a full re-fetch, and the real backend message surfaced
+on a 409. Deleting the currently-open session resets the cockpit via the
+existing `startNewSession` (reused `resetToFreshSession`); deleting any other
+session leaves the live cockpit unchanged. No auto/scheduled retention UI, no
+bulk delete, no new dependency. Validation: frontend **157 passed** (9 new
+tests), `npm run build` and `npm run lint` clean, backend **517 passed**
+(unchanged). Full report in `049-session-manager-frontend.md`.

@@ -61,6 +61,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 046 | OpenCode | **PASS (LOCAL)** | `046-deterministic-mock-provider-library.md` — closes Punch Board item 14 |
 | 047 | OpenCode | **PARTIAL — config implemented, runtime verification REQUIRES USER** | `047-tauri-csp-hardening.md` — advances Punch Board item 34 (CSP half); runtime proof outstanding |
 | 048 | OpenCode | **PASS (LOCAL)** | `048-session-listing-and-deletion-backend.md` — advances Punch Board item 29 (retention/delete basics) |
+| 049 | OpenCode | **PASS (LOCAL)** | `049-session-manager-frontend.md` — closes Punch Board item 29 (retention/delete UI) |
 
 
 ## Mission 007 Provenance Clarification
@@ -899,6 +900,23 @@ while a run in that session is active, 422 on bad id, 404 if absent, 204 on
 success). Validation: targeted persistence+streaming suite **39 passed**, full
 backend **517 passed** (10 new tests), frontend **148 passed**, build and lint
 clean.
+
+## Mission 049 Result
+
+**Mission 049 is implemented and verified locally.** Session manager UI
+(frontend only, Punch Board item 29 retention/delete UI; no backend change).
+`modelmixApi.js`: `listModelMixSessions()` (GET) and `deleteModelMixSession()`
+(DELETE with encoded id), reusing `checkedFetch`. `ModelMixObserver.jsx`: a
+`Sessions` section added to `SETTINGS_SECTIONS`; `SessionsSection` lists real
+sessions (shortened id, created/updated absolute time, message count) with an
+honest empty/loading state, per-row two-click delete confirmation (a single
+click never calls the API), removal of the deleted row without a full
+re-fetch, and the real backend message surfaced on a 409. Deleting the
+currently-open session resets the cockpit via the existing `startNewSession`
+(reused `resetToFreshSession`); deleting any other session leaves the live
+cockpit unchanged. No auto/scheduled retention UI, no bulk delete, no new
+dependency. Validation: frontend **157 passed** (9 new tests), `npm run build`
+and `npm run lint` clean, backend **517 passed** (unchanged).
 
 ## Evidence Rule
 
