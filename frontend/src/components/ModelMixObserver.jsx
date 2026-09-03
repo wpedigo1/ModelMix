@@ -20,6 +20,13 @@ import {
   validateGuardrailOverride,
 } from '../guardrailSettings';
 import { loadSavedMode, MODES, saveMode } from '../modelmixMode';
+import {
+  clearBehavior,
+  loadBehavior,
+  saveBehavior,
+  validateBehavior,
+  MAX_MODERATOR_GUIDANCE_LENGTH,
+} from '../modelmixBehavior';
 import pkg from '../../package.json';
 import {
   cancelModelMixRun,
@@ -66,6 +73,7 @@ export default function ModelMixObserver() {
   const [settingsSnapshot, setSettingsSnapshot] = useState(null);
   const [defaultsRevision, setDefaultsRevision] = useState(0);
   const [guardrailsRevision, setGuardrailsRevision] = useState(0);
+  const [behaviorRevision, setBehaviorRevision] = useState(0);
   const [mode, setMode] = useState(() => loadSavedMode(window.localStorage));
 
   const updateObserver = useCallback((updater) => {
@@ -242,6 +250,11 @@ export default function ModelMixObserver() {
         requestBody.warning_threshold_chars = guardrailOverride.warning_threshold_chars;
         requestBody.hard_cap_chars = guardrailOverride.hard_cap_chars;
       }
+      const behaviorSettings = loadBehavior();
+      if (behaviorSettings) {
+        if (behaviorSettings.temperature !== undefined) requestBody.temperature = behaviorSettings.temperature;
+        if (behaviorSettings.moderator_guidance !== undefined) requestBody.moderator_guidance = behaviorSettings.moderator_guidance;
+      }
       const response = await startModelMixRun(requestBody, controller.signal);
       const runId = response.headers.get('X-ModelMix-Run-ID');
       const sessionId = response.headers.get('X-ModelMix-Session-ID');
@@ -296,6 +309,16 @@ export default function ModelMixObserver() {
   const clearGuardrails = () => {
     clearGuardrailOverride();
     setGuardrailsRevision((revision) => revision + 1);
+  };
+
+  const saveBehaviorSettings = (values) => {
+    if (!saveBehavior(values)) return;
+    setBehaviorRevision((revision) => revision + 1);
+  };
+
+  const clearBehaviorSettings = () => {
+    clearBehavior();
+    setBehaviorRevision((revision) => revision + 1);
   };
 
   const controls = controlState(observer.overall);
@@ -360,6 +383,9 @@ export default function ModelMixObserver() {
           guardrailsRevision={guardrailsRevision}
           onSaveGuardrails={saveGuardrails}
           onClearGuardrails={clearGuardrails}
+          behaviorRevision={behaviorRevision}
+          onSaveBehavior={saveBehaviorSettings}
+          onClearBehavior={clearBehaviorSettings}
           currentSessionId={observer.sessionId}
           onCurrentSessionDeleted={resetToFreshSession}
         />
@@ -526,6 +552,7 @@ const SETTINGS_SECTIONS = [
   { id: 'providers', label: 'Providers' },
   { id: 'defaults', label: 'Defaults' },
   { id: 'guardrails', label: 'Guardrails' },
+  { id: 'behavior', label: 'Behavior' },
   { id: 'sessions', label: 'Sessions' },
 ];
 
@@ -541,6 +568,9 @@ function ModelMixSettings({
   guardrailsRevision,
   onSaveGuardrails,
   onClearGuardrails,
+  behaviorRevision,
+  onSaveBehavior,
+  onClearBehavior,
   currentSessionId,
   onCurrentSessionDeleted,
 }) {
@@ -586,6 +616,13 @@ function ModelMixSettings({
               key={guardrailsRevision}
               onSave={onSaveGuardrails}
               onClear={onClearGuardrails}
+            />
+          )}
+          {section === 'behavior' && (
+            <BehaviorSection
+              key={behaviorRevision}
+              onSave={onSaveBehavior}
+              onClear={onClearBehavior}
             />
           )}
           {section === 'sessions' && (
@@ -765,11 +802,96 @@ function GuardrailsSection({ onSave, onClear }) {
   );
 }
 
+function BehaviorSection({ onSave, onClear }) {
+  const saved = loadBehavior();
+  const [temperature, setTemperature] = useState(
+    saved && saved.temperature !== undefined ? String(saved.temperature) : ''
+  );
+  const [guidance, setGuidance] = useState(
+    saved && saved.moderator_guidance !== undefined ? saved.moderator_guidance : ''
+  );
+
+  const parsedTemperature = temperature === '' ? NaN : Number(temperature);
+  const parsedGuidance = guidance;
+  const validation = validateBehavior({
+    temperature: parsedTemperature,
+    moderator_guidance: parsedGuidance,
+  });
+  const edited = temperature !== '' || guidance !== '';
+  const guidanceRemaining = MAX_MODERATOR_GUIDANCE_LENGTH - guidance.length;
+
+  const handleSave = () => {
+    const values = {};
+    if (temperature !== '') values.temperature = parsedTemperature;
+    if (guidance !== '') values.moderator_guidance = guidance;
+    onSave(values);
+  };
+
+  return (
+    <div className="modelmix-settings-section">
+      <p className="modelmix-settings-line">
+        Optionally set per-run model behavior. Each value is independent — set one, the other, or neither. Saved values are sent with every request and the server validates them again.
+      </p>
+      <label className="modelmix-settings-line" htmlFor="modelmix-behavior-temperature">
+        Temperature (0.0–2.0)
+      </label>
+      <input
+        id="modelmix-behavior-temperature"
+        className="modelmix-settings-input"
+        type="number"
+        min={0.0}
+        max={2.0}
+        step="0.1"
+        value={temperature}
+        onChange={(event) => setTemperature(event.target.value)}
+        aria-label="Temperature"
+      />
+      <label className="modelmix-settings-line" htmlFor="modelmix-behavior-guidance">
+        Moderator guidance (how the Moderator should synthesize)
+      </label>
+      <textarea
+        id="modelmix-behavior-guidance"
+        className="modelmix-settings-input"
+        rows="4"
+        maxLength={MAX_MODERATOR_GUIDANCE_LENGTH}
+        value={guidance}
+        onChange={(event) => setGuidance(event.target.value)}
+        aria-label="Moderator guidance"
+      />
+      <p className="modelmix-settings-line">
+        {guidanceRemaining} characters remaining (limit {MAX_MODERATOR_GUIDANCE_LENGTH}). Guidance is appended to the Moderator's instructions, never replacing them.
+      </p>
+      {!validation.valid && edited && (
+        <p className="modelmix-settings-error" role="alert">
+          {Object.values(validation.errors).join(' ')}
+        </p>
+      )}
+      {saved ? (
+        <p className="modelmix-settings-line">Saved behavior will be sent with each request.</p>
+      ) : (
+        <p className="modelmix-settings-line">No saved behavior — no temperature or guidance is sent.</p>
+      )}
+      <div className="modelmix-settings-actions">
+        <button
+          type="button"
+          className="modelmix-settings-save"
+          disabled={!validation.valid || !edited}
+          onClick={handleSave}
+        >
+          Save behavior
+        </button>
+        <button type="button" className="modelmix-settings-clear" disabled={!saved} onClick={onClear}>
+          Clear saved behavior
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function formatSessionTime(ts) {
   if (typeof ts !== 'number' || !Number.isFinite(ts)) return 'unknown';
   return new Date(ts * 1000).toLocaleString();
 }
-
 function SessionRow({ session, current, confirming, busy, onConfirm, onDelete }) {
   const displayId = session.session_id.length > 40 ? `${session.session_id.slice(0, 37)}…` : session.session_id;
   const isCurrent = current != null && session.session_id === current;

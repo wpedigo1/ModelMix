@@ -64,6 +64,8 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 049 | OpenCode | **PASS (LOCAL)** | `049-session-manager-frontend.md` â€” closes Punch Board item 29 (retention/delete UI) |
 | 050 | OpenCode | **PASS (LOCAL)** | `050-per-seat-spend-warning-backend.md` â€” advances Punch Board item 17 (informational spend warning) |
 | 051 | OpenCode | **PASS (LOCAL)** | `051-spend-warning-rendering-frontend.md` â€” closes Punch Board item 17 spend visibility (frontend warning) |
+| 053 | OpenCode | **PASS (LOCAL)** | `053-temperature-and-moderator-guidance-backend.md` â€” advances Punch Board item 26 (temperature + moderator guidance, backend) |
+| 054 | OpenCode | **PASS (LOCAL)** | `054-temperature-and-moderator-guidance-frontend.md` â€” advances Punch Board item 26 (temperature + moderator guidance, frontend) |
 
 
 ## Mission 007 Provenance Clarification
@@ -947,7 +949,7 @@ change). `modelmixState.js`: `seat_cost_warning`/`moderator_cost_warning` set
 the `outputWarning` set exactly at both branches. `seatTelemetry.js`:
 `buildSeatTelemetry` renders a plain, non-alarming `Cost notice` footer row
 only when `costWarning` has a real finite `cost_usd` and `threshold`, reusing
-the existing `formatCostUsd` (sub-cent values four decimals, never `$0.00`) —
+the existing `formatCostUsd` (sub-cent values four decimals, never `$0.00`) ï¿½
 value like `$0.12 (above $0.10 notice threshold)`. Live-only by design:
 `costWarning` is deliberately absent from `createModelMixState` shapes,
 `hydrateModelMixState`, `buildHistoryEntry`, and `archiveCurrentRun`, exactly
@@ -959,22 +961,39 @@ and cumulative session-cost tracking remain separate, undecided future work.
 ## Mission 053 Result
 
 Temperature control and moderator guidance, backend only (Punch Board item 26
-advanced). `TwoWorkerRequest` gains `temperature` (Optional[float], 0.0–2.0,
+advanced). `TwoWorkerRequest` gains `temperature` (Optional[float], 0.0ï¿½2.0,
 validated) and `moderator_guidance` (Optional[str], max 2000 chars, validated).
 Both thread through `registry.start()` ? `_run` ? `_run_phase` exactly like
 `warning_threshold_chars`. All four real provider call sites
 (`orchestrator.py` streaming + non-streaming, `moderator.py` streaming +
 non-streaming) pass `temperature` only when not `None` via a conditional
-`provider_kwargs` dict — when `None`, NO `temperature` kwarg at all, so each
+`provider_kwargs` dict ï¿½ when `None`, NO `temperature` kwarg at all, so each
 provider's own default applies unchanged; no ModelMix-level default added.
 `assemble_moderator_input` appends guidance after the FULL unmodified
-`MODERATOR_INSTRUCTIONS` as `Additional guidance from the user:` — strictly
+`MODERATOR_INSTRUCTIONS` as `Additional guidance from the user:` ï¿½ strictly
 append-only; when `None`, the system message is byte-for-byte identical.
 ModelMix-only; no Council/Advisor path, no `settings.py` persistence, no new
 dependencies, no schema bump. Validation: targeted pytest **30 passed**, full
 suite **535 passed** (525 + 10 new), frontend **166 passed**, build + lint
 clean. Frontend controls and local persistence remain open (item 26 still
 PARTIAL).
+## Mission 054 Result
+
+Temperature and moderator guidance, frontend only (Punch Board item 26). New
+`frontend/src/modelmixBehavior.js` mirrors `guardrailSettings.js`: bounds
+`MIN/MAX_TEMPERATURE = 0.0/2.0`, `MAX_MODERATOR_GUIDANCE_LENGTH = 2000`, plus
+`validateBehavior`/`loadBehavior`/`saveBehavior`/`clearBehavior` with the same
+defensive discipline (malformed/missing localStorage -> null/false, never
+throws; each field independent, absent field skipped). `ModelMixObserver.jsx`:
+new Settings "Behavior" section renders a temperature number input (0.0-2.0,
+step 0.1) and a moderator-guidance textarea (max 2000 chars, live remaining
+count) with a Save/Clear pair mirroring `GuardrailsSection`; `send()` includes
+`temperature`/`moderator_guidance` only when a valid saved value exists,
+omitting the key otherwise (never `null`) - exact guardrail-override
+precedent. No backend change, no new dependency. Validation: frontend **176
+passed** (166 + 10 new), build + lint clean, backend **535 passed**
+(unchanged). Both settings are local-preference only, not persisted
+server-side.
 ## Evidence Rule
 
 Historical worker branch names, reports, local commit SHAs, or PASS statements are evidence to reconcile; they are not proof of current remote state by themselves.

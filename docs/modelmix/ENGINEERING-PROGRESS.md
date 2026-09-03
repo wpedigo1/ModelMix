@@ -1496,3 +1496,21 @@ dependencies, no schema bump. Validation: targeted pytest **30 passed**, full
 suite **535 passed** (525 + 10 new), frontend **166 passed**, build + lint
 clean. Frontend controls and local persistence remain open (item 26 still
 PARTIAL). Full report in `053-temperature-and-moderator-guidance-backend.md`.
+
+## Mission 054 Result
+
+Temperature and moderator guidance, frontend only (Punch Board item 26). New
+`frontend/src/modelmixBehavior.js` mirrors `guardrailSettings.js`: bounds
+`MIN/MAX_TEMPERATURE = 0.0/2.0`, `MAX_MODERATOR_GUIDANCE_LENGTH = 2000`, plus
+`validateBehavior`/`loadBehavior`/`saveBehavior`/`clearBehavior` with the same
+defensive discipline (malformed/missing localStorage -> null/false, never
+throws; each field independent, absent field skipped). `ModelMixObserver.jsx`:
+new Settings "Behavior" section renders a temperature number input (0.0-2.0,
+step 0.1) and a moderator-guidance textarea (max 2000 chars, live remaining
+count) with a Save/Clear pair mirroring `GuardrailsSection`; `send()` includes
+`temperature`/`moderator_guidance` only when a valid saved value exists,
+omitting the key otherwise (never `null`) - exact guardrail-override
+precedent. No backend change, no new dependency. Validation: frontend **176
+passed** (166 + 10 new), build + lint clean, backend **535 passed**
+(unchanged). Both settings are local-preference only, not persisted
+server-side. Full report in `054-temperature-and-moderator-guidance-frontend.md`.
