@@ -70,6 +70,60 @@ export async function deleteModelMixSession(sessionId) {
   );
 }
 
+export async function updateSettings(body) {
+  const response = await checkedFetch(`${getApiBase()}/api/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return response.json();
+}
+
+export async function testProvider(providerId, apiKey) {
+  const response = await checkedFetch(`${getApiBase()}/api/settings/test-provider`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider_id: providerId, api_key: apiKey || undefined }),
+  });
+  return response.json();
+}
+
+export async function testOpenrouter(apiKey) {
+  const response = await checkedFetch(`${getApiBase()}/api/settings/test-openrouter`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key: apiKey || undefined }),
+  });
+  return response.json();
+}
+
+export async function testOpencode(apiKey) {
+  const response = await checkedFetch(`${getApiBase()}/api/settings/test-opencode`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key: apiKey || undefined }),
+  });
+  return response.json();
+}
+
+export async function testOllama(baseUrl) {
+  const response = await checkedFetch(`${getApiBase()}/api/settings/test-ollama`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base_url: baseUrl }),
+  });
+  return response.json();
+}
+
+export async function testCustomEndpoint(name, url, apiKey) {
+  const response = await checkedFetch(`${getApiBase()}/api/settings/test-custom-endpoint`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, url, api_key: apiKey || undefined }),
+  });
+  return response.json();
+}
+
 export async function consumeModelMixSSE(response, onEvent) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();

@@ -67,6 +67,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 052 | OpenCode | **PASS (LOCAL)** | `052-spend-confirmation-gate-backend.md` — advances Punch Board item 17 (backend dollar-cap enforcement gate) |
 | 053 | OpenCode | **PASS (LOCAL)** | `053-temperature-and-moderator-guidance-backend.md` — advances Punch Board item 26 (temperature + moderator guidance, backend) |
 | 054 | OpenCode | **PASS (LOCAL)** | `054-temperature-and-moderator-guidance-frontend.md` — advances Punch Board item 26 (temperature + moderator guidance, frontend) |
+| 055 | OpenCode | **PASS (LOCAL)** | `055-native-credential-entry-simple-providers.md` — advances Punch Board item 26 (native credential entry for 12 simple providers, frontend) |
 
 
 ## Mission 007 Provenance Clarification
@@ -1017,6 +1018,28 @@ precedent. No backend change, no new dependency. Validation: frontend **176
 passed** (166 + 10 new), build + lint clean, backend **535 passed**
 (unchanged). Both settings are local-preference only, not persisted
 server-side.
+## Mission 055 Result
+
+Native credential entry for ModelMix's 12 simple (non-OAuth) providers,
+frontend only (Punch Board item 26 significantly advanced — the credential/
+endpoint entry that previously shipped users to Council settings now lives in
+the ModelMix cockpit). `frontend/src/modelmixApi.js` gains `updateSettings`
+(partial PUT to the existing `PUT /api/settings`), `testProvider`, `testOpenrouter`,
+`testOpencode`, `testOllama`, and `testCustomEndpoint` (each POSTing to the exact
+existing `_require_admin`-guarded test endpoint and returning the real JSON).
+`ModelMixObserver.jsx` Providers section: keeps the connected/not-connected
+`configuredSources` READ list, then adds a write-only editor per provider —
+password-masked key inputs (OpenRouter; OpenAI, Anthropic, Google, Mistral,
+DeepSeek, Groq, NVIDIA; OpenCode Zen+Go sharing one key), a URL input for
+Ollama's base URL, and name/url/optional-key inputs for custom endpoint — each
+with a Test button that renders the real returned success/failure message and a
+Save that PUTs only the edited field(s). Saved values are never pre-filled or
+echoed (write-only); after a successful save the section re-fetches settings so
+the READ status updates. The former "Manage providers in council settings" link
+is now scoped to OAuth providers only (xAI, ChatGPT, GitHub Copilot), which are
+explicitly deferred to a separate mission. Zero backend changes. Validation:
+frontend **203 passed** (181 + 22 new: 11 API + 11 component), build + lint
+green, backend **544 passed** (unchanged).
 ## Evidence Rule
 
 Historical worker branch names, reports, local commit SHAs, or PASS statements are evidence to reconcile; they are not proof of current remote state by themselves.

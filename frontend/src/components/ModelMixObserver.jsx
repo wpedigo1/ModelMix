@@ -37,6 +37,12 @@ import {
   ModelMixHttpError,
   replayModelMixRun,
   startModelMixRun,
+  testCustomEndpoint,
+  testOllama,
+  testOpencode,
+  testOpenrouter,
+  testProvider,
+  updateSettings,
 } from '../modelmixApi';
 import {
   applyModelMixEvent,
@@ -662,17 +668,178 @@ const PROVIDER_ROWS = [
   ['OAuth accounts', (sources) => sources.oauth],
 ];
 
+const KEY_PROVIDERS = [
+  { id: 'openrouter', name: 'OpenRouter', saveField: 'openrouter_api_key', statusFlag: 'openrouter_api_key_set', testKind: 'openrouter' },
+  { id: 'openai', name: 'OpenAI', saveField: 'openai_api_key', statusFlag: 'openai_api_key_set', testKind: 'provider' },
+  { id: 'anthropic', name: 'Anthropic', saveField: 'anthropic_api_key', statusFlag: 'anthropic_api_key_set', testKind: 'provider' },
+  { id: 'google', name: 'Google', saveField: 'google_api_key', statusFlag: 'google_api_key_set', testKind: 'provider' },
+  { id: 'mistral', name: 'Mistral', saveField: 'mistral_api_key', statusFlag: 'mistral_api_key_set', testKind: 'provider' },
+  { id: 'deepseek', name: 'DeepSeek', saveField: 'deepseek_api_key', statusFlag: 'deepseek_api_key_set', testKind: 'provider' },
+  { id: 'groq', name: 'Groq', saveField: 'groq_api_key', statusFlag: 'groq_api_key_set', testKind: 'provider' },
+  { id: 'nvidia', name: 'NVIDIA Build', saveField: 'nvidia_api_key', statusFlag: 'nvidia_api_key_set', testKind: 'provider' },
+  { id: 'opencode', name: 'OpenCode (Zen + Go)', saveField: 'opencode_api_key', statusFlag: 'opencode_api_key_set', testKind: 'opencode' },
+];
+
 function ProvidersSection({ settings }) {
-  if (!settings) {
+  const [currentSettings, setCurrentSettings] = useState(settings);
+  const [keys, setKeys] = useState({});
+  const [ollamaUrl, setOllamaUrl] = useState('');
+  const [customName, setCustomName] = useState('');
+  const [customUrl, setCustomUrl] = useState('');
+  const [customKey, setCustomKey] = useState('');
+  const [testResults, setTestResults] = useState({});
+  const [testing, setTesting] = useState({});
+  const [saving, setSaving] = useState({});
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const refreshSettings = useCallback(async () => {
+    try {
+      const updated = await api.getSettings();
+      if (updated) setCurrentSettings(updated);
+    } catch {
+      // Keep the last known snapshot; status stays as-is rather than guessing.
+    }
+  }, []);
+
+  useEffect(() => {
+    setCurrentSettings(settings);
+  }, [settings]);
+
+  const runTest = useCallback(async (provider) => {
+    const key = (keys[provider.id] || '').trim();
+    setTesting((current) => ({ ...current, [provider.id]: true }));
+    setTestResults((current) => ({ ...current, [provider.id]: undefined }));
+    setError('');
+    try {
+      let result;
+      if (provider.testKind === 'openrouter') {
+        result = await testOpenrouter(key || undefined);
+      } else if (provider.testKind === 'opencode') {
+        result = await testOpencode(key || undefined);
+      } else {
+        result = await testProvider(provider.id, key || undefined);
+      }
+      setTestResults((current) => ({ ...current, [provider.id]: result }));
+    } catch (err) {
+      setTestResults((current) => ({
+        ...current,
+        [provider.id]: { success: false, message: err instanceof Error ? err.message : 'Test failed' },
+      }));
+    } finally {
+      setTesting((current) => ({ ...current, [provider.id]: false }));
+    }
+  }, [keys]);
+
+  const saveKey = useCallback(async (provider) => {
+    const value = (keys[provider.id] || '').trim();
+    if (!value) return;
+    setSaving((current) => ({ ...current, [provider.id]: true }));
+    setError('');
+    setMessage('');
+    try {
+      await updateSettings({ [provider.saveField]: value });
+      setKeys((current) => ({ ...current, [provider.id]: '' }));
+      setTestResults((current) => ({ ...current, [provider.id]: undefined }));
+      await refreshSettings();
+      setMessage(`${provider.name} saved.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to save ${provider.name}.`);
+    } finally {
+      setSaving((current) => ({ ...current, [provider.id]: false }));
+    }
+  }, [keys, refreshSettings]);
+
+  const saveOllama = useCallback(async () => {
+    const value = ollamaUrl.trim();
+    if (!value) return;
+    setSaving((current) => ({ ...current, ollama: true }));
+    setError('');
+    setMessage('');
+    try {
+      await updateSettings({ ollama_base_url: value });
+      setOllamaUrl('');
+      await refreshSettings();
+      setMessage('Ollama saved.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save Ollama.');
+    } finally {
+      setSaving((current) => ({ ...current, ollama: false }));
+    }
+  }, [ollamaUrl, refreshSettings]);
+
+  const saveCustom = useCallback(async () => {
+    const body = {};
+    if (customName.trim()) body.custom_endpoint_name = customName.trim();
+    if (customUrl.trim()) body.custom_endpoint_url = customUrl.trim();
+    if (customKey.trim()) body.custom_endpoint_api_key = customKey.trim();
+    if (Object.keys(body).length === 0) return;
+    setSaving((current) => ({ ...current, custom: true }));
+    setError('');
+    setMessage('');
+    try {
+      await updateSettings(body);
+      setCustomName('');
+      setCustomUrl('');
+      setCustomKey('');
+      await refreshSettings();
+      setMessage('Custom endpoint saved.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save custom endpoint.');
+    } finally {
+      setSaving((current) => ({ ...current, custom: false }));
+    }
+  }, [customName, customUrl, customKey, refreshSettings]);
+
+  const testOllamaNow = useCallback(async () => {
+    if (!ollamaUrl.trim()) return;
+    setTesting((current) => ({ ...current, ollama: true }));
+    setTestResults((current) => ({ ...current, ollama: undefined }));
+    setError('');
+    try {
+      const result = await testOllama(ollamaUrl.trim());
+      setTestResults((current) => ({ ...current, ollama: result }));
+    } catch (err) {
+      setTestResults((current) => ({
+        ...current,
+        ollama: { success: false, message: err instanceof Error ? err.message : 'Test failed' },
+      }));
+    } finally {
+      setTesting((current) => ({ ...current, ollama: false }));
+    }
+  }, [ollamaUrl]);
+
+  const testCustomNow = useCallback(async () => {
+    if (!customName.trim() || !customUrl.trim()) return;
+    setTesting((current) => ({ ...current, custom: true }));
+    setTestResults((current) => ({ ...current, custom: undefined }));
+    setError('');
+    try {
+      const result = await testCustomEndpoint(customName.trim(), customUrl.trim(), customKey.trim() || undefined);
+      setTestResults((current) => ({ ...current, custom: result }));
+    } catch (err) {
+      setTestResults((current) => ({
+        ...current,
+        custom: { success: false, message: err instanceof Error ? err.message : 'Test failed' },
+      }));
+    } finally {
+      setTesting((current) => ({ ...current, custom: false }));
+    }
+  }, [customName, customUrl, customKey]);
+
+  if (!currentSettings) {
     return (
       <div className="modelmix-settings-section">
         <p className="modelmix-settings-line">Provider status is unavailable right now.</p>
       </div>
     );
   }
-  const sources = configuredSources(settings);
+  const sources = configuredSources(currentSettings);
   return (
     <div className="modelmix-settings-section">
+      <p className="modelmix-settings-line">
+        Enter a credential below to connect a provider from here. Fields are write-only — a saved value is never shown back.
+      </p>
       <ul className="modelmix-provider-list">
         {PROVIDER_ROWS.map(([name, status]) => {
           const connected = status(sources);
@@ -686,9 +853,124 @@ function ProvidersSection({ settings }) {
           );
         })}
       </ul>
+      <div className="modelmix-credential-editors">
+        {KEY_PROVIDERS.map((provider) => (
+          <CredentialRow
+            key={provider.id}
+            provider={provider}
+            settings={currentSettings}
+            value={keys[provider.id] || ''}
+            testResult={testResults[provider.id]}
+            testing={testing[provider.id]}
+            saving={saving[provider.id]}
+            onChange={(next) => setKeys((current) => ({ ...current, [provider.id]: next }))}
+            onTest={() => runTest(provider)}
+            onSave={() => saveKey(provider)}
+          />
+        ))}
+        <div className="modelmix-credential-row">
+          <span className="modelmix-cred-name">Ollama (local)</span>
+          <span className="modelmix-cred-hint">Base URL — a local server address, not a key</span>
+          <div className="modelmix-cred-controls">
+            <input
+              type="text"
+              className="modelmix-settings-input"
+              placeholder="http://localhost:11434"
+              aria-label="Ollama base URL"
+              value={ollamaUrl}
+              onChange={(event) => setOllamaUrl(event.target.value)}
+            />
+            <button type="button" className="modelmix-cred-test" disabled={testing.ollama || !ollamaUrl.trim()} onClick={testOllamaNow}>
+              {testing.ollama ? 'Testing…' : 'Test'}
+            </button>
+            <button type="button" className="modelmix-cred-save" disabled={saving.ollama || !ollamaUrl.trim()} onClick={saveOllama}>
+              {saving.ollama ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          <ResultLine result={testResults.ollama} />
+        </div>
+        <div className="modelmix-credential-row">
+          <span className="modelmix-cred-name">Custom endpoint</span>
+          <span className="modelmix-cred-hint">Display name, base URL, and optional API key (blank for local servers)</span>
+          <input
+            type="text"
+            className="modelmix-settings-input"
+            placeholder="Display name"
+            aria-label="Custom endpoint name"
+            value={customName}
+            onChange={(event) => setCustomName(event.target.value)}
+          />
+          <input
+            type="text"
+            className="modelmix-settings-input"
+            placeholder="https://api.example.com/v1"
+            aria-label="Custom endpoint URL"
+            value={customUrl}
+            onChange={(event) => setCustomUrl(event.target.value)}
+          />
+          <input
+            type="password"
+            className="modelmix-settings-input"
+            placeholder="API key (optional)"
+            aria-label="Custom endpoint API key"
+            value={customKey}
+            onChange={(event) => setCustomKey(event.target.value)}
+          />
+          <div className="modelmix-cred-controls">
+            <button type="button" className="modelmix-cred-test" disabled={testing.custom || !customName.trim() || !customUrl.trim()} onClick={testCustomNow}>
+              {testing.custom ? 'Testing…' : 'Test'}
+            </button>
+            <button type="button" className="modelmix-cred-save" disabled={saving.custom || (!customName.trim() && !customUrl.trim() && !customKey.trim())} onClick={saveCustom}>
+              {saving.custom ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          <ResultLine result={testResults.custom} />
+        </div>
+      </div>
+      {error && <p className="modelmix-settings-error" role="alert">{error}</p>}
+      {message && <p className="modelmix-settings-line" role="status">{message}</p>}
       <p className="modelmix-settings-line">Credentials stay in secure storage and never appear here.</p>
-      <p className="modelmix-settings-line"><a href="/">Manage providers in council settings</a></p>
+      <p className="modelmix-settings-line">
+        OAuth providers (xAI, ChatGPT, GitHub Copilot) are still managed in council settings.
+      </p>
     </div>
+  );
+}
+
+function CredentialRow({ provider, settings, value, testResult, testing, saving, onChange, onTest, onSave }) {
+  const configured = !!settings[provider.statusFlag];
+  return (
+    <div className="modelmix-credential-row">
+      <span className="modelmix-cred-name">{provider.name}</span>
+      <div className="modelmix-cred-controls">
+        <input
+          type="password"
+          className="modelmix-settings-input"
+          placeholder={configured ? 'New key (saved key not shown)' : 'Enter API key'}
+          aria-label={`${provider.name} API key`}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <button type="button" className="modelmix-cred-test" disabled={testing || !value.trim()} onClick={onTest}>
+          {testing ? 'Testing…' : 'Test'}
+        </button>
+        <button type="button" className="modelmix-cred-save" disabled={saving || !value.trim()} onClick={onSave}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+      <ResultLine result={testResult} />
+    </div>
+  );
+}
+
+function ResultLine({ result }) {
+  if (!result) return null;
+  const success = result.success === true;
+  const text = result.message || (success ? 'Success' : 'Failed');
+  return (
+    <p className={`modelmix-cred-result ${success ? 'modelmix-cred-result--ok' : 'modelmix-cred-result--err'}`} role="status">
+      {text}
+    </p>
   );
 }
 

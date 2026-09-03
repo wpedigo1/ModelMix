@@ -7,12 +7,14 @@ import pkg from '../../package.json';
 import { DEFAULT_SAVED_MODELS_KEY, loadSavedSeatModels } from '../defaultSeatModels';
 import { GUARDRAIL_STORAGE_KEY, loadGuardrailOverride } from '../guardrailSettings';
 
-const { mockSettings, mockDiscovered, mockHydrate, mockSessions, mockDelete } = vi.hoisted(() => ({
+const { mockSettings, mockDiscovered, mockHydrate, mockSessions, mockDelete, mockUpdate, mockTest } = vi.hoisted(() => ({
   mockSettings: {},
   mockDiscovered: [],
   mockHydrate: { value: null, shouldThrow: true },
   mockSessions: { value: [] },
   mockDelete: { error: null, called: [] },
+  mockUpdate: { calls: [] },
+  mockTest: { calls: [], results: {} },
 }));
 
 vi.mock('../api', () => ({
@@ -51,6 +53,27 @@ vi.mock('../modelmixApi', () => {
     },
     replayModelMixRun: async () => { throw new Error('not used in render test'); },
     startModelMixRun: async () => { throw new Error('not used in render test'); },
+    updateSettings: async (body) => { mockUpdate.calls.push(body); return {}; },
+    testProvider: async (providerId, apiKey) => {
+      mockTest.calls.push({ endpoint: 'provider', providerId, apiKey });
+      return mockTest.results.provider || { success: true, message: 'Provider key is valid' };
+    },
+    testOpenrouter: async (apiKey) => {
+      mockTest.calls.push({ endpoint: 'openrouter', apiKey });
+      return mockTest.results.openrouter || { success: true, message: 'OpenRouter key is valid' };
+    },
+    testOpencode: async (apiKey) => {
+      mockTest.calls.push({ endpoint: 'opencode', apiKey });
+      return mockTest.results.opencode || { success: true, message: 'OpenCode key is valid' };
+    },
+    testOllama: async (baseUrl) => {
+      mockTest.calls.push({ endpoint: 'ollama', baseUrl });
+      return mockTest.results.ollama || { success: true, message: 'Connected to Ollama' };
+    },
+    testCustomEndpoint: async (name, url, apiKey) => {
+      mockTest.calls.push({ endpoint: 'custom', name, url, apiKey });
+      return mockTest.results.custom || { success: true, message: 'Endpoint is reachable' };
+    },
   };
 });
 
@@ -93,6 +116,9 @@ beforeEach(() => {
   mockSessions.value = [];
   mockDelete.error = null;
   mockDelete.called = [];
+  mockUpdate.calls = [];
+  mockTest.calls = [];
+  mockTest.results = {};
 });
 
 afterEach(() => {
@@ -103,6 +129,9 @@ afterEach(() => {
   mockSessions.value = [];
   mockDelete.error = null;
   mockDelete.called = [];
+  mockUpdate.calls = [];
+  mockTest.calls = [];
+  mockTest.results = {};
   for (const { root, container } of mounted.splice(0)) {
     act(() => {
       root.unmount();
@@ -497,4 +526,182 @@ test('deleting a different session leaves the live cockpit state unchanged', asy
   // The currently-open session is untouched.
   assert.equal(window.localStorage.getItem('modelmix.sessionId'), 'sess-current');
   assert.equal(document.querySelector('.modelmix-session-status').getAttribute('data-status'), 'completed');
+});
+
+function credRow(name) {
+  return [...document.querySelectorAll('.modelmix-credential-row')].find(
+    (row) => row.querySelector('.modelmix-cred-name')?.textContent === name,
+  );
+}
+
+function openProviders() {
+  openSettings();
+  click(navButton('Providers'));
+}
+
+test('Providers credential UI shows write-only password inputs that start empty even when a key is already saved', async () => {
+  mockSettings.value = { openai_api_key_set: true, enabled_providers: { direct: true } };
+  await renderObserver();
+  openProviders();
+
+  const row = credRow('OpenAI');
+  assert.ok(row);
+  const input = row.querySelector('input');
+  assert.equal(input.type, 'password');
+  assert.equal(input.value, '');
+  // No saved credential value is ever echoed into the document.
+  assert.ok(!document.body.textContent.includes('sk-'));
+  assert.ok(!input.getAttribute('placeholder').includes('sk-'));
+  assert.match(input.getAttribute('placeholder'), /New key/);
+  // The connected READ status reflects the saved state independently.
+  const statuses = [...document.querySelectorAll('.modelmix-provider-status')];
+  assert.equal(statuses.find((s) => s.parentElement.textContent.includes('Direct API keys')).getAttribute('data-connected'), 'true');
+});
+
+test('Providers saves a plain API-key provider by PUTting only that field', async () => {
+  await renderObserver();
+  openProviders();
+
+  const input = credRow('OpenAI').querySelector('input');
+  typeInput(input, 'sk-openai-123');
+  click(credRow('OpenAI').querySelector('.modelmix-cred-save'));
+  await flush();
+
+  assert.deepEqual(mockUpdate.calls, [{ openai_api_key: 'sk-openai-123' }]);
+  // A successful save clears the write-only input.
+  assert.equal(input.value, '');
+});
+
+test('Providers saves the ollama base URL by PUTting only that field', async () => {
+  await renderObserver();
+  openProviders();
+
+  const input = document.querySelector('input[aria-label="Ollama base URL"]');
+  typeInput(input, 'http://localhost:11434');
+  click(credRow('Ollama (local)').querySelector('.modelmix-cred-save'));
+  await flush();
+
+  assert.deepEqual(mockUpdate.calls, [{ ollama_base_url: 'http://localhost:11434' }]);
+});
+
+test('Providers saves a custom endpoint by PUTting only the entered fields (no api_key when blank)', async () => {
+  await renderObserver();
+  openProviders();
+
+  typeInput(document.querySelector('input[aria-label="Custom endpoint name"]'), 'My vLLM');
+  typeInput(document.querySelector('input[aria-label="Custom endpoint URL"]'), 'http://localhost:8000/v1');
+  // Leave the API key blank for a local server.
+  click(credRow('Custom endpoint').querySelector('.modelmix-cred-save'));
+  await flush();
+
+  assert.deepEqual(mockUpdate.calls, [
+    { custom_endpoint_name: 'My vLLM', custom_endpoint_url: 'http://localhost:8000/v1' },
+  ]);
+});
+
+test('Providers custom endpoint save includes api_key when the user provided one', async () => {
+  await renderObserver();
+  openProviders();
+
+  typeInput(document.querySelector('input[aria-label="Custom endpoint name"]'), 'Together');
+  typeInput(document.querySelector('input[aria-label="Custom endpoint URL"]'), 'https://api.together.xyz/v1');
+  typeInput(document.querySelector('input[aria-label="Custom endpoint API key"]'), 'tk-456');
+  click(credRow('Custom endpoint').querySelector('.modelmix-cred-save'));
+  await flush();
+
+  assert.deepEqual(mockUpdate.calls, [
+    { custom_endpoint_name: 'Together', custom_endpoint_url: 'https://api.together.xyz/v1', custom_endpoint_api_key: 'tk-456' },
+  ]);
+});
+
+test('Providers Test calls the correct existing endpoint and shows the real returned message', async () => {
+  mockTest.results.provider = { success: true, message: 'Valid OpenAI key' };
+  await renderObserver();
+  openProviders();
+
+  const row = credRow('OpenAI');
+  typeInput(row.querySelector('input'), 'sk-openai-xyz');
+  click(row.querySelector('.modelmix-cred-test'));
+  await flush();
+
+  assert.deepEqual(mockTest.calls, [{ endpoint: 'provider', providerId: 'openai', apiKey: 'sk-openai-xyz' }]);
+  const result = row.querySelector('.modelmix-cred-result');
+  assert.ok(result);
+  assert.ok(result.textContent.includes('Valid OpenAI key'));
+  assert.ok(result.classList.contains('modelmix-cred-result--ok'));
+});
+
+test('Providers OpenRouter Test hits the dedicated test-openrouter endpoint and renders a failure message', async () => {
+  mockTest.results.openrouter = { success: false, message: 'Invalid OpenRouter key' };
+  await renderObserver();
+  openProviders();
+
+  const row = credRow('OpenRouter');
+  typeInput(row.querySelector('input'), 'bad-key');
+  click(row.querySelector('.modelmix-cred-test'));
+  await flush();
+
+  assert.deepEqual(mockTest.calls, [{ endpoint: 'openrouter', apiKey: 'bad-key' }]);
+  const result = row.querySelector('.modelmix-cred-result');
+  assert.ok(result.textContent.includes('Invalid OpenRouter key'));
+  assert.ok(result.classList.contains('modelmix-cred-result--err'));
+});
+
+test('Providers Ollama Test hits test-ollama with the base URL and renders the real message', async () => {
+  mockTest.results.ollama = { success: true, message: 'Successfully connected to Ollama' };
+  await renderObserver();
+  openProviders();
+
+  typeInput(document.querySelector('input[aria-label="Ollama base URL"]'), 'http://localhost:11434');
+  click(credRow('Ollama (local)').querySelector('.modelmix-cred-test'));
+  await flush();
+
+  assert.deepEqual(mockTest.calls, [{ endpoint: 'ollama', baseUrl: 'http://localhost:11434' }]);
+  const result = credRow('Ollama (local)').querySelector('.modelmix-cred-result');
+  assert.ok(result.textContent.includes('Successfully connected to Ollama'));
+});
+
+test('Providers Custom endpoint Test hits test-custom-endpoint with name, url, and key', async () => {
+  mockTest.results.custom = { success: true, message: 'Endpoint is reachable' };
+  await renderObserver();
+  openProviders();
+
+  typeInput(document.querySelector('input[aria-label="Custom endpoint name"]'), 'Together');
+  typeInput(document.querySelector('input[aria-label="Custom endpoint URL"]'), 'https://api.together.xyz/v1');
+  typeInput(document.querySelector('input[aria-label="Custom endpoint API key"]'), 'tk-789');
+  click(credRow('Custom endpoint').querySelector('.modelmix-cred-test'));
+  await flush();
+
+  assert.deepEqual(mockTest.calls, [{ endpoint: 'custom', name: 'Together', url: 'https://api.together.xyz/v1', apiKey: 'tk-789' }]);
+  const result = credRow('Custom endpoint').querySelector('.modelmix-cred-result');
+  assert.ok(result.textContent.includes('Endpoint is reachable'));
+});
+
+test('Providers READ status updates to Connected after a successful save via refetch', async () => {
+  mockSettings.value = {};
+  await renderObserver();
+  openProviders();
+
+  const row = credRow('OpenAI');
+  typeInput(row.querySelector('input'), 'sk-openai-update');
+  // Simulate the server having saved the key: the refetch returns new state.
+  mockSettings.value = { openai_api_key_set: true, enabled_providers: { direct: true } };
+  click(row.querySelector('.modelmix-cred-save'));
+  await flush();
+
+  assert.deepEqual(mockUpdate.calls, [{ openai_api_key: 'sk-openai-update' }]);
+  const statuses = [...document.querySelectorAll('.modelmix-provider-status')];
+  const direct = statuses.find((s) => s.parentElement.textContent.includes('Direct API keys'));
+  assert.equal(direct.getAttribute('data-connected'), 'true');
+  assert.equal(direct.textContent, 'Connected');
+});
+
+test('Providers section scopes the council-settings link to OAuth providers only', async () => {
+  await renderObserver();
+  openProviders();
+
+  const section = document.querySelector('.modelmix-settings-section');
+  assert.ok(section.textContent.includes('OAuth providers (xAI, ChatGPT, GitHub Copilot)'));
+  assert.ok(section.textContent.includes('still managed in council settings'));
+  assert.ok(!section.textContent.includes('Manage providers in council settings'));
 });

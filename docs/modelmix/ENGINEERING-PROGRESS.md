@@ -1545,3 +1545,26 @@ temperature-only-saved -> guidance genuinely absent; guidance-only -> temperatur
 genuinely absent; malformed saved behavior ignored (both omitted). Frontend
 suite now **181 passed** (18 files; 166 -> +15), build + lint clean; backend
 unchanged **535 passed**.
+## Mission 055 Result
+
+Native credential entry for ModelMix's 12 simple (non-OAuth) providers,
+frontend only (Punch Board item 26 significantly advanced — credential/endpoint
+entry that previously shipped users to Council settings now lives in the ModelMix
+cockpit). `frontend/src/modelmixApi.js` gains `updateSettings` (partial PUT to the
+existing `PUT /api/settings`), `testProvider`, `testOpenrouter`, `testOpencode`,
+`testOllama`, and `testCustomEndpoint` (each POSTing to the exact existing
+`_require_admin`-guarded test endpoint and returning the real JSON).
+`ModelMixObserver.jsx` Providers section: keeps the connected/not-connected
+`configuredSources` READ list, then adds a write-only editor per provider —
+password-masked key inputs (OpenRouter; OpenAI, Anthropic, Google, Mistral,
+DeepSeek, Groq, NVIDIA; OpenCode Zen+Go sharing one key), a URL input for
+Ollama's base URL, and name/url/optional-key inputs for custom endpoint — each
+with a Test button rendering the real returned success/failure message and a
+Save that PUTs only the edited field(s) via the existing partial-merge endpoint.
+Saved values are never pre-filled or echoed (write-only); after a successful save
+the section re-fetches settings so the READ status updates. The former "Manage
+providers in council settings" link is now scoped to OAuth providers only (xAI,
+ChatGPT, GitHub Copilot), which are explicitly deferred to a separate mission.
+Zero backend changes; no new dependency. Validation: frontend **203 passed**
+(181 + 22 new: 11 API + 11 component), build + lint green, backend **544 passed**
+(unchanged). Full report in `055-native-credential-entry-simple-providers.md`.
