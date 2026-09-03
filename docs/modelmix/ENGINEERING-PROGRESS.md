@@ -1362,3 +1362,21 @@ expectation changed. Validation: frontend **148 passed** (10 new tests),
 Punch Board item 17 is now **SATISFIED**; dollar spend-cap enforcement remains
 a separate, undecided product question. Full report in
 `045-cost-rendering-frontend.md`.
+
+## Mission 046 Result
+
+Deterministic mock provider library (additive test infrastructure, Punch
+Board item 14 closed; no production code and no existing test touched).
+`backend/tests/mock_providers.py` provides ten composable `LLMProvider` factory
+functions — `normal_provider`, `streaming_provider`, `slow_streaming_provider`,
+`failing_provider`, `timeout_provider`, `rate_limited_provider`,
+`cancellation_aware_provider`, `malformed_event_provider`,
+`missing_usage_provider`, and `out_of_order_provider`/`duplicate_provider` —
+each matching the real `backend/providers/base.py` interface, keeping default
+timing fast (no real sleeps beyond a small bounded delay), and adding no
+dependency. `test_mock_providers.py` (13 tests) proves each fixture directly
+and demonstrates genuine usability by driving a real `multiplex_workers` flow
+with `streaming_provider`. Existing tests are deliberately not migrated.
+Validation: new suite **13 passed**, full backend **507 passed**, frontend
+**148 passed**, `npm run build` and `npm run lint` clean. Full report in
+`046-deterministic-mock-provider-library.md`.

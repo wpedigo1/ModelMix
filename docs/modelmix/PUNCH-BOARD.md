@@ -186,10 +186,15 @@ Document what each provider may receive; credentials are references; no raw secr
 
 ## PHASE 3 — Build the Smallest Real Engine
 
-### 14. Build deterministic mock provider — **PARTIAL**
+### 14. Build deterministic mock provider - **SATISFIED**
 
-Support normal response, stream, slow stream, failure, timeout, rate limit, cancellation, malformed event, missing usage, duplicate/out-of-order fixtures.
-
+Support normal response, stream, slow stream, failure, timeout, rate limit, 
+cancellation, malformed event, missing usage, duplicate/out-of-order fixtures.
+**Mission 046** delivers this as one shared, composable library in
+`backend/tests/mock_providers.py` (ten factory functions implementing
+`LLMProvider`), each proven by its own direct test, with one test
+demonstrating a real `multiplex_workers` flow. Existing tests are not
+migrated; the library is additive infrastructure for future ModelMix tests.
 ### 15. Build NON-STREAMING Mix vertical slice first — **SATISFIED — MISSION 009**
 
 Two isolated workers → complete bounded outputs → Moderator → persisted session. Mission 009 adds bounded seat-scoped continuation while preserving the same isolated worker and Moderator flow.

@@ -58,6 +58,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 043 | Big Pickle (OpenCode Zen) | **PASS (LOCAL, pushed, docs-only)** | `043-foundational-domain-documentation.md` — draws Punch Board items 7/9/12/13 to SATISFIED |
 | 044 | Big Pickle (OpenCode Zen) | **PASS (LOCAL)** | `044-real-cost-computation-backend.md` — advances Punch Board item 17 (spend visibility backend half) |
 | 045 | GLM 5.3 Flash (OpenCode) | **PASS (LOCAL)** | `045-cost-rendering-frontend.md` — closes Punch Board item 17 visibility half (frontend rendering) |
+| 046 | OpenCode | **PASS (LOCAL)** | `046-deterministic-mock-provider-library.md` — closes Punch Board item 14 |
 
 
 ## Mission 007 Provenance Clarification
@@ -839,6 +840,21 @@ any actual dollar spend-cap enforcement remains a separate, explicitly
 undecided product question. Validation: frontend **148 passed** (138 prior +
 10 new), `npm run build` and `npm run lint` clean, backend **494 passed**
 (unchanged).
+
+## Mission 046 Result
+
+**Mission 046 is implemented and verified locally.** One shared, deterministic
+mock provider library in `backend/tests/mock_providers.py` (additive test
+infrastructure; no production code and no existing test touched). Ten factory
+functions implementing `LLMProvider` — `normal_provider`, `streaming_provider`,
+`slow_streaming_provider`, `failing_provider`, `timeout_provider`,
+`rate_limited_provider`, `cancellation_aware_provider`,
+`malformed_event_provider`, `missing_usage_provider`, and
+`out_of_order_provider`/`duplicate_provider` — each proven by a direct test,
+plus one test driving a real `multiplex_workers` flow to prove usability
+(replacing an ad-hoc fake). Punch Board item 14 is now **SATISFIED**.
+Validation: new suite **13 passed**, full backend **507 passed**, frontend
+**148 passed**, build and lint clean.
 
 ## Evidence Rule
 
