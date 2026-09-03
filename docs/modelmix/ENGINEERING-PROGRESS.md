@@ -1437,3 +1437,24 @@ session leaves the live cockpit unchanged. No auto/scheduled retention UI, no
 bulk delete, no new dependency. Validation: frontend **157 passed** (9 new
 tests), `npm run build` and `npm run lint` clean, backend **517 passed**
 (unchanged). Full report in `049-session-manager-frontend.md`.
+
+## Mission 050 Result
+
+Per-seat spend warning (backend only, Punch Board item 17, informational only
+- no enforcement, no cutoff, no cumulative tracking). `guardrails.py`:
+`WARNING_COST_USD_THRESHOLD = 0.10` (provisional notice-this default for a
+single seat turn, matching the Mission 019 provisional-default precedent) and
+`should_warn_cost()` - true only for a real finite number strictly above the
+threshold; `None` (non-OpenRouter or uncached pricing) never warns, exactly
+matching the telemetry honesty rules. `orchestrator.py` (streaming and
+non-streaming worker paths) and `moderator.py` emit one
+`seat_cost_warning`/`moderator_cost_warning` (cost_usd, threshold) at the
+exact point real cost is computed, just before the completion event -
+purely additional, never replacing or altering the completed run. Fires once
+at completion per seat; never mid-stream, no cumulative session total. The
+output-length warning (`WARNING_OUTPUT_THRESHOLD_CHARS`/`seat_output_warning`)
+is untouched - a separate parallel mechanism. Validation: targeted
+cost+guardrails suite **43 passed**, full backend **525 passed** (8 new
+tests), frontend **157 passed**, `npm run build` and `npm run lint` clean.
+Enforcement/cutoff and cumulative session-cost tracking remain separate,
+undecided future work. Full report in `050-per-seat-spend-warning-backend.md`.

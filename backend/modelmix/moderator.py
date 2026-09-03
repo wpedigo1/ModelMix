@@ -164,6 +164,13 @@ async def run_moderator(
         cost_usd = compute_openrouter_cost_usd(model_id, usage)
         if cost_usd is not None:
             payload["cost_usd"] = cost_usd
+        if guardrails.should_warn_cost(cost_usd):
+            await create_event(
+                "moderator_cost_warning",
+                actor="moderator",
+                cost_usd=cost_usd,
+                threshold=guardrails.WARNING_COST_USD_THRESHOLD,
+            )
         finish_reason = "modelmix_output_cap" if capped else finish_reason
         if finish_reason is not None:
             payload["finish_reason"] = finish_reason

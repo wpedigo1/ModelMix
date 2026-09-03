@@ -10,6 +10,7 @@ import json
 
 import pytest
 
+from backend.modelmix import guardrails
 from backend.modelmix.moderator import ModeratorInput, run_moderator
 from backend.modelmix.orchestrator import multiplex_workers
 from backend.providers.base import LLMProvider, ProviderStreamEvent
@@ -23,6 +24,10 @@ MODEL = "openrouter:vendor/test-model"
 PROMPT_PRICE = 1.5e-6
 COMPLETION_PRICE = 6e-6
 
+PRICEY_MODEL = "openrouter:vendor/pricey"
+PRICEY_PROMPT_PRICE = 1e-3
+PRICEY_COMPLETION_PRICE = 1e-3
+
 
 @pytest.fixture(autouse=True)
 def clean_pricing_cache():
@@ -35,6 +40,13 @@ def seed_pricing():
     _PRICING["vendor/test-model"] = {
         "prompt": PROMPT_PRICE,
         "completion": COMPLETION_PRICE,
+    }
+
+
+def seed_pricey_pricing():
+    _PRICING["vendor/pricey"] = {
+        "prompt": PRICEY_PROMPT_PRICE,
+        "completion": PRICEY_COMPLETION_PRICE,
     }
 
 
@@ -234,6 +246,118 @@ async def test_compute_rejects_non_numeric_or_negative_tokens():
     assert compute_openrouter_cost_usd(MODEL, {"prompt_tokens": "5", "completion_tokens": 1}) is None
     assert compute_openrouter_cost_usd(MODEL, {"prompt_tokens": -1, "completion_tokens": 1}) is None
     assert compute_openrouter_cost_usd("plain/model", {"prompt_tokens": 5, "completion_tokens": 1}) is None
+
+
+@pytest.mark.asyncio
+async def test_seat_cost_warning_fires_once_above_threshold_alongside_completed():
+    seed_pricey_pricing()
+    usage = {"prompt_tokens": 100, "completion_tokens": 100}
+    provider = DeltasProvider(("answer",), usage=usage)
+
+    events = await collect_seat_events(PRICEY_MODEL, provider)
+
+    warnings = [e for e in events if e["type"] == "seat_cost_warning"]
+    completed = [e for e in events if e["type"] == "seat_completed"]
+    assert len(warnings) == 1
+    # 100 * 1e-3 + 100 * 1e-3 = 0.20
+    assert warnings[0]["cost_usd"] == pytest.approx(0.20, rel=1e-12)
+    assert warnings[0]["threshold"] == guardrails.WARNING_COST_USD_THRESHOLD
+    assert len(completed) == 1
+    assert completed[0]["cost_usd"] == pytest.approx(0.20, rel=1e-12)
+
+
+@pytest.mark.asyncio
+async def test_seat_cost_below_threshold_emits_no_warning():
+    seed_pricing()
+    usage = {"prompt_tokens": 10, "completion_tokens": 5}
+    provider = DeltasProvider(("answer",), usage=usage)
+
+    events = await collect_seat_events(MODEL, provider)
+
+    assert not any(e["type"] == "seat_cost_warning" for e in events)
+    completed = [e for e in events if e["type"] == "seat_completed"]
+    assert len(completed) == 1
+    # 10 * 1.5e-6 + 5 * 6e-6 = 4.5e-5
+    assert completed[0]["cost_usd"] == pytest.approx(4.5e-5, rel=1e-12)
+
+
+@pytest.mark.asyncio
+async def test_seat_with_unknown_cost_never_emits_cost_warning():
+    usage = {"prompt_tokens": 1000, "completion_tokens": 1000}
+    provider = DeltasProvider(("answer",), usage=usage)
+
+    events = await collect_seat_events("other-provider/test-model", provider)
+
+    assert not any(e["type"] == "seat_cost_warning" for e in events)
+    completed = [e for e in events if e["type"] == "seat_completed"]
+    assert "cost_usd" not in completed[0]
+
+
+async def _run_moderator_with(provider, model_id=PRICEY_MODEL):
+    created = []
+
+    async def create_event(event_type, **payload):
+        created.append({"type": event_type, **payload})
+        return created[-1]
+
+    ok = await run_moderator(model_id, provider, MODERATOR_INPUT, create_event)
+    return ok, created
+
+
+@pytest.mark.asyncio
+async def test_moderator_cost_warning_fires_once_above_threshold_alongside_completed():
+    seed_pricey_pricing()
+    usage = {"prompt_tokens": 150, "completion_tokens": 150}
+    provider = DeltasProvider(("synthesis",), usage=usage)
+
+    ok, created = await _run_moderator_with(provider)
+
+    assert ok is True
+    warnings = [e for e in created if e["type"] == "moderator_cost_warning"]
+    completed = [e for e in created if e["type"] == "moderator_completed"]
+    assert len(warnings) == 1
+    # 150 * 1e-3 + 150 * 1e-3 = 0.30
+    assert warnings[0]["cost_usd"] == pytest.approx(0.30, rel=1e-12)
+    assert warnings[0]["threshold"] == guardrails.WARNING_COST_USD_THRESHOLD
+    assert warnings[0]["actor"] == "moderator"
+    assert len(completed) == 1
+
+
+@pytest.mark.asyncio
+async def test_moderator_cost_below_threshold_emits_no_warning():
+    seed_pricing()
+    usage = {"prompt_tokens": 2000, "completion_tokens": 1000}
+    provider = DeltasProvider(("synthesis",), usage=usage)
+
+    ok, created = await _run_moderator_with(provider, model_id=MODEL)
+
+    assert ok is True
+    assert not any(e["type"] == "moderator_cost_warning" for e in created)
+    completed = [e for e in created if e["type"] == "moderator_completed"]
+    assert len(completed) == 1
+
+
+@pytest.mark.asyncio
+async def test_moderator_with_unknown_cost_never_emits_cost_warning():
+    usage = {"prompt_tokens": 5000, "completion_tokens": 5000}
+    provider = DeltasProvider(("synthesis",), usage=usage)
+
+    ok, created = await _run_moderator_with(provider, model_id="other-provider/test-model")
+
+    assert ok is True
+    assert not any(e["type"] == "moderator_cost_warning" for e in created)
+    completed = [e for e in created if e["type"] == "moderator_completed"]
+    assert "cost_usd" not in completed[0]
+
+
+def test_should_warn_cost_only_true_for_real_finite_above_threshold():
+    assert guardrails.should_warn_cost(None) is False
+    assert guardrails.should_warn_cost(0.001) is False
+    assert guardrails.should_warn_cost(float("inf")) is False
+    assert guardrails.should_warn_cost("0.50") is False
+    assert guardrails.should_warn_cost(guardrails.WARNING_COST_USD_THRESHOLD) is False
+    assert guardrails.should_warn_cost(0.50) is True
+
 
 MODERATOR_INPUT = ModeratorInput(messages=[{"role": "user", "content": "prompt"}], truncation={})
 

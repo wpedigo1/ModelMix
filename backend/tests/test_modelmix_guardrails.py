@@ -805,3 +805,31 @@ async def test_registry_threads_override_to_workers_and_moderator(tmp_path):
     assert moderator_events[-1]["finish_reason"] == "modelmix_output_cap"
     assert events[-1]["type"] == "run_completed"
     assert events[-1]["status"] == "completed"
+
+# Mission 050 regression: the per-seat cost warning never disturbs the existing
+# output-length warning; both coexist on one completion.
+@pytest.mark.asyncio
+async def test_cost_warning_coexists_with_output_warning_unaffected(monkeypatch):
+    from backend.providers.openrouter import _PRICING
+    _PRICING["vendor/pricey"] = {"prompt": 1e-3, "completion": 1e-3}
+    monkeypatch.setattr("backend.modelmix.guardrails.WARNING_OUTPUT_THRESHOLD_CHARS", 40)
+    monkeypatch.setattr("backend.modelmix.guardrails.HARD_OUTPUT_CAP_CHARS", 100_000)
+    usage = {"prompt_tokens": 100, "completion_tokens": 100}
+    providers = {"openrouter:vendor/pricey": DeltasProvider(("a" * 20, "b" * 20, "c" * 20), usage=usage)}
+    events = [
+        event
+        async for event in multiplex_workers(
+            "guardrail prompt", "openrouter:vendor/pricey", None, providers.__getitem__
+        )
+    ]
+    output_warnings = [e for e in events if e["type"] == "seat_output_warning"]
+    cost_warnings = [e for e in events if e["type"] == "seat_cost_warning"]
+    assert len(output_warnings) == 1
+    assert output_warnings[0]["chars"] == 40
+    assert output_warnings[0]["threshold"] == 40
+    assert len(cost_warnings) == 1
+    completed = [e for e in events if e["type"] == "seat_completed"]
+    assert len(completed) == 1
+    # Cap is huge, so this is a normal stop completion; cost warning was extra.
+    assert completed[0]["finish_reason"] == "stop"
+    _PRICING.clear()

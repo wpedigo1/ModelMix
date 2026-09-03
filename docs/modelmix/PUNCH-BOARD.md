@@ -237,7 +237,16 @@ footer row only when a real finite figure exists - sub-cent values show four
 decimals so a real cost never displays as a misleading ``$0.00`` - with no
 cross-seat aggregate and no ``unavailable`` placeholder. The visibility half is
 now done end to end; any actual dollar spend-cap enforcement remains a
-separate, explicitly undecided product question.
+separate, explicitly undecided product question. **Mission 050** adds a
+per-seat spend warning (informational only, no enforcement): a module
+constant ``WARNING_COST_USD_THRESHOLD = 0.10`` and, whenever a completed
+seat/moderator's real ``cost_usd`` strictly exceeds it, one
+``seat_cost_warning``/``moderator_cost_warning`` event firing alongside the
+already-computed completion (never blocking or altering it). ``None`` cost
+(non-OpenRouter or uncached) never warns. This fires once at completion per
+seat — not mid-stream, not a cumulative session total — exactly matching the
+telemetry honesty rules. Enforcement/cutoff and cumulative session-cost
+tracking remain separate, explicitly undecided future work.
 
 ## PHASE 4 — Streaming
 

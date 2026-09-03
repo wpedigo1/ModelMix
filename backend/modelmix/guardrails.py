@@ -20,6 +20,35 @@ HARD_OUTPUT_CAP_CHARS = 40_000
 MIN_OUTPUT_CHARS_BOUND = 100
 MAX_OUTPUT_CHARS_BOUND = 200_000
 
+# Provisional per-seat spend "notice this" threshold in USD. Fires a single
+# informational warning once a real per-turn cost is known at completion; it
+# never blocks or alters the completed run. This is informational only —
+# enforcement/cutoff and cumulative session totals are separate, undecided
+# future work. 0.10 (ten cents for one seat's response) is a sensible notice
+# default, same provisional spirit as the character thresholds above.
+WARNING_COST_USD_THRESHOLD = 0.10
+
+
+def should_warn_cost(cost_usd: Any) -> bool:
+    """Whether a real per-seat cost warrants an informational warning.
+
+    Only a real, finite number strictly above the threshold warns. ``None``
+    (non-OpenRouter or uncached pricing) and sub-threshold values never warn —
+    absence of cost data is unknown, not a warning condition.
+    """
+    if cost_usd is None:
+        return False
+    if not isinstance(cost_usd, (int, float)) or not _finite(cost_usd):
+        return False
+    return cost_usd > WARNING_COST_USD_THRESHOLD
+
+
+def _finite(value: Any) -> bool:
+    try:
+        return float(value) == float(value) and float(value) not in (float("inf"), float("-inf"))
+    except (TypeError, ValueError):
+        return False
+
 
 def clip_delta(delta: str, emitted: int, cap: int) -> tuple[str, bool]:
     """Clip one stream delta so cumulative emitted chars never exceed cap.

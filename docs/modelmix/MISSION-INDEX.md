@@ -62,6 +62,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 047 | OpenCode | **PARTIAL â€” config implemented, runtime verification REQUIRES USER** | `047-tauri-csp-hardening.md` â€” advances Punch Board item 34 (CSP half); runtime proof outstanding |
 | 048 | OpenCode | **PASS (LOCAL)** | `048-session-listing-and-deletion-backend.md` â€” advances Punch Board item 29 (retention/delete basics) |
 | 049 | OpenCode | **PASS (LOCAL)** | `049-session-manager-frontend.md` â€” closes Punch Board item 29 (retention/delete UI) |
+| 050 | OpenCode | **PASS (LOCAL)** | `050-per-seat-spend-warning-backend.md` â€” advances Punch Board item 17 (informational spend warning) |
 
 
 ## Mission 007 Provenance Clarification
@@ -917,6 +918,24 @@ currently-open session resets the cockpit via the existing `startNewSession`
 cockpit unchanged. No auto/scheduled retention UI, no bulk delete, no new
 dependency. Validation: frontend **157 passed** (9 new tests), `npm run build`
 and `npm run lint` clean, backend **517 passed** (unchanged).
+
+## Mission 050 Result
+
+**Mission 050 is implemented and verified locally.** Per-seat spend warning
+(backend only, Punch Board item 17, informational only — no enforcement).
+`guardrails.py`: `WARNING_COST_USD_THRESHOLD = 0.10` (provisional default,
+the "notice this" point for a single seat turn) and `should_warn_cost()` —
+true only for a real finite number strictly above the threshold; `None`
+(non-OpenRouter or uncached) never warns. `orchestrator.py` (both streaming
+and non-streaming worker paths) and `moderator.py` emit one
+`seat_cost_warning`/`moderator_cost_warning` (cost_usd, threshold) at the
+exact point cost is computed, just before the completion event — purely
+additional, never replacing/altering it. Fires once at completion per seat,
+never mid-stream, no cumulative session total. Output-length warning
+untouched. Validation: targeted cost+guardrails suite **43 passed**, full
+backend **525 passed** (8 new tests), frontend **157 passed**, build and lint
+clean. Enforcement/cutoff and cumulative tracking remain separate, undecided
+future work.
 
 ## Evidence Rule
 
