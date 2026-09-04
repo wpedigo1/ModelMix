@@ -273,6 +273,7 @@
   border-radius: 6px;
 }
 .modelmix-settings-error { margin: 0; color: #fca5a5; font-size: 12px; line-height: 1.5; }
+.modelmix-settings-divider { border: none; border-top: 1px solid rgba(148, 163, 184, .22); margin: 14px 0 4px; }
 
 .modelmix-composer {
   display: grid;
@@ -312,6 +313,29 @@
 }
 .modelmix-actions button.stop { background: #b91c1c; }
 .modelmix-actions button:disabled { color: #64748b; background: #1e293b; cursor: not-allowed; opacity: .65; }
+
+.modelmix-spend-confirmation {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(127, 29, 29, .3);
+  border-left: 3px solid #ef4444;
+  border-radius: 4px;
+}
+.modelmix-spend-confirmation-message {
+  margin: 0 0 8px;
+  color: #fecaca;
+  font-size: 13px;
+}
+.modelmix-spend-confirm {
+  padding: 6px 14px;
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+  color: #fecaca;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+}
+.modelmix-spend-confirm:hover { background: rgba(239, 68, 68, .15); }
 
 .modelmix-panel-toolbar { display: flex; justify-content: flex-end; }
 .modelmix-reset-layout {

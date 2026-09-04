@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import { afterEach, test, vi } from 'vitest';
 import { DEFAULT_SAVED_MODELS_KEY } from '../defaultSeatModels';
-import { BEHAVIOR_STORAGE_KEY } from '../modelmixBehavior';
+import { BEHAVIOR_STORAGE_KEY, SPEND_LIMIT_STORAGE_KEY } from '../modelmixBehavior';
 
 const { captured } = vi.hoisted(() => ({ captured: { payload: null } }));
 
@@ -155,4 +155,26 @@ test('send omits both fields when the saved behavior fails validation', async ()
   await sendWithPrompt();
   assert.equal('temperature' in captured.payload, false);
   assert.equal('moderator_guidance' in captured.payload, false);
+});
+
+test('send includes spend_limit_usd when a spend limit is saved', async () => {
+  window.localStorage.setItem(DEFAULT_SAVED_MODELS_KEY, JSON.stringify({
+    worker_a: 'openai-oauth:alt',
+    moderator: 'openai-oauth:gpt-5',
+    worker_b: 'ollama:llama3',
+  }));
+  window.localStorage.setItem(SPEND_LIMIT_STORAGE_KEY, JSON.stringify(3.0));
+  await sendWithPrompt();
+  assert.equal(captured.payload.spend_limit_usd, 3.0);
+});
+
+test('send omits spend_limit_usd when no spend limit is saved', async () => {
+  await sendWithPrompt();
+  assert.equal('spend_limit_usd' in captured.payload, false);
+});
+
+test('confirm_over_budget is never present on the initial request', async () => {
+  window.localStorage.setItem(SPEND_LIMIT_STORAGE_KEY, JSON.stringify(1.5));
+  await sendWithPrompt();
+  assert.equal('confirm_over_budget' in captured.payload, false);
 });

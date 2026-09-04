@@ -22,8 +22,11 @@ import {
 import { loadSavedMode, MODES, saveMode } from '../modelmixMode';
 import {
   clearBehavior,
+  clearSpendLimit,
   loadBehavior,
+  loadSpendLimit,
   saveBehavior,
+  saveSpendLimit,
   validateBehavior,
   MAX_MODERATOR_GUIDANCE_LENGTH,
 } from '../modelmixBehavior';
@@ -75,6 +78,7 @@ export default function ModelMixObserver() {
   const observerRef = useRef(observer);
   const connectionRef = useRef(null);
   const historicalModelsRef = useRef(new Set());
+  const lastRequestBodyRef = useRef(null);
   const [panelView, setPanelView] = useState(DEFAULT_PANEL_VIEW);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -246,25 +250,67 @@ export default function ModelMixObserver() {
       },
     };
     updateObserver(starting);
+    const requestBody = {
+      prompt: prompt.trim(),
+      worker_a_model: workerAModel.trim(),
+      session_id: observerRef.current.sessionId || undefined,
+    };
+    if (!isSolo) requestBody.worker_b_model = workerBModel.trim();
+    if (mode === 'mix') requestBody.moderator_model = moderatorModel.trim();
+    const guardrailOverride = loadGuardrailOverride();
+    if (guardrailOverride) {
+      requestBody.warning_threshold_chars = guardrailOverride.warning_threshold_chars;
+      requestBody.hard_cap_chars = guardrailOverride.hard_cap_chars;
+    }
+    const behaviorSettings = loadBehavior();
+    if (behaviorSettings) {
+      if (behaviorSettings.temperature !== undefined) requestBody.temperature = behaviorSettings.temperature;
+      if (behaviorSettings.moderator_guidance !== undefined) requestBody.moderator_guidance = behaviorSettings.moderator_guidance;
+    }
+    const spendLimit = loadSpendLimit();
+    if (spendLimit !== null && spendLimit !== undefined) requestBody.spend_limit_usd = spendLimit;
+    lastRequestBodyRef.current = requestBody;
     try {
-      const requestBody = {
-        prompt: prompt.trim(),
-        worker_a_model: workerAModel.trim(),
-        session_id: observerRef.current.sessionId || undefined,
-      };
-      if (!isSolo) requestBody.worker_b_model = workerBModel.trim();
-      if (mode === 'mix') requestBody.moderator_model = moderatorModel.trim();
-      const guardrailOverride = loadGuardrailOverride();
-      if (guardrailOverride) {
-        requestBody.warning_threshold_chars = guardrailOverride.warning_threshold_chars;
-        requestBody.hard_cap_chars = guardrailOverride.hard_cap_chars;
-      }
-      const behaviorSettings = loadBehavior();
-      if (behaviorSettings) {
-        if (behaviorSettings.temperature !== undefined) requestBody.temperature = behaviorSettings.temperature;
-        if (behaviorSettings.moderator_guidance !== undefined) requestBody.moderator_guidance = behaviorSettings.moderator_guidance;
-      }
       const response = await startModelMixRun(requestBody, controller.signal);
+      const runId = response.headers.get('X-ModelMix-Run-ID');
+      const sessionId = response.headers.get('X-ModelMix-Session-ID');
+      if (sessionId) window.localStorage?.setItem('modelmix.sessionId', sessionId);
+      updateObserver((current) => ({ ...current, runId, sessionId, overall: 'running', message: 'Streaming…' }));
+      await observe(response, controller);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        if (error instanceof ModelMixHttpError && error.status === 402) {
+          setPendingSpendConfirmation({ requestBody, message: error.message });
+        } else {
+          showConnectionError(error);
+        }
+      }
+    }
+  };
+
+  const [pendingSpendConfirmation, setPendingSpendConfirmation] = useState(null);
+
+  const confirmOverBudget = useCallback(async () => {
+    if (!pendingSpendConfirmation) return;
+    const { requestBody } = pendingSpendConfirmation;
+    setPendingSpendConfirmation(null);
+    connectionRef.current?.abort();
+    const controller = new AbortController();
+    connectionRef.current = controller;
+    updateObserver((current) => ({
+      ...archiveCurrentRun(current),
+      overall: 'connecting',
+      message: 'Connecting…',
+      prompt: requestBody.prompt,
+      models: {
+        worker_a: requestBody.worker_a_model,
+        moderator: requestBody.moderator_model || '',
+        worker_b: requestBody.worker_b_model || '',
+      },
+    }));
+    try {
+      const confirmedBody = { ...requestBody, confirm_over_budget: true };
+      const response = await startModelMixRun(confirmedBody, controller.signal);
       const runId = response.headers.get('X-ModelMix-Run-ID');
       const sessionId = response.headers.get('X-ModelMix-Session-ID');
       if (sessionId) window.localStorage?.setItem('modelmix.sessionId', sessionId);
@@ -273,7 +319,7 @@ export default function ModelMixObserver() {
     } catch (error) {
       if (!controller.signal.aborted) showConnectionError(error);
     }
-  };
+  }, [pendingSpendConfirmation, observe, updateObserver, showConnectionError]);
 
   const stop = async () => {
     if (!observerRef.current.runId) return;
@@ -327,6 +373,16 @@ export default function ModelMixObserver() {
 
   const clearBehaviorSettings = () => {
     clearBehavior();
+    setBehaviorRevision((revision) => revision + 1);
+  };
+
+  const saveSpendLimitSetting = (value) => {
+    if (!saveSpendLimit(value)) return;
+    setBehaviorRevision((revision) => revision + 1);
+  };
+
+  const clearSpendLimitSetting = () => {
+    clearSpendLimit();
     setBehaviorRevision((revision) => revision + 1);
   };
 
@@ -395,6 +451,8 @@ export default function ModelMixObserver() {
           behaviorRevision={behaviorRevision}
           onSaveBehavior={saveBehaviorSettings}
           onClearBehavior={clearBehaviorSettings}
+          onSaveSpendLimit={saveSpendLimitSetting}
+          onClearSpendLimit={clearSpendLimitSetting}
           currentSessionId={observer.sessionId}
           onCurrentSessionDeleted={resetToFreshSession}
         />
@@ -453,6 +511,14 @@ export default function ModelMixObserver() {
           <button type="button" className="stop" disabled={controls.stopDisabled} onClick={stop}>Stop</button>
           <span role="status">{observer.message}</span>
         </div>
+        {pendingSpendConfirmation && (
+          <div className="modelmix-spend-confirmation" role="alert">
+            <p className="modelmix-spend-confirmation-message">{pendingSpendConfirmation.message}</p>
+            <button type="button" className="modelmix-spend-confirm" onClick={confirmOverBudget}>
+              Proceed anyway
+            </button>
+          </div>
+        )}
       </form>
 
       {panelLayoutNeedsReset(panelView.maximized, panelView.collapsed) && (
@@ -580,6 +646,8 @@ function ModelMixSettings({
   behaviorRevision,
   onSaveBehavior,
   onClearBehavior,
+  onSaveSpendLimit,
+  onClearSpendLimit,
   currentSessionId,
   onCurrentSessionDeleted,
 }) {
@@ -632,6 +700,8 @@ function ModelMixSettings({
               key={behaviorRevision}
               onSave={onSaveBehavior}
               onClear={onClearBehavior}
+              onSaveSpendLimit={onSaveSpendLimit}
+              onClearSpendLimit={onClearSpendLimit}
             />
           )}
           {section === 'sessions' && (
@@ -1233,7 +1303,7 @@ function GuardrailsSection({ onSave, onClear }) {
   );
 }
 
-function BehaviorSection({ onSave, onClear }) {
+function BehaviorSection({ onSave, onClear, onSaveSpendLimit, onClearSpendLimit }) {
   const saved = loadBehavior();
   const [temperature, setTemperature] = useState(
     saved && saved.temperature !== undefined ? String(saved.temperature) : ''
@@ -1241,6 +1311,10 @@ function BehaviorSection({ onSave, onClear }) {
   const [guidance, setGuidance] = useState(
     saved && saved.moderator_guidance !== undefined ? saved.moderator_guidance : ''
   );
+  const [spendLimit, setSpendLimit] = useState(() => {
+    const savedLimit = loadSpendLimit();
+    return savedLimit !== null ? String(savedLimit) : '';
+  });
 
   const parsedTemperature = temperature === '' ? NaN : Number(temperature);
   const parsedGuidance = guidance;
@@ -1251,11 +1325,25 @@ function BehaviorSection({ onSave, onClear }) {
   const edited = temperature !== '' || guidance !== '';
   const guidanceRemaining = MAX_MODERATOR_GUIDANCE_LENGTH - guidance.length;
 
+  const parsedSpendLimit = spendLimit === '' ? NaN : Number(spendLimit);
+  const spendLimitValid = spendLimit === '' || (Number.isFinite(parsedSpendLimit) && parsedSpendLimit > 0);
+  const spendLimitSaved = loadSpendLimit();
+
   const handleSave = () => {
     const values = {};
     if (temperature !== '') values.temperature = parsedTemperature;
     if (guidance !== '') values.moderator_guidance = guidance;
     onSave(values);
+  };
+
+  const handleSaveSpendLimit = () => {
+    if (!Number.isFinite(parsedSpendLimit) || parsedSpendLimit <= 0) return;
+    onSaveSpendLimit(parsedSpendLimit);
+  };
+
+  const handleClearSpendLimit = () => {
+    onClearSpendLimit();
+    setSpendLimit('');
   };
 
   return (
@@ -1313,6 +1401,43 @@ function BehaviorSection({ onSave, onClear }) {
         </button>
         <button type="button" className="modelmix-settings-clear" disabled={!saved} onClick={onClear}>
           Clear saved behavior
+        </button>
+      </div>
+      <hr className="modelmix-settings-divider" />
+      <label className="modelmix-settings-line" htmlFor="modelmix-behavior-spend-limit">
+        Spend limit (USD)
+      </label>
+      <input
+        id="modelmix-behavior-spend-limit"
+        className="modelmix-settings-input"
+        type="number"
+        min={0.01}
+        step="0.01"
+        value={spendLimit}
+        onChange={(event) => setSpendLimit(event.target.value)}
+        aria-label="Spend limit in USD"
+      />
+      {!spendLimitValid && spendLimit !== '' && (
+        <p className="modelmix-settings-error" role="alert">
+          Spend limit must be greater than 0
+        </p>
+      )}
+      {spendLimitSaved !== null ? (
+        <p className="modelmix-settings-line">Saved spend limit: ${spendLimitSaved} USD. Runs exceeding this are rejected.</p>
+      ) : (
+        <p className="modelmix-settings-line">No spend limit — runs are not gated by cost.</p>
+      )}
+      <div className="modelmix-settings-actions">
+        <button
+          type="button"
+          className="modelmix-settings-save"
+          disabled={!spendLimitValid || spendLimit === ''}
+          onClick={handleSaveSpendLimit}
+        >
+          Save spend limit
+        </button>
+        <button type="button" className="modelmix-settings-clear" disabled={spendLimitSaved === null} onClick={handleClearSpendLimit}>
+          Clear spend limit
         </button>
       </div>
     </div>

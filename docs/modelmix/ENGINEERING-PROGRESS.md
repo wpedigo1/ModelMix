@@ -10,7 +10,7 @@ Mission provenance/index: [`MISSION-INDEX.md`](MISSION-INDEX.md)
 
 ## Current Repository Checkpoint
 
-Completed and locally verified implementation missions: **001–035**.
+Completed and locally verified implementation missions: **001–035, 037–057**.
 
 Mission **007.5 — PASS** closed the dependency-security compatibility interlock.
 
@@ -62,6 +62,7 @@ Mission **008** persistence is present on current `main` and passes the current 
 | 032 | **PASS (LOCAL)** | Tauri 2 toolchain check and minimal native shell: observed Rust/Cargo 1.98.0, MSVC C++ tools, and WebView2 151.0.4129.107; installed the missing `tauri-cli 2.11.4`; added standard `src-tauri/` pointing development at the existing `/modelmix` Vite route and production assets at `frontend/dist`, with no sidecar/backend launch. Direct Windows inspection observed the real three-panel cockpit in the native `target\debug\app.exe` window against the separately started backend. `cargo check` green; frontend **138 passed** / build / lint green; backend workspace-temp rerun **460 passed** after the exact command reproduced the known default-temp `WinError 5`. Item 34 remains in progress for sidecar and installer work | `032-tauri-toolchain-and-shell.md` |
 | 033 | **PASS (LOCAL)** | Standalone Windows PyInstaller `onedir` backend bundle: packaging-only package-context adapter, durable spec, installed keyring hook verification, and narrow bundled project-metadata fallback. The isolated frozen executable ran with a sanitized no-Python/uv/venv environment, served health/session/settings/MCP routes, persisted and cleared fake keyring/file sentinels across restarts, produced a direct non-inherited current-user FullControl ACL, and shut down with no orphan/JSON/temp-file/live-data damage. Backend **461 passed** with workspace-temp after the known default-temp failure; frontend **138 passed** / build / lint green; Rust format/check and focused Ruff green. Item 34 remains open for Tauri sidecar, installer, and final credential packaging | `033-pyinstaller-backend-bundle.md` |
 | 034 | **PASS (LOCAL)** | Frozen-aware user data directory fixing the Mission 033 finding (`_internal\data\credentials.json`): new stdlib-only `backend/user_data_dir.py` (`is_frozen()` + `resolve_user_data_dir()` → repo `data/` unmodified when not frozen, `%LOCALAPPDATA%\ModelMix` when frozen, executable-dir fallback + warning, mkdir before return); `CREDENTIALS_FILE`, `SETTINGS_FILE`, and `personas._DATA_DIR` derive from it; keyring/store/route/`icacls`/`src-tauri`/frontend untouched. New 7-test regression/simulation suite. Backend **468 passed** (461 unmodified + 7 new); focused credential run **24 passed**; `ruff` clean; frontend **138 passed** / build / lint green (required, unchanged). Frozen-mode path proven by simulation; real frozen-build confirmation required with item 34 | `034-frozen-aware-user-data-directory.md` |
+| 057 | **PASS (LOCAL)** | Spend limit control and 402 confirmation UX (frontend-only) — closes Punch Board item 17. `modelmixBehavior.js` gains `loadSpendLimit`/`saveSpendLimit`/`clearSpendLimit` (validating `value > 0`); `send()` includes `spend_limit_usd` only when a valid saved value exists; a 402 renders the real backend message with an explicit "Proceed anyway" button that resends the identical original request body plus `confirm_over_budget: true`. Frontend **228 passed** (215 + 13 new) / build / lint green. Backend: zero files touched | `057-spend-limit-control-and-confirmation-frontend.md` |
 
 
 ## Current Verified Product Slice
@@ -142,7 +143,7 @@ Mission numbers are implementation slices; they are not one-to-one with the 47 l
 - **12 — Provider capability matrix:** streaming capability/fallback and configured discovery exist; the full capability matrix remains open.
 - **14 — Deterministic mock provider:** current tests use deterministic fakes/mocks, but the full locked failure/timeout/rate-limit fixture matrix remains open.
 - **29 — Finalized Mix multi-turn behavior:** seat histories, Moderator history, hot-swap continuity, deterministic context bounding, and completed-turn cockpit display are implemented; retention/delete UX remains open.
-- **17 — Spend/runtime guardrails:** explicit Stop, the turn cap, seat-history per-message/per-seat character budgets (Mission 010), wall-clock run (600s) / seat-Moderator (300s) timeouts (Mission 013), persisted `started_at`/`completed_at` timing truth (Mission 015) surfaced as calculated elapsed in the cockpit (Mission 018), and — new in Mission 019 — a hard output cap plus one-shot output warning for every worker seat and the Moderator with an honest `modelmix_output_cap` terminal outcome, made configurable per request in Mission 020 and **from the cockpit in Mission 021**: a Guardrails settings section saves/clears a local `modelmix.guardrails` override (bounded 100–200_000 chars, server cross-check mirrored) that is sent with every run request, the warning renders live in seat footers (`Approaching output limit: 22,451 / 20,000 chars`), and worker seats show the same honest finish captions as the Moderator. Cost/token ceilings remain the only open sub-item.
+- **17 — Spend/runtime guardrails — CLOSED (visibility: 044/045, warning: 050/051, gate: 052/057).** explicit Stop, the turn cap, seat-history character budgets (Mission 010), wall-clock run (600s) / seat-Moderator (300s) timeouts (Mission 013), hard output cap + warning (Missions 019–021), dollar cost visibility (Missions 044/045), per-seat spend warning (Missions 050/051), and dollar-cap enforcement with frontend confirmation UX (Missions 052/057) are all complete end to end.
 - **26 — Provider/settings UX:** searchable configured selectors are complete; the visible ModelMix sidebar navigation entry point exists (Mission 014); the cockpit Settings surface is now a real entry (Mission 017) with read-only provider status from the exported `configuredSources` and saved default seat models; full alpha provider/settings entry flow remains open.
 - **4 — License and provenance — PARTIAL — MISSION 017** (the cockpit About section surfaces the MIT license, the copyright holder, the real version, the text-only AI Counsel attribution, and the repo URL; the `OPEN_SOURCE_CREDITS.md`, inherited-module provenance, and dependency-license inventory remain open)
 
@@ -1591,3 +1592,23 @@ OAuth) now requires a trip to Council settings. Validation: frontend **215 passe
 (203 + 12 new: 5 API + 7 component), build + lint green, backend **544 passed**
 (unchanged, no backend files touched). Full report in
 `056-native-oauth-connect-disconnect.md`.
+
+## Mission 057 Result
+
+Spend limit control and 402 confirmation UX (frontend-only) — **closing Punch
+Board item 17's gate half**. `frontend/src/modelmixBehavior.js` gains
+`loadSpendLimit`/`saveSpendLimit`/`clearSpendLimit` (validating `value > 0`,
+matching the backend's `gt=0` bound exactly, same defensive storage discipline
+as every existing settings module). `send()` includes `spend_limit_usd` in the
+request body only when a valid saved value exists (key genuinely absent
+otherwise). When `startModelMixRun` rejects with HTTP 402, the real backend
+message (which seat, actual cost) renders in a dedicated confirmation UI with an
+explicit "Proceed anyway" button that resends the identical original request
+body plus `confirm_over_budget: true` — never auto-retrying, never persisting
+the confirmation flag. A dollar-amount input with save/clear pair is added to
+the existing Behavior Settings section. Validation: frontend **228 passed**
+(215 prior + 13 new: 4 in `modelmixBehavior.test.js`, 3 in
+`ModelMixSendBehavior.test.jsx`, 6 in new `ModelMixSpendLimit.test.jsx`), build
++ lint green. Backend: zero files touched; observed errors are pre-existing
+Windows temp-dir `WinError 5` PermissionErrors, not mission regressions. Full
+report in `057-spend-limit-control-and-confirmation-frontend.md`.

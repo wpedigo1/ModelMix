@@ -102,7 +102,7 @@ MCP remains an **alpha non-goal** as a ModelMix product capability; compatibilit
 - **9 — Define run state machine:** core active/terminal outcomes exist; complete timeout/retry/state contract remains open. Mission 013 adds honest wall-clock `reason: "timeout"` outcomes for runs, seats, and Moderator.
 - **12 — Define provider capability matrix:** streaming/fallback and configured discovery exist; full matrix remains open.
 - **14 — Build deterministic mock provider:** deterministic fakes/mocks support current tests; full failure/timeout/rate-limit fixture matrix remains open.
-- **17 — Add basic spend/runtime guardrails:** Stop, turn cap, wall-clock run (600s) / seat-Moderator (300s) timeouts (Mission 013), seat-history per-message/per-seat character budgets (Mission 010 partial progress on context bounding), and — new in Mission 019 — a hard output cap plus one-shot output warning for every worker seat and the Moderator with an honest `modelmix_output_cap` terminal outcome, made configurable per request in Mission 020 (`warning_threshold_chars`/`hard_cap_chars`, bounded 100–200_000 chars, validated to 422 before any provider call), and made user-configurable from the cockpit in Mission 021 (Guardrails settings section saving a local `modelmix.guardrails` override that is sent with every run request, with the crossed warning and honest finish captions rendered live in every seat footer); cost/token ceilings remain the only open sub-item.
+- **17 — Add basic spend/runtime guardrails — CLOSED (visibility: 044/045, warning: 050/051, gate: 052/057).** Stop, turn cap, wall-clock run (600s) / seat-Moderator (300s) timeouts (Mission 013), seat-history character budgets (Mission 010), hard output cap + warning (Missions 019–021), dollar cost visibility (Missions 044/045), per-seat spend warning (Missions 050/051), and dollar-cap enforcement with frontend confirmation UX (Missions 052/057) are all complete end to end.
 - **29 — Finalize Mix multi-turn session behavior:** seat-scoped Worker/Moderator history, bounding, failure-partial reuse, hot-swap continuity, completed-turn cockpit display, and New Session reset are implemented; retention/delete UX remains open.
 - **26 — Add provider/settings UX sufficient for alpha:** searchable configured selectors are complete; the visible ModelMix navigation entry point in the Council sidebar exists (Mission 014); the cockpit Settings surface is now a real entry (Mission 017) with read-only provider status from the exported `configuredSources`; full alpha provider/settings flow remains open.
 
@@ -203,7 +203,7 @@ Two isolated workers → complete bounded outputs → Moderator → persisted se
 
 One/both worker failure, Moderator failure, timeout/rate limit/cancellation/partial outcomes modeled honestly. **Mission 013** proves run/seat/Moderator timeouts share the same loop and cancellation machinery as failure and explicit cancel, with a no-late-writes guarantee verified in both the journal and durable session. **Mission 023** proves cancellation stays terminal and bounded even when a seat/Moderator provider does not honor cancellation promptly (deterministic stall tests; `run_cancelled` within `CANCEL_GRACE_SECONDS`). Persisted restart case remains tied to item 11.
 
-### 17. Add basic spend/runtime guardrails — **PARTIAL**
+### 17. Add basic spend/runtime guardrails — **CLOSED (visibility: 044/045, warning: 050/051, gate: 052/057)**
 
 Max workers, run timeout, Stop, seat-history character budgets (Mission 010 partial), optional cost/token ceiling, no automatic provider/model substitution without permission. **Mission 013** adds the ModelMix-owned wall-clock bounds: `RUN_TIMEOUT_SECONDS = 600` enforced by `RunRegistry`, `SEAT_TIMEOUT_SECONDS = 300` enforced per worker seat and for the Moderator phase, with honest `reason: "timeout"` terminal events. **Mission 019** enforces the output guardrails behind module constants (`guardrails.py`): `WARNING_OUTPUT_THRESHOLD_CHARS = 20_000` and `HARD_OUTPUT_CAP_CHARS = 40_000`, with a one-shot `seat_output_warning`/`moderator_output_warning` on first crossing and an exact-cap deterministic truncation that stops consuming the stream and terminates as `seat_completed`/`moderator_completed` with `finish_reason: "modelmix_output_cap"` (never `seat_failed`, never colliding with provider reasons). **Mission 020** makes both
 thresholds configurable per request through `POST /api/modelmix/runs/stream`:
@@ -267,7 +267,21 @@ over-budget, `confirm_over_budget: true` bypasses the check, and omitting
 facts from the existing `load_session` — no `should_warn_cost` change, no
 server-side persistence of the limit, no schema bump, no new dependency. Mission
 053/054 (per-request temperature/moderator guidance, frontend) land on top had
-already shipped before 052 was retroactively renumbered.
+already shipped before 052 was retroactively renumbered. **Mission 057** closes
+the frontend half: a new `loadSpendLimit`/`saveSpendLimit`/`clearSpendLimit`
+triple in `modelmixBehavior.js` (validating `value > 0`, matching the backend's
+`gt=0` bound exactly, same defensive storage discipline as every existing
+settings module) powers a dollar-amount input with save/clear pair in the
+Behavior Settings section; `send()` includes `spend_limit_usd` in the request
+body only when a valid saved value exists (key genuinely absent otherwise,
+matching the absence-not-null discipline for every other optional field); when
+`startModelMixRun` rejects with HTTP 402, the real backend message (which seat,
+actual cost) renders in a dedicated confirmation UI with an explicit "Proceed
+anyway" button that resends the identical original request body plus
+`confirm_over_budget: true` — never auto-retrying, never persisting the
+confirmation flag. Frontend-only — no backend changes. Item 17 is now complete
+end to end: visibility (044/045), warning (050/051), and gate (052/057) all
+real backend AND frontend.
 
 ## PHASE 4 — Streaming
 

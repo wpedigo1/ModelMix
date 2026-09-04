@@ -1,4 +1,5 @@
 export const BEHAVIOR_STORAGE_KEY = 'modelmix.behavior';
+export const SPEND_LIMIT_STORAGE_KEY = 'modelmix.spendLimit';
 
 export const MIN_TEMPERATURE = 0.0;
 export const MAX_TEMPERATURE = 2.0;
@@ -84,6 +85,48 @@ export function clearBehavior(storage = defaultStorage()) {
   if (!storage?.removeItem) return false;
   try {
     storage.removeItem(BEHAVIOR_STORAGE_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isValidSpendLimit(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+export function loadSpendLimit(storage = defaultStorage()) {
+  let raw;
+  try {
+    raw = storage?.getItem?.(SPEND_LIMIT_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+  if (typeof raw !== 'string' || raw === '') return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!isValidSpendLimit(parsed)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function saveSpendLimit(value, storage = defaultStorage()) {
+  if (!storage?.setItem) return false;
+  if (!isValidSpendLimit(value)) return false;
+  try {
+    storage.setItem(SPEND_LIMIT_STORAGE_KEY, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearSpendLimit(storage = defaultStorage()) {
+  if (!storage?.removeItem) return false;
+  try {
+    storage.removeItem(SPEND_LIMIT_STORAGE_KEY);
     return true;
   } catch {
     return false;

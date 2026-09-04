@@ -69,6 +69,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 054 | OpenCode | **PASS (LOCAL)** | `054-temperature-and-moderator-guidance-frontend.md` — advances Punch Board item 26 (temperature + moderator guidance, frontend) |
 | 055 | OpenCode | **PASS (LOCAL)** | `055-native-credential-entry-simple-providers.md` — advances Punch Board item 26 (native credential entry for 12 simple providers, frontend) |
 | 056 | OpenCode | **PASS (LOCAL)** | `056-native-oauth-connect-disconnect.md` — closes Punch Board item 26 (native OAuth connect/disconnect for xAI, ChatGPT, GitHub Copilot, frontend; zero backend changes) |
+| 057 | OpenCode | **PASS (LOCAL)** | `057-spend-limit-control-and-confirmation-frontend.md` — closes Punch Board item 17 (spend limit control, 402 confirmation UX, frontend-only) |
 
 
 ## Mission 007 Provenance Clarification
@@ -1065,6 +1066,26 @@ test suite proves it. The stale "still managed in council settings" OAuth copy
 is removed. Validation: frontend **215 passed** (203 + 12 new: 5 API + 7
 component), build + lint green, backend **544 passed** (unchanged, no backend
 files touched). Full report in `056-native-oauth-connect-disconnect.md`.
+## Mission 057 Result
+
+Spend limit control and 402 confirmation UX (frontend-only) — closing Punch
+Board item 17's gate half. `frontend/src/modelmixBehavior.js` gains
+`loadSpendLimit`/`saveSpendLimit`/`clearSpendLimit` (validating `value > 0`,
+matching the backend's `gt=0` bound exactly, same defensive storage discipline
+as every existing settings module). `send()` includes `spend_limit_usd` in the
+request body only when a valid saved value exists (key genuinely absent
+otherwise). When `startModelMixRun` rejects with HTTP 402, the real backend
+message (which seat, actual cost) renders in a dedicated confirmation UI with an
+explicit "Proceed anyway" button that resends the identical original request
+body plus `confirm_over_budget: true` — never auto-retrying, never persisting
+the confirmation flag. A new dollar-amount input with save/clear pair is added
+to the existing Behavior Settings section. Validation: frontend **228 passed**
+(215 prior + 13 new: 4 in `modelmixBehavior.test.js`, 3 in
+`ModelMixSendBehavior.test.jsx`, 6 in new `ModelMixSpendLimit.test.jsx`), build
++ lint green. Backend: zero files touched; observed errors are pre-existing
+Windows temp-dir `WinError 5` PermissionErrors, not mission regressions. Full
+report in `057-spend-limit-control-and-confirmation-frontend.md`.
+
 ## Evidence Rule
 
 Historical worker branch names, reports, local commit SHAs, or PASS statements are evidence to reconcile; they are not proof of current remote state by themselves.

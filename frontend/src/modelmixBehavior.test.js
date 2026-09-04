@@ -3,11 +3,15 @@ import { test } from 'vitest';
 import {
   BEHAVIOR_STORAGE_KEY,
   clearBehavior,
+  clearSpendLimit,
   loadBehavior,
+  loadSpendLimit,
   MAX_MODERATOR_GUIDANCE_LENGTH,
   MAX_TEMPERATURE,
   MIN_TEMPERATURE,
   saveBehavior,
+  saveSpendLimit,
+  SPEND_LIMIT_STORAGE_KEY,
   validateBehavior,
 } from './modelmixBehavior.js';
 
@@ -120,4 +124,56 @@ test('helpers tolerate broken or throwing storage without throwing', () => {
   assert.equal(loadBehavior(throwing), null);
   assert.equal(saveBehavior({ temperature: 0.7 }, throwing), false);
   assert.equal(clearBehavior(throwing), false);
+});
+
+test('loadSpendLimit/saveSpendLimit/clearSpendLimit round-trip correctly', () => {
+  const storage = memoryStorage();
+  assert.equal(loadSpendLimit(storage), null);
+  assert.equal(saveSpendLimit(5.0, storage), true);
+  assert.equal(loadSpendLimit(storage), 5.0);
+  assert.equal(saveSpendLimit(0.01, storage), true);
+  assert.equal(loadSpendLimit(storage), 0.01);
+  assert.equal(clearSpendLimit(storage), true);
+  assert.equal(loadSpendLimit(storage), null);
+});
+
+test('saveSpendLimit rejects invalid values without writing', () => {
+  const storage = memoryStorage();
+  for (const bad of [0, -1, -0.01, NaN, Infinity, -Infinity, '1.0', null, undefined]) {
+    assert.equal(saveSpendLimit(bad, storage), false, `value=${String(bad)}`);
+  }
+  assert.equal(loadSpendLimit(storage), null);
+});
+
+test('loadSpendLimit returns null for malformed storage', () => {
+  const storage = memoryStorage();
+  storage.setItem(SPEND_LIMIT_STORAGE_KEY, 'not-json{{');
+  assert.equal(loadSpendLimit(storage), null);
+
+  storage.setItem(SPEND_LIMIT_STORAGE_KEY, JSON.stringify('string'));
+  assert.equal(loadSpendLimit(storage), null);
+
+  storage.setItem(SPEND_LIMIT_STORAGE_KEY, JSON.stringify(0));
+  assert.equal(loadSpendLimit(storage), null);
+
+  storage.setItem(SPEND_LIMIT_STORAGE_KEY, JSON.stringify(-5));
+  assert.equal(loadSpendLimit(storage), null);
+
+  storage.setItem(SPEND_LIMIT_STORAGE_KEY, JSON.stringify(null));
+  assert.equal(loadSpendLimit(storage), null);
+});
+
+test('spend limit helpers tolerate broken or throwing storage without throwing', () => {
+  assert.equal(saveSpendLimit(5.0, {}), false);
+  assert.equal(clearSpendLimit({}), false);
+  assert.equal(loadSpendLimit({}), null);
+
+  const throwing = {
+    getItem() { throw new Error('nope'); },
+    setItem() { throw new Error('nope'); },
+    removeItem() { throw new Error('nope'); },
+  };
+  assert.equal(loadSpendLimit(throwing), null);
+  assert.equal(saveSpendLimit(5.0, throwing), false);
+  assert.equal(clearSpendLimit(throwing), false);
 });
