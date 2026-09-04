@@ -1568,3 +1568,26 @@ ChatGPT, GitHub Copilot), which are explicitly deferred to a separate mission.
 Zero backend changes; no new dependency. Validation: frontend **203 passed**
 (181 + 22 new: 11 API + 11 component), build + lint green, backend **544 passed**
 (unchanged). Full report in `055-native-credential-entry-simple-providers.md`.
+## Mission 056 Result
+
+Native OAuth connect/disconnect for the three OAuth providers (`xai-oauth`,
+`openai-oauth`, `github-copilot`) in the cockpit Settings "Providers" section —
+**closing the credential fold-in (Punch Board item 26 is now CLOSED)**. Zero
+backend changes: reuses the existing uniform device-code flow and the existing
+`_require_admin`-guarded routes exactly. `frontend/src/modelmixApi.js` gains
+`startOAuthConnection` (POST `/api/oauth/{id}/start`), `getOAuthConnectionStatus`
+(GET `/api/oauth/{id}/status?session_id=...`), and `disconnectOAuthProvider`
+(DELETE `/api/oauth/{id}`). `ModelMixObserver.jsx` extends the Mission 055
+Providers section with an `OAuthRow` per provider: real connected status from
+`xai_oauth_connected`/`openai_oauth_connected`/`github_copilot_connected`, a
+Connect button that starts the flow and renders the real `user_code` plus a
+clickable `verification_uri_complete` link (falling back to `verification_uri`
+when complete is `null`), then polls every 2.5s until `complete`/`error`/`expired`
+(interval cleared) showing the real error/expired message; a Disconnect button
+calls the DELETE route and refetches status. Polling is bounded to `expires_in`
+and every interval is cleared on unmount — a test proves no leak. The stale
+"still managed in council settings" OAuth copy is removed. No provider (simple or
+OAuth) now requires a trip to Council settings. Validation: frontend **215 passed**
+(203 + 12 new: 5 API + 7 component), build + lint green, backend **544 passed**
+(unchanged, no backend files touched). Full report in
+`056-native-oauth-connect-disconnect.md`.

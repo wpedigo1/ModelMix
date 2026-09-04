@@ -68,6 +68,7 @@ Mission prompts and worker responses may also exist in the ModelMix project Libr
 | 053 | OpenCode | **PASS (LOCAL)** | `053-temperature-and-moderator-guidance-backend.md` — advances Punch Board item 26 (temperature + moderator guidance, backend) |
 | 054 | OpenCode | **PASS (LOCAL)** | `054-temperature-and-moderator-guidance-frontend.md` — advances Punch Board item 26 (temperature + moderator guidance, frontend) |
 | 055 | OpenCode | **PASS (LOCAL)** | `055-native-credential-entry-simple-providers.md` — advances Punch Board item 26 (native credential entry for 12 simple providers, frontend) |
+| 056 | OpenCode | **PASS (LOCAL)** | `056-native-oauth-connect-disconnect.md` — closes Punch Board item 26 (native OAuth connect/disconnect for xAI, ChatGPT, GitHub Copilot, frontend; zero backend changes) |
 
 
 ## Mission 007 Provenance Clarification
@@ -1040,6 +1041,30 @@ is now scoped to OAuth providers only (xAI, ChatGPT, GitHub Copilot), which are
 explicitly deferred to a separate mission. Zero backend changes. Validation:
 frontend **203 passed** (181 + 22 new: 11 API + 11 component), build + lint
 green, backend **544 passed** (unchanged).
+## Mission 056 Result
+
+Native OAuth connect/disconnect for the three OAuth providers (`xai-oauth`,
+`openai-oauth`, `github-copilot`) directly in the cockpit Settings "Providers"
+section — closing the credential fold-in (Punch Board item 26, now **CLOSED**).
+Zero backend changes: reuses the existing uniform device-code flow
+(`backend/oauth/sessions.py`) and the existing `_require_admin`-guarded routes
+exactly. `frontend/src/modelmixApi.js` gains `startOAuthConnection` (POST
+`/api/oauth/{id}/start`), `getOAuthConnectionStatus` (GET
+`/api/oauth/{id}/status?session_id=...`), and `disconnectOAuthProvider` (DELETE
+`/api/oauth/{id}`). `ModelMixObserver.jsx` extends the Mission 055 Providers
+section with an `OAuthRow` per provider: real connected status from the
+`xai_oauth_connected`/`openai_oauth_connected`/`github_copilot_connected`
+fields, a Connect button that starts the flow and renders the real returned
+`user_code` plus a clickable `verification_uri_complete` link (falling back to
+`verification_uri` when complete is `null`), then polls `getOAuthConnectionStatus`
+every 2.5s until `complete`/`error`/`expired`, stopping (interval cleared) and
+showing the real returned error/expired message; a Disconnect button calls the
+DELETE route and refetches status. Polling is bounded to the session's
+`expires_in` and every interval is cleared on unmount — no React leak and the
+test suite proves it. The stale "still managed in council settings" OAuth copy
+is removed. Validation: frontend **215 passed** (203 + 12 new: 5 API + 7
+component), build + lint green, backend **544 passed** (unchanged, no backend
+files touched). Full report in `056-native-oauth-connect-disconnect.md`.
 ## Evidence Rule
 
 Historical worker branch names, reports, local commit SHAs, or PASS statements are evidence to reconcile; they are not proof of current remote state by themselves.

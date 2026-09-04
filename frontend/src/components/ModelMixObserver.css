@@ -242,6 +242,11 @@
 .modelmix-cred-result { margin: 0; font-size: 12px; }
 .modelmix-cred-result--ok { color: #6ee7b7; }
 .modelmix-cred-result--err { color: #fca5a5; }
+.modelmix-oauth-pending { display: flex; flex-direction: column; gap: 6px; margin: 4px 0; }
+.modelmix-oauth-code { margin: 0; color: var(--text-primary); font-size: 13px; }
+.modelmix-oauth-code strong { font-size: 16px; letter-spacing: 1px; }
+.modelmix-oauth-link { color: #60a5fa; font-size: 13px; text-decoration: underline; }
+.modelmix-oauth-note { margin: 0; color: var(--text-muted); font-size: 12px; }
 .modelmix-settings-actions { display: flex; gap: 8px; }
 .modelmix-settings-actions button {
   padding: 7px 12px;

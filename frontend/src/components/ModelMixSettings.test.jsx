@@ -7,7 +7,7 @@ import pkg from '../../package.json';
 import { DEFAULT_SAVED_MODELS_KEY, loadSavedSeatModels } from '../defaultSeatModels';
 import { GUARDRAIL_STORAGE_KEY, loadGuardrailOverride } from '../guardrailSettings';
 
-const { mockSettings, mockDiscovered, mockHydrate, mockSessions, mockDelete, mockUpdate, mockTest } = vi.hoisted(() => ({
+const { mockSettings, mockDiscovered, mockHydrate, mockSessions, mockDelete, mockUpdate, mockTest, mockOauth } = vi.hoisted(() => ({
   mockSettings: {},
   mockDiscovered: [],
   mockHydrate: { value: null, shouldThrow: true },
@@ -15,6 +15,11 @@ const { mockSettings, mockDiscovered, mockHydrate, mockSessions, mockDelete, moc
   mockDelete: { error: null, called: [] },
   mockUpdate: { calls: [] },
   mockTest: { calls: [], results: {} },
+  mockOauth: {
+    start: { calls: [], error: null, response: null },
+    status: { calls: [], status: 'pending', error: null, once: null },
+    disconnect: { calls: [], error: null },
+  },
 }));
 
 vi.mock('../api', () => ({
@@ -74,6 +79,34 @@ vi.mock('../modelmixApi', () => {
       mockTest.calls.push({ endpoint: 'custom', name, url, apiKey });
       return mockTest.results.custom || { success: true, message: 'Endpoint is reachable' };
     },
+    startOAuthConnection: async (providerId) => {
+      if (mockOauth.start.error) throw mockOauth.start.error;
+      mockOauth.start.calls.push(providerId);
+      if (mockOauth.start.response) return mockOauth.start.response(providerId);
+      return {
+        session_id: `session-${providerId}`,
+        provider_id: providerId,
+        user_code: 'CODE-1234',
+        verification_uri: 'https://verify.example.com/device',
+        verification_uri_complete: `https://verify.example.com/device?code=CODE`,
+        expires_in: 300,
+        status: 'pending',
+      };
+    },
+    getOAuthConnectionStatus: async (providerId, sessionId) => {
+      mockOauth.status.calls.push({ providerId, sessionId });
+      if (mockOauth.status.once) {
+        const once = mockOauth.status.once;
+        mockOauth.status.once = null;
+        return once;
+      }
+      return { status: mockOauth.status.status, error: mockOauth.status.error, provider_id: providerId, session_id: sessionId };
+    },
+    disconnectOAuthProvider: async (providerId) => {
+      if (mockOauth.disconnect.error) throw mockOauth.disconnect.error;
+      mockOauth.disconnect.calls.push(providerId);
+      return { status: 'disconnected', provider_id: providerId };
+    },
   };
 });
 
@@ -119,6 +152,15 @@ beforeEach(() => {
   mockUpdate.calls = [];
   mockTest.calls = [];
   mockTest.results = {};
+  mockOauth.start.calls = [];
+  mockOauth.start.error = null;
+  mockOauth.start.response = null;
+  mockOauth.status.calls = [];
+  mockOauth.status.status = 'pending';
+  mockOauth.status.error = null;
+  mockOauth.status.once = null;
+  mockOauth.disconnect.calls = [];
+  mockOauth.disconnect.error = null;
 });
 
 afterEach(() => {
@@ -132,12 +174,22 @@ afterEach(() => {
   mockUpdate.calls = [];
   mockTest.calls = [];
   mockTest.results = {};
+  mockOauth.start.calls = [];
+  mockOauth.start.error = null;
+  mockOauth.start.response = null;
+  mockOauth.status.calls = [];
+  mockOauth.status.status = 'pending';
+  mockOauth.status.error = null;
+  mockOauth.status.once = null;
+  mockOauth.disconnect.calls = [];
+  mockOauth.disconnect.error = null;
   for (const { root, container } of mounted.splice(0)) {
     act(() => {
       root.unmount();
     });
     container.remove();
   }
+  vi.useRealTimers();
   window.localStorage.clear();
 });
 
@@ -701,7 +753,144 @@ test('Providers section scopes the council-settings link to OAuth providers only
   openProviders();
 
   const section = document.querySelector('.modelmix-settings-section');
-  assert.ok(section.textContent.includes('OAuth providers (xAI, ChatGPT, GitHub Copilot)'));
-  assert.ok(section.textContent.includes('still managed in council settings'));
+  assert.ok(!section.textContent.includes('still managed in council settings'), 'OAuth copy should no longer say council-managed');
   assert.ok(!section.textContent.includes('Manage providers in council settings'));
+});
+
+test('OAuth Connect starts the device-code flow and renders the real code and verification link', async () => {
+  await renderObserver();
+  openProviders();
+
+  for (const provider of ['xai-oauth', 'openai-oauth', 'github-copilot']) {
+    const names = {
+      'xai-oauth': 'xAI (Grok)',
+      'openai-oauth': 'ChatGPT (OpenAI)',
+      'github-copilot': 'GitHub Copilot',
+    };
+    const row = credRow(names[provider]);
+    click(row.querySelector('.modelmix-cred-test'));
+    await flush();
+    assert.deepEqual(mockOauth.start.calls, [provider], `start called for ${provider}`);
+    const pending = row.querySelector('.modelmix-oauth-pending');
+    assert.ok(pending, `pending block for ${provider}`);
+    assert.ok(pending.textContent.includes('CODE-1234'), `code shown for ${provider}`);
+    const link = pending.querySelector('a');
+    assert.equal(link.getAttribute('href'), `https://verify.example.com/device?code=CODE`);
+    assert.equal(link.getAttribute('target'), '_blank');
+    mockOauth.start.calls = [];
+  }
+});
+
+test('OAuth Connect falls back to verification_uri when verification_uri_complete is null', async () => {
+  mockOauth.start.response = (providerId) => ({
+    session_id: `session-${providerId}`,
+    provider_id: providerId,
+    user_code: 'CODE-NULL',
+    verification_uri: 'https://verify.example.com/device',
+    verification_uri_complete: null,
+    expires_in: 300,
+    status: 'pending',
+  });
+  await renderObserver();
+  openProviders();
+  const row = credRow('ChatGPT (OpenAI)');
+  click(row.querySelector('.modelmix-cred-test'));
+  await flush();
+  const link = row.querySelector('a');
+  assert.ok(link, 'approval link rendered');
+  assert.equal(link.getAttribute('href'), 'https://verify.example.com/device');
+  assert.ok(row.querySelector('.modelmix-oauth-pending').textContent.includes('CODE-NULL'));
+});
+
+test('OAuth polling transitions to connected display on status complete', async () => {
+  vi.useFakeTimers();
+  await renderObserver();
+  openProviders();
+  const row = credRow('xAI (Grok)');
+  click(row.querySelector('.modelmix-cred-test'));
+  await flush();
+  assert.ok(row.querySelector('.modelmix-oauth-pending'));
+
+  mockSettings.value = { xai_oauth_connected: true, enabled_providers: { 'xai-oauth': true } };
+  mockOauth.status.once = { status: 'complete', error: null };
+  await act(async () => { vi.advanceTimersByTime(2500); });
+  await flush();
+  assert.ok(mockOauth.status.calls.length >= 1, 'status polled');
+  const pending = row.querySelector('.modelmix-oauth-pending');
+  assert.ok(pending === null, 'no longer awaiting once connected');
+  const afterComplete = mockOauth.status.calls.length;
+  await act(async () => { vi.advanceTimersByTime(2500 * 3); });
+  await flush();
+  assert.equal(mockOauth.status.calls.length, afterComplete, 'no further polling after complete');
+  vi.useRealTimers();
+});
+
+test('OAuth polling stops and shows the real error message on status error', async () => {
+  vi.useFakeTimers();
+  await renderObserver();
+  openProviders();
+  const row = credRow('xAI (Grok)');
+  click(row.querySelector('.modelmix-cred-test'));
+  await flush();
+
+  mockOauth.status.once = { status: 'error', error: 'approval denied by user' };
+  await act(async () => { vi.advanceTimersByTime(2500); });
+  await flush();
+  const result = row.querySelector('.modelmix-cred-result');
+  assert.ok(result, 'error result rendered');
+  assert.ok(result.textContent.includes('approval denied by user'));
+  const afterError = mockOauth.status.calls.length;
+  await act(async () => { vi.advanceTimersByTime(2500 * 3); });
+  await flush();
+  assert.equal(mockOauth.status.calls.length, afterError, 'no further polling after error');
+  vi.useRealTimers();
+});
+
+test('OAuth polling stops and shows expired message on status expired', async () => {
+  vi.useFakeTimers();
+  await renderObserver();
+  openProviders();
+  const row = credRow('xAI (Grok)');
+  click(row.querySelector('.modelmix-cred-test'));
+  await flush();
+
+  mockOauth.status.once = { status: 'expired', error: null };
+  await act(async () => { vi.advanceTimersByTime(2500); });
+  await flush();
+  const result = row.querySelector('.modelmix-cred-result');
+  assert.ok(result && result.textContent.includes('expired'));
+  vi.useRealTimers();
+});
+
+test('Closing settings during a poll clears the active interval (no leak)', async () => {
+  vi.useFakeTimers();
+  await renderObserver();
+  openProviders();
+  const row = credRow('xAI (Grok)');
+  click(row.querySelector('.modelmix-cred-test'));
+  await flush();
+
+  const before = mockOauth.status.calls.length;
+  assert.ok(before >= 1, 'poll started');
+  // Close the settings dialog -> the ProvidersSection unmounts mid-poll.
+  click(document.querySelector('.modelmix-settings-close'));
+  await flush();
+  await act(async () => { vi.advanceTimersByTime(2500 * 3); });
+  await flush();
+  assert.equal(mockOauth.status.calls.length, before, 'no polling after unmount');
+  vi.useRealTimers();
+});
+
+test('OAuth Disconnect calls the DELETE route and updates connected status afterward', async () => {
+  mockSettings.value = { xai_oauth_connected: true, enabled_providers: { 'xai-oauth': true } };
+  await renderObserver();
+  openProviders();
+
+  const row = credRow('xAI (Grok)');
+  click(row.querySelector('.modelmix-cred-save')); // Disconnect
+  mockSettings.value = {};
+  await flush();
+  assert.deepEqual(mockOauth.disconnect.calls, ['xai-oauth']);
+  const button = row.querySelector('.modelmix-cred-test');
+  assert.ok(button && button.textContent === 'Connect', 'shows Connect after disconnect');
 });

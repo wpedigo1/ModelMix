@@ -124,6 +124,29 @@ export async function testCustomEndpoint(name, url, apiKey) {
   return response.json();
 }
 
+export async function startOAuthConnection(providerId) {
+  const response = await checkedFetch(
+    `${getApiBase()}/api/oauth/${encodeURIComponent(providerId)}/start`,
+    { method: 'POST' },
+  );
+  return response.json();
+}
+
+export async function getOAuthConnectionStatus(providerId, sessionId) {
+  const response = await checkedFetch(
+    `${getApiBase()}/api/oauth/${encodeURIComponent(providerId)}/status?session_id=${encodeURIComponent(sessionId)}`,
+  );
+  return response.json();
+}
+
+export async function disconnectOAuthProvider(providerId) {
+  const response = await checkedFetch(
+    `${getApiBase()}/api/oauth/${encodeURIComponent(providerId)}`,
+    { method: 'DELETE' },
+  );
+  return response.json();
+}
+
 export async function consumeModelMixSSE(response, onEvent) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test, vi } from 'vitest';
-import { deleteModelMixSession, listModelMixSessions, updateSettings, testProvider, testOpenrouter, testOpencode, testOllama, testCustomEndpoint } from './modelmixApi';
+import { deleteModelMixSession, listModelMixSessions, updateSettings, testProvider, testOpenrouter, testOpencode, testOllama, testCustomEndpoint, startOAuthConnection, getOAuthConnectionStatus, disconnectOAuthProvider } from './modelmixApi';
 
 let fetchCalls = [];
 
@@ -175,4 +175,53 @@ test('testCustomEndpoint omits api_key when not provided (local servers)', async
     name: 'vLLM',
     url: 'http://localhost:8000',
   });
+});
+
+test('startOAuthConnection POSTs the start route and returns the session', async () => {
+  const session = {
+    session_id: 's1', provider_id: 'xai-oauth', user_code: 'CODE',
+    verification_uri: 'https://verify', verification_uri_complete: null, expires_in: 300, status: 'pending',
+  };
+  stubFetch(true, 200, session);
+
+  const result = await startOAuthConnection('xai-oauth');
+
+  assert.equal(fetchCalls.length, 1);
+  assert.ok(fetchCalls[0].url.endsWith('/api/oauth/xai-oauth/start'));
+  assert.equal(fetchCalls[0].options.method, 'POST');
+  assert.deepEqual(result, session);
+});
+
+test('startOAuthConnection encodes the provider id in the URL', async () => {
+  stubFetch(true, 200, {});
+  await startOAuthConnection('openai-oauth');
+  assert.ok(fetchCalls[0].url.includes('/api/oauth/openai-oauth/start'));
+});
+
+test('getOAuthConnectionStatus GETs the status route with the encoded session id', async () => {
+  const status = { status: 'pending', error: null, provider_id: 'xai-oauth', session_id: 's1' };
+  stubFetch(true, 200, status);
+
+  const result = await getOAuthConnectionStatus('xai-oauth', 's1');
+
+  assert.equal(fetchCalls.length, 1);
+  assert.ok(fetchCalls[0].url.endsWith('/api/oauth/xai-oauth/status?session_id=s1'));
+  assert.equal(result, status);
+});
+
+test('getOAuthConnectionStatus encodes session id', async () => {
+  stubFetch(true, 200, {});
+  await getOAuthConnectionStatus('github-copilot', 'session 12');
+  assert.ok(fetchCalls[0].url.includes('session_id=session%2012'));
+});
+
+test('disconnectOAuthProvider DELETEs the provider route and returns the result', async () => {
+  stubFetch(true, 200, { status: 'disconnected', provider_id: 'xai-oauth' });
+
+  const result = await disconnectOAuthProvider('xai-oauth');
+
+  assert.equal(fetchCalls.length, 1);
+  assert.ok(fetchCalls[0].url.endsWith('/api/oauth/xai-oauth'));
+  assert.equal(fetchCalls[0].options.method, 'DELETE');
+  assert.deepEqual(result, { status: 'disconnected', provider_id: 'xai-oauth' });
 });

@@ -32,11 +32,14 @@ import {
   cancelModelMixRun,
   consumeModelMixSSE,
   deleteModelMixSession,
+  disconnectOAuthProvider,
+  getOAuthConnectionStatus,
   hydrateModelMixSession,
   listModelMixSessions,
   ModelMixHttpError,
   replayModelMixRun,
   startModelMixRun,
+  startOAuthConnection,
   testCustomEndpoint,
   testOllama,
   testOpencode,
@@ -680,6 +683,12 @@ const KEY_PROVIDERS = [
   { id: 'opencode', name: 'OpenCode (Zen + Go)', saveField: 'opencode_api_key', statusFlag: 'opencode_api_key_set', testKind: 'opencode' },
 ];
 
+const OAUTH_PROVIDERS = [
+  { id: 'xai-oauth', name: 'xAI (Grok)', connectedFlag: 'xai_oauth_connected' },
+  { id: 'openai-oauth', name: 'ChatGPT (OpenAI)', connectedFlag: 'openai_oauth_connected' },
+  { id: 'github-copilot', name: 'GitHub Copilot', connectedFlag: 'github_copilot_connected' },
+];
+
 function ProvidersSection({ settings }) {
   const [currentSettings, setCurrentSettings] = useState(settings);
   const [keys, setKeys] = useState({});
@@ -692,6 +701,8 @@ function ProvidersSection({ settings }) {
   const [saving, setSaving] = useState({});
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [oauth, setOauth] = useState({});
+  const oauthTimersRef = useRef({});
 
   const refreshSettings = useCallback(async () => {
     try {
@@ -827,6 +838,93 @@ function ProvidersSection({ settings }) {
     }
   }, [customName, customUrl, customKey]);
 
+  const connectOAuth = useCallback(async (provider) => {
+    setError('');
+    setMessage('');
+    try {
+      const session = await startOAuthConnection(provider.id);
+      setOauth((current) => ({
+        ...current,
+        [provider.id]: {
+          state: 'awaiting',
+          sessionId: session.session_id,
+          userCode: session.user_code,
+          verificationUri: session.verification_uri_complete || session.verification_uri,
+          expiresIn: Number(session.expires_in) || 300,
+          message: session.error || '',
+        },
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to start ${provider.name} connection.`);
+    }
+  }, []);
+
+  const disconnectOAuth = useCallback(async (provider) => {
+    setError('');
+    setMessage('');
+    try {
+      await disconnectOAuthProvider(provider.id);
+      setOauth((current) => ({ ...current, [provider.id]: undefined }));
+      await refreshSettings();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to disconnect ${provider.name}.`);
+    }
+  }, [refreshSettings]);
+
+  useEffect(() => {
+    const timers = oauthTimersRef.current;
+    const started = new Map();
+    const deadline = new Map();
+    const poll = async (provider, entry) => {
+      try {
+        const status = await getOAuthConnectionStatus(provider.id, entry.sessionId);
+        if (status.status === 'complete') {
+          clearInterval(timers[entry.sessionId]);
+          delete timers[entry.sessionId];
+          setOauth((current) => ({ ...current, [provider.id]: { ...current[provider.id], state: 'connected' } }));
+          await refreshSettings();
+        } else if (status.status === 'error' || status.status === 'expired') {
+          clearInterval(timers[entry.sessionId]);
+          delete timers[entry.sessionId];
+          setOauth((current) => ({
+            ...current,
+            [provider.id]: {
+              ...current[provider.id],
+              state: 'terminated',
+              message: status.error || (status.status === 'expired' ? 'Connection expired.' : 'Connection failed.'),
+            },
+          }));
+        } else if (entry.expiresIn > 0 && Date.now() - started.get(entry.sessionId) >= deadline.get(entry.sessionId)) {
+          clearInterval(timers[entry.sessionId]);
+          delete timers[entry.sessionId];
+          setOauth((current) => ({
+            ...current,
+            [provider.id]: { ...current[provider.id], state: 'terminated', message: 'Connection timed out.' },
+          }));
+        }
+      } catch {
+        // Transient poll error: keep polling until the deadline rather than guessing.
+      }
+    };
+
+    OAUTH_PROVIDERS.forEach((provider) => {
+      const entry = oauth[provider.id];
+      if (!entry || entry.state === 'terminated' || entry.state === 'connected') return;
+      if (timers[entry.sessionId]) return;
+      started.set(entry.sessionId, Date.now());
+      deadline.set(entry.sessionId, (Number(entry.expiresIn) || 300) * 1000);
+      poll(provider, entry);
+      timers[entry.sessionId] = setInterval(() => poll(provider, entry), 2500);
+    });
+
+    return () => {
+      Object.keys(timers).forEach((sessionId) => {
+        clearInterval(timers[sessionId]);
+        delete timers[sessionId];
+      });
+    };
+  }, [oauth, refreshSettings]);
+
   if (!currentSettings) {
     return (
       <div className="modelmix-settings-section">
@@ -926,13 +1024,20 @@ function ProvidersSection({ settings }) {
           </div>
           <ResultLine result={testResults.custom} />
         </div>
+        {OAUTH_PROVIDERS.map((provider) => (
+          <OAuthRow
+            key={provider.id}
+            provider={provider}
+            settings={currentSettings}
+            entry={oauth[provider.id]}
+            onConnect={() => connectOAuth(provider)}
+            onDisconnect={() => disconnectOAuth(provider)}
+          />
+        ))}
       </div>
       {error && <p className="modelmix-settings-error" role="alert">{error}</p>}
       {message && <p className="modelmix-settings-line" role="status">{message}</p>}
       <p className="modelmix-settings-line">Credentials stay in secure storage and never appear here.</p>
-      <p className="modelmix-settings-line">
-        OAuth providers (xAI, ChatGPT, GitHub Copilot) are still managed in council settings.
-      </p>
     </div>
   );
 }
@@ -971,6 +1076,50 @@ function ResultLine({ result }) {
     <p className={`modelmix-cred-result ${success ? 'modelmix-cred-result--ok' : 'modelmix-cred-result--err'}`} role="status">
       {text}
     </p>
+  );
+}
+
+function OAuthRow({ provider, settings, entry, onConnect, onDisconnect }) {
+  const connected = !!settings[provider.connectedFlag];
+  const awaiting = entry && (entry.state === 'awaiting');
+  return (
+    <div className="modelmix-credential-row">
+      <span className="modelmix-cred-name">{provider.name}</span>
+      <span className="modelmix-cred-hint">
+        {connected ? 'Connected' : 'Not connected'}
+      </span>
+      {awaiting ? (
+        <div className="modelmix-oauth-pending">
+          <p className="modelmix-oauth-code">
+            Enter code <strong>{entry.userCode}</strong>
+          </p>
+          <a
+            className="modelmix-oauth-link"
+            href={entry.verificationUri}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open approval page
+          </a>
+          <p className="modelmix-oauth-note">Waiting for approval…</p>
+        </div>
+      ) : (
+        <div className="modelmix-cred-controls">
+          {connected ? (
+            <button type="button" className="modelmix-cred-save" onClick={onDisconnect}>
+              Disconnect
+            </button>
+          ) : (
+            <button type="button" className="modelmix-cred-test" onClick={onConnect}>
+              Connect
+            </button>
+          )}
+        </div>
+      )}
+      {entry && entry.state === 'terminated' && entry.message && (
+        <ResultLine result={{ success: false, message: entry.message }} />
+      )}
+    </div>
   );
 }
 
